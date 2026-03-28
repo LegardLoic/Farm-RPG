@@ -4,10 +4,13 @@
 
 1. Create OAuth app branding with audience `External`.
 2. Create OAuth client of type `Web application`.
-3. Add redirect URIs:
-   - `http://localhost:3000/auth/google/callback`
+3. Add authorized JavaScript origins:
+   - `http://localhost:5173`
+   - `https://<your-front-domain>`
+4. Add authorized redirect URIs:
+   - `http://localhost:3001/auth/google/callback`
    - `https://<your-api-domain>/auth/google/callback`
-4. Keep the generated `client_id` and `client_secret` safe.
+5. Keep the generated `client_id` and `client_secret` safe.
 
 ## 2) API env vars (`apps/api/.env`)
 
@@ -18,13 +21,30 @@
 - `GOOGLE_CLIENT_SECRET=<from_google_cloud>`
 - `GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback`
 
-## 3) Render services (later when code is pushed)
+## 3) Render services (after push)
 
 1. Create `Postgres` service.
-2. Create `Web Service` for `apps/api`.
-3. Create `Static Site` for `apps/web`.
+2. Create `Web Service` for API with:
+   - Build command: `npm install && npm run build --workspace @farm-rpg/api`
+   - Start command: `npm run start:prod --workspace @farm-rpg/api`
+3. Create `Static Site` for web with:
+   - Build command: `npm install && npm run build --workspace @farm-rpg/web`
+   - Publish directory: `apps/web/dist`
 
-## 4) GitHub repository secrets (when needed)
+## 4) Render env vars for API
+
+- `NODE_ENV=production`
+- `PORT=3001` (or rely on Render `PORT`)
+- `CORS_ORIGIN=https://<your-front-domain>`
+- `FRONTEND_URL=https://<your-front-domain>`
+- `GOOGLE_CLIENT_ID=<from_google_cloud>`
+- `GOOGLE_CLIENT_SECRET=<from_google_cloud>`
+- `GOOGLE_CALLBACK_URL=https://<your-api-domain>/auth/google/callback`
+
+Optional now, required once DB integration is implemented:
+- `DATABASE_URL=<from_render_postgres>`
+
+## 5) GitHub repository secrets (when needed)
 
 - `RENDER_API_KEY` (if deployment is automated by GitHub Actions)
 - Any additional deploy token/IDs as required by final deployment workflow
