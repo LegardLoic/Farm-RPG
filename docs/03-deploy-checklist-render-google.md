@@ -25,7 +25,7 @@
 
 1. Create `Postgres` service.
 2. Create `Web Service` for API with:
-   - Build command: `npm install && npm run build --workspace @farm-rpg/api`
+   - Build command: `npm install --include=dev && npm run build --workspace @farm-rpg/api`
    - Start command: `npm run start:prod --workspace @farm-rpg/api`
 3. Create `Static Site` for web with:
    - Build command: `npm install && npm run build --workspace @farm-rpg/web`
