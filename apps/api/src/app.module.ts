@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
 import { AuthModule } from './auth/auth.module';
+import { CombatModule } from './combat/combat.module';
 import { HealthController } from './health/health.controller';
 import { validateEnv } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
@@ -23,6 +24,7 @@ import { SavesModule } from './saves/saves.module';
     EquipmentModule,
     GameplayModule,
     SavesModule,
+    CombatModule,
   ],
   controllers: [HealthController],
 })

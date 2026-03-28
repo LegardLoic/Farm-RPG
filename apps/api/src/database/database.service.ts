@@ -154,6 +154,50 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       ON save_slots(user_id);
     `);
 
+    await this.query(`
+      CREATE TABLE IF NOT EXISTS combat_encounters (
+        id UUID PRIMARY KEY,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        enemy_key TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('active', 'won', 'lost', 'fled')),
+        state_json JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        ended_at TIMESTAMPTZ
+      );
+    `);
+
+    await this.query(`
+      ALTER TABLE combat_encounters
+      ADD COLUMN IF NOT EXISTS enemy_key TEXT;
+    `);
+
+    await this.query(`
+      ALTER TABLE combat_encounters
+      ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ;
+    `);
+
+    await this.query(`
+      UPDATE combat_encounters
+      SET enemy_key = COALESCE(state_json->>'enemyKey', 'forest_goblin')
+      WHERE enemy_key IS NULL;
+    `);
+
+    await this.query(`
+      ALTER TABLE combat_encounters
+      ALTER COLUMN enemy_key SET NOT NULL;
+    `);
+
+    await this.query(`
+      CREATE INDEX IF NOT EXISTS combat_encounters_user_id_idx
+      ON combat_encounters(user_id);
+    `);
+
+    await this.query(`
+      CREATE INDEX IF NOT EXISTS combat_encounters_user_status_idx
+      ON combat_encounters(user_id, status);
+    `);
+
     this.logger.log('Database schema ensured');
   }
 }
