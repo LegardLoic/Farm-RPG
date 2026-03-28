@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   color-scheme: dark;
   --bg-0: #090d16;
   --bg-1: #101826;
@@ -8,6 +8,7 @@
   --muted: #b9c3d4;
   --accent: #e2b66d;
   --accent-2: #7fd1c7;
+  --danger: #f26f6f;
   --shadow: rgba(0, 0, 0, 0.42);
 }
 
@@ -87,7 +88,9 @@ body::before {
 }
 
 .hud-panel {
-  width: min(320px, calc(100vw - 48px));
+  width: min(420px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 18px;
@@ -107,41 +110,57 @@ body::before {
 
 .hud-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
 .hud-stat,
-.hud-location {
+.hud-location,
+.hud-combat-stat,
+.combat-card,
+.hud-combat-error,
+.hud-combat-log li {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 14px;
+}
+
+.hud-stat,
+.hud-location,
+.hud-combat-stat {
   padding: 10px 12px;
 }
 
 .hud-stat span,
-.hud-location span {
+.hud-location span,
+.hud-combat-stat span,
+.combat-card span,
+.combat-card-line span {
   display: block;
   font-size: 0.74rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
-  margin-bottom: 4px;
 }
 
 .hud-stat strong,
-.hud-location strong {
+.hud-location strong,
+.hud-combat-stat strong,
+.combat-card strong,
+.combat-card-line strong {
   font-size: 1rem;
   color: var(--text);
+  word-break: break-word;
 }
 
 .hud-location {
   margin-top: 10px;
 }
 
-.hud-auth {
+.hud-auth,
+.hud-combat {
   margin-top: 10px;
-  padding: 10px 12px;
+  padding: 12px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.05);
@@ -154,13 +173,15 @@ body::before {
   color: var(--accent-2);
 }
 
-.hud-auth-actions {
+.hud-auth-actions,
+.hud-combat-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.hud-auth-button {
+.hud-auth-button,
+.hud-combat-button {
   border: 1px solid rgba(226, 182, 109, 0.4);
   background: rgba(226, 182, 109, 0.18);
   color: var(--text);
@@ -168,15 +189,160 @@ body::before {
   padding: 8px 10px;
   font-size: 0.8rem;
   cursor: pointer;
+  transition: filter 120ms ease, transform 120ms ease, opacity 120ms ease;
 }
 
-.hud-auth-button.secondary {
+.hud-auth-button.secondary,
+.hud-combat-button.secondary {
   border-color: rgba(127, 209, 199, 0.4);
   background: rgba(127, 209, 199, 0.16);
 }
 
-.hud-auth-button:hover {
+.hud-combat-button.primary {
+  border-color: rgba(226, 182, 109, 0.5);
+  background: rgba(226, 182, 109, 0.24);
+}
+
+.hud-combat-button.danger {
+  border-color: rgba(242, 111, 111, 0.45);
+  background: rgba(242, 111, 111, 0.18);
+}
+
+.hud-auth-button:hover:not(:disabled),
+.hud-combat-button:hover:not(:disabled) {
   filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.hud-auth-button:disabled,
+.hud-combat-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.hud-combat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hud-combat-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.hud-combat-kicker {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.hud-combat-name {
+  margin-top: 4px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.hud-combat-status {
+  align-self: flex-start;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(127, 209, 199, 0.4);
+  background: rgba(127, 209, 199, 0.14);
+  color: #b8f7f0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.hud-combat-status[data-status="loading"] {
+  border-color: rgba(226, 182, 109, 0.4);
+  background: rgba(226, 182, 109, 0.16);
+  color: var(--accent);
+}
+
+.hud-combat-status[data-status="idle"] {
+  border-color: rgba(185, 195, 212, 0.35);
+  background: rgba(185, 195, 212, 0.12);
+  color: var(--muted);
+}
+
+.hud-combat-status[data-status="error"],
+.hud-combat-status[data-status="lost"] {
+  border-color: rgba(242, 111, 111, 0.45);
+  background: rgba(242, 111, 111, 0.16);
+  color: #ffd0d0;
+}
+
+.hud-combat-status[data-status="won"] {
+  border-color: rgba(127, 209, 199, 0.45);
+  background: rgba(127, 209, 199, 0.16);
+  color: #c5fff8;
+}
+
+.hud-combat-meta,
+.hud-combat-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.hud-combat-meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hud-combat-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.combat-card {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.combat-card-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hud-combat-error {
+  border-color: rgba(242, 111, 111, 0.4);
+  background: rgba(242, 111, 111, 0.12);
+  color: #ffd1d1;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.hud-combat-log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 140px;
+  overflow: auto;
+}
+
+.hud-combat-log li {
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.hud-combat-log li.combat-log-empty {
+  color: #8997a8;
+  font-style: italic;
 }
 
 .hud-help {
@@ -205,6 +371,20 @@ body::before {
   }
 
   .hud-panel {
-    width: min(100%, 320px);
+    width: min(100%, 380px);
+  }
+
+  .hud-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hud-combat-meta,
+  .hud-combat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hud-auth-button,
+  .hud-combat-button {
+    flex: 1 1 100%;
   }
 }
