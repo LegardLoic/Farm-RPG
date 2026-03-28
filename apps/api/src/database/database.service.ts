@@ -2,6 +2,13 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { ConfigService } from '@nestjs/config';
 import { Pool, QueryResult, QueryResultRow } from 'pg';
 
+export interface TransactionClient {
+  query<T extends QueryResultRow = QueryResultRow>(
+    text: string,
+    values?: unknown[],
+  ): Promise<QueryResult<T>>;
+}
+
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
@@ -25,6 +32,22 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     values: unknown[] = [],
   ): Promise<QueryResult<T>> {
     return this.pool.query<T>(text, values);
+  }
+
+  async withTransaction<T>(callback: (tx: TransactionClient) => Promise<T>): Promise<T> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   private async ensureSchema(): Promise<void> {
@@ -68,7 +91,69 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       ON auth_sessions(expires_at);
     `);
 
+    await this.query(`
+      CREATE TABLE IF NOT EXISTS inventory_items (
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        item_key TEXT NOT NULL,
+        quantity INTEGER NOT NULL CHECK (quantity > 0),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, item_key)
+      );
+    `);
+
+    await this.query(`
+      CREATE INDEX IF NOT EXISTS inventory_items_user_id_idx
+      ON inventory_items(user_id);
+    `);
+
+    await this.query(`
+      CREATE TABLE IF NOT EXISTS equipment_items (
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        slot TEXT NOT NULL CHECK (
+          slot IN (
+            'helmet',
+            'amulet',
+            'chest',
+            'legs',
+            'boots',
+            'gloves',
+            'ring_left',
+            'ring_right',
+            'main_hand',
+            'off_hand'
+          )
+        ),
+        item_key TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, slot)
+      );
+    `);
+
+    await this.query(`
+      CREATE INDEX IF NOT EXISTS equipment_items_user_id_idx
+      ON equipment_items(user_id);
+    `);
+
+    await this.query(`
+      CREATE TABLE IF NOT EXISTS save_slots (
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        slot SMALLINT NOT NULL CHECK (slot BETWEEN 1 AND 3),
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
+        label TEXT,
+        snapshot_json JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, slot)
+      );
+    `);
+
+    await this.query(`
+      CREATE INDEX IF NOT EXISTS save_slots_user_id_idx
+      ON save_slots(user_id);
+    `);
+
     this.logger.log('Database schema ensured');
   }
 }
-
