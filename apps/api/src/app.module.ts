@@ -5,7 +5,9 @@ import { AuthModule } from './auth/auth.module';
 import { HealthController } from './health/health.controller';
 import { validateEnv } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
+import { EquipmentModule } from './equipment/equipment.module';
 import { GameplayModule } from './gameplay/gameplay.module';
+import { InventoryModule } from './inventory/inventory.module';
 import { SavesModule } from './saves/saves.module';
 
 @Module({
@@ -17,6 +19,8 @@ import { SavesModule } from './saves/saves.module';
     }),
     DatabaseModule,
     AuthModule,
+    InventoryModule,
+    EquipmentModule,
     GameplayModule,
     SavesModule,
   ],

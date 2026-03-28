@@ -29,6 +29,32 @@ Create local env files before starting:
 - `npm run lint`: lint all workspaces
 - `npm run typecheck`: type-check all workspaces
 
+## Branch strategy
+
+- `main`: production-ready branch
+- `develop`: integration branch for upcoming work
+- feature changes should be merged into `develop` first via pull requests
+- merge `develop` into `main` when a release batch is validated
+
+## Current API routes
+
+- `GET /health`
+- `GET /auth/google`
+- `GET /auth/google/callback`
+- `GET /auth/me`
+- `POST /auth/refresh`
+- `POST /auth/logout`
+- `GET /inventory`
+- `POST /inventory/add`
+- `POST /inventory/use`
+- `GET /equipment`
+- `POST /equipment/equip`
+- `POST /equipment/unequip`
+- `GET /saves`
+- `GET /saves/:slot`
+- `PUT /saves/:slot`
+- `DELETE /saves/:slot`
+
 ## Security note
 
 Never commit OAuth downloaded JSON files (`client_secret_*.json`) or `.env` files.
