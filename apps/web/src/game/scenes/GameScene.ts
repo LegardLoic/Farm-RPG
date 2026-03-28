@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { API_BASE_URL } from '../../config/env';
 
 type HudState = {
   day: number;
@@ -18,12 +19,26 @@ export class GameScene extends Phaser.Scene {
     right: Phaser.Input.Keyboard.Key;
   };
   private hudRoot: HTMLElement | null = null;
+  private loginButton: HTMLButtonElement | null = null;
+  private logoutButton: HTMLButtonElement | null = null;
+  private authStatus = 'Verification...';
+  private isAuthenticated = false;
   private hudState: HudState = {
     day: 1,
     gold: 120,
     hp: 10,
     stamina: 8,
     area: 'Ferme',
+  };
+  private readonly onLoginClick = () => {
+    window.location.href = `${API_BASE_URL}/auth/google`;
+  };
+  private readonly onLogoutClick = async () => {
+    await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    await this.refreshAuthState();
   };
 
   constructor() {
@@ -35,6 +50,7 @@ export class GameScene extends Phaser.Scene {
     this.setupPlayer();
     this.setupInput();
     this.setupHud();
+    void this.refreshAuthState();
     this.setupCamera();
     this.drawDecor();
 
@@ -153,17 +169,33 @@ export class GameScene extends Phaser.Scene {
           <span>Zone</span>
           <strong data-hud="area"></strong>
         </div>
-                <div class="hud-help">
+        <div class="hud-auth">
+          <span class="hud-auth-status" data-hud="authStatus"></span>
+          <div class="hud-auth-actions">
+            <button class="hud-auth-button" data-hud-action="login">Connexion Google</button>
+            <button class="hud-auth-button secondary" data-hud-action="logout" hidden>Se deconnecter</button>
+          </div>
+        </div>
+        <div class="hud-help">
           Deplacement: fleches ou ZQSD
           <br />
           Prototype: ferme, village et tour a venir
         </div>
       </div>
     `;
+    this.loginButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-hud-action="login"]');
+    this.logoutButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-hud-action="logout"]');
+    this.loginButton?.addEventListener('click', this.onLoginClick);
+    this.logoutButton?.addEventListener('click', this.onLogoutClick);
     this.updateHud();
   }
 
   private teardownHud(): void {
+    this.loginButton?.removeEventListener('click', this.onLoginClick);
+    this.logoutButton?.removeEventListener('click', this.onLogoutClick);
+    this.loginButton = null;
+    this.logoutButton = null;
+
     if (this.hudRoot) {
       this.hudRoot.innerHTML = '';
       this.hudRoot = null;
@@ -180,12 +212,50 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('hp', `${this.hudState.hp} / 10`);
     this.setHudText('stamina', `${Math.max(0, Math.round(this.hudState.stamina))} / 8`);
     this.setHudText('area', this.hudState.area);
+    this.setHudText('authStatus', this.authStatus);
+
+    if (this.loginButton) {
+      this.loginButton.hidden = this.isAuthenticated;
+    }
+
+    if (this.logoutButton) {
+      this.logoutButton.hidden = !this.isAuthenticated;
+    }
   }
 
   private setHudText(key: string, value: string): void {
     const element = this.hudRoot?.querySelector<HTMLElement>(`[data-hud="${key}"]`);
     if (element) {
       element.textContent = value;
+    }
+  }
+
+  private async refreshAuthState(): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error(`Auth check failed: ${response.status}`);
+      }
+
+      const payload = (await response.json()) as {
+        user?: {
+          displayName?: string;
+          email?: string;
+        };
+      };
+
+      const displayName = payload.user?.displayName ?? payload.user?.email ?? 'Joueur';
+      this.authStatus = `Connecte: ${displayName}`;
+      this.isAuthenticated = true;
+    } catch {
+      this.authStatus = 'Non connecte';
+      this.isAuthenticated = false;
+    } finally {
+      this.updateHud();
     }
   }
 

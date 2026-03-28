@@ -2,7 +2,7 @@
 
 Monorepo for the project:
 - `apps/web`: Phaser 2D client (Vite + TypeScript)
-- `apps/api`: NestJS API (Google OAuth skeleton + health endpoint)
+- `apps/api`: NestJS API (Google OAuth + cookie session + protected routes)
 
 ## Requirements
 
@@ -16,6 +16,10 @@ npm install
 npm run dev:web
 npm run dev:api
 ```
+
+Create local env files before starting:
+- `apps/api/.env` from `apps/api/.env.example`
+- `apps/web/.env` from `apps/web/.env.example`
 
 ## Scripts
 

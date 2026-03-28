@@ -94,6 +94,7 @@ body::before {
   padding: 16px 16px 14px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(14px);
+  pointer-events: auto;
 }
 
 .hud-title {
@@ -136,6 +137,46 @@ body::before {
 
 .hud-location {
   margin-top: 10px;
+}
+
+.hud-auth {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.hud-auth-status {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 0.82rem;
+  color: var(--accent-2);
+}
+
+.hud-auth-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hud-auth-button {
+  border: 1px solid rgba(226, 182, 109, 0.4);
+  background: rgba(226, 182, 109, 0.18);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.hud-auth-button.secondary {
+  border-color: rgba(127, 209, 199, 0.4);
+  background: rgba(127, 209, 199, 0.16);
+}
+
+.hud-auth-button:hover {
+  filter: brightness(1.08);
 }
 
 .hud-help {

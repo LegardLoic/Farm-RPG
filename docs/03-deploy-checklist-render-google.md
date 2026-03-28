@@ -40,8 +40,10 @@
 - `GOOGLE_CLIENT_ID=<from_google_cloud>`
 - `GOOGLE_CLIENT_SECRET=<from_google_cloud>`
 - `GOOGLE_CALLBACK_URL=https://<your-api-domain>/auth/google/callback`
+- `ACCESS_TOKEN_SECRET=<long_random_secret_at_least_32_chars>`
+- `ACCESS_TOKEN_TTL=15m`
+- `REFRESH_TOKEN_TTL_DAYS=30`
 
-Optional now, required once DB integration is implemented:
 - `DATABASE_URL=<from_render_postgres>`
 
 ## 5) GitHub repository secrets (when needed)

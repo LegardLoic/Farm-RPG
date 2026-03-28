@@ -19,17 +19,23 @@
     "@nestjs/platform-express": "^10.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "cookie-parser": "^1.4.7",
+    "jsonwebtoken": "^9.0.2",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
+    "pg": "^8.16.3",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.0.0",
     "zod": "^3.0.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",
+    "@types/cookie-parser": "^1.4.10",
     "@types/express": "^4.17.0",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.0.0",
     "@types/passport-google-oauth20": "^2.0.0",
+    "@types/pg": "^8.15.6",
     "typescript": "^5.0.0"
   },
   "engines": {
