@@ -1,0 +1,21 @@
+{
+  "name": "farm-rpg",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Farm RPG monorepo (Phaser web + NestJS API)",
+  "workspaces": [
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "npm run dev:web",
+    "dev:web": "npm run dev --workspace @farm-rpg/web",
+    "dev:api": "npm run start:dev --workspace @farm-rpg/api",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  }
+}
