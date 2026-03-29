@@ -10,6 +10,7 @@ import {
   xpRequiredForLevel,
 } from '../gameplay/gameplay.constants';
 import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
+import { TOWER_PROGRESSION_TABLE } from '../tower/tower.constants';
 import { QUEST_DEFINITIONS, QUEST_STATES_TABLE } from './quests.constants';
 import type {
   QuestDefinition,
@@ -39,16 +40,21 @@ type PlayerProgressionRow = {
   gold: number;
 };
 
+type TowerProgressionRow = {
+  highest_floor: number;
+};
+
 @Injectable()
 export class QuestsService {
   async listQuests(executor: TransactionClient, userId: string): Promise<QuestView[]> {
     await this.ensureQuestRows(executor, userId);
     const rows = await this.getQuestRows(executor, userId);
+    const towerHighestFloor = await this.getTowerHighestFloor(executor, userId);
     const byKey = new Map(rows.map((row) => [row.quest_key, row]));
 
     return QUEST_DEFINITIONS.map((definition) => {
       const row = byKey.get(definition.key);
-      return this.toQuestView(definition, row);
+      return this.toQuestView(definition, row, towerHighestFloor);
     });
   }
 
@@ -57,15 +63,18 @@ export class QuestsService {
     await this.ensureQuestRows(executor, userId);
 
     const row = await this.getQuestRowForUpdate(executor, userId, questKey);
+    const towerHighestFloor = await this.getTowerHighestFloor(executor, userId);
     const progress = this.normalizeProgress(row.progress_json);
-    const isCompleted = row.status === 'completed' || row.status === 'claimed' || this.isQuestCompleted(definition, progress);
+    progress.towerHighestFloor = Math.max(progress.towerHighestFloor, towerHighestFloor);
+    const isCompleted =
+      row.status === 'completed' || row.status === 'claimed' || this.isQuestCompleted(definition, progress, towerHighestFloor);
 
     if (!isCompleted) {
       throw new BadRequestException(`Quest ${questKey} is not completed yet`);
     }
 
     if (row.status === 'claimed') {
-      return this.toQuestView(definition, row);
+      return this.toQuestView(definition, row, towerHighestFloor);
     }
 
     await this.applyClaimRewards(executor, userId, definition);
@@ -87,7 +96,7 @@ export class QuestsService {
     );
 
     const updatedRow = updated.rows[0];
-    return this.toQuestView(definition, updatedRow);
+    return this.toQuestView(definition, updatedRow, towerHighestFloor);
   }
 
   async recordCombatVictory(
@@ -115,7 +124,7 @@ export class QuestsService {
       progress.towerHighestFloor = Math.max(progress.towerHighestFloor, input.towerHighestFloor);
       progress.lastVictoryAt = now;
 
-      const completed = this.isQuestCompleted(definition, progress);
+      const completed = this.isQuestCompleted(definition, progress, input.towerHighestFloor);
       const nextStatus: QuestStatus = completed ? 'completed' : 'active';
 
       if (completed && !progress.completedAt) {
@@ -315,12 +324,32 @@ export class QuestsService {
     };
   }
 
-  private toQuestView(definition: QuestDefinition, row?: QuestStateRow): QuestView {
-    const progress = this.normalizeProgress(row?.progress_json);
-    const status: QuestStatus = row?.status ?? 'active';
-    const objectives = definition.objectives.map((objective) => this.toObjectiveView(objective, progress));
+  private async getTowerHighestFloor(executor: TransactionClient, userId: string): Promise<number> {
+    const result = await executor.query<TowerProgressionRow>(
+      `
+        SELECT highest_floor
+        FROM ${TOWER_PROGRESSION_TABLE}
+        WHERE user_id = $1
+        LIMIT 1
+      `,
+      [userId],
+    );
 
-    const completed = objectives.every((objective) => objective.completed);
+    const row = result.rows[0];
+    if (!row) {
+      return 1;
+    }
+
+    return Math.max(1, Number(row.highest_floor ?? 1));
+  }
+
+  private toQuestView(definition: QuestDefinition, row?: QuestStateRow, towerHighestFloor = 1): QuestView {
+    const progress = this.normalizeProgress(row?.progress_json);
+    progress.towerHighestFloor = Math.max(progress.towerHighestFloor, towerHighestFloor);
+    const status: QuestStatus = row?.status ?? 'active';
+    const objectives = definition.objectives.map((objective) => this.toObjectiveView(objective, progress, towerHighestFloor));
+
+    const completed = this.isQuestCompleted(definition, progress, towerHighestFloor);
     const normalizedStatus: QuestStatus = status === 'claimed' ? 'claimed' : completed ? 'completed' : 'active';
 
     return {
@@ -337,8 +366,9 @@ export class QuestsService {
   private toObjectiveView(
     objective: QuestObjectiveDefinition,
     progress: QuestProgressState,
+    towerHighestFloor: number,
   ): QuestObjectiveView {
-    const current = this.getObjectiveCurrentValue(objective, progress);
+    const current = this.getObjectiveCurrentValue(objective, progress, towerHighestFloor);
 
     return {
       key: objective.key,
@@ -349,22 +379,27 @@ export class QuestsService {
     };
   }
 
-  private isQuestCompleted(definition: QuestDefinition, progress: QuestProgressState): boolean {
+  private isQuestCompleted(
+    definition: QuestDefinition,
+    progress: QuestProgressState,
+    towerHighestFloor: number,
+  ): boolean {
     return definition.objectives.every(
-      (objective) => this.getObjectiveCurrentValue(objective, progress) >= objective.target,
+      (objective) => this.getObjectiveCurrentValue(objective, progress, towerHighestFloor) >= objective.target,
     );
   }
 
   private getObjectiveCurrentValue(
     objective: QuestObjectiveDefinition,
     progress: QuestProgressState,
+    towerHighestFloor: number,
   ): number {
     if (objective.metric === 'victories_total') {
       return progress.victoriesTotal;
     }
 
     if (objective.metric === 'tower_highest_floor') {
-      return progress.towerHighestFloor;
+      return Math.max(progress.towerHighestFloor, towerHighestFloor);
     }
 
     if (!objective.enemyKey) {
