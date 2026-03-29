@@ -4,7 +4,7 @@ export interface BlacksmithOffer {
   name: string;
   description: string;
   goldPrice: number;
-  tier: 1 | 2;
+  tier: 1 | 2 | 3;
   requiredFlags: string[];
 }
 

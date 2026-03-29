@@ -27,11 +27,16 @@ import {
   COMBAT_ENEMY_DEFINITIONS,
   COMBAT_LOG_LIMIT,
   CURSE_AVATAR_DISPEL_MANA_COST,
+  CLEANSE_MANA_COST,
   DEFAULT_COMBAT_ENEMY_KEY,
   DEFAULT_PLAYER_COMBAT_STATE,
   FLOOR_LOOT_TABLES,
   FIREBALL_MANA_COST,
+  INTERRUPT_MANA_COST,
   MEND_MANA_COST,
+  PLAYER_BURNING_DAMAGE,
+  PLAYER_BURNING_DURATION_TURNS,
+  PLAYER_SILENCED_DURATION_TURNS,
   RALLY_DURATION_TURNS,
   RALLY_MANA_COST,
   CINDER_WARDEN_PURGE_MANA_COST,
@@ -348,6 +353,10 @@ export class CombatService {
     next.turn = 'enemy';
     next.player.defending = false;
 
+    if (this.getPlayerSilencedTurns(next) > 0 && this.isActionBlockedBySilence(action)) {
+      throw new BadRequestException('You are silenced and cannot cast this skill');
+    }
+
     switch (action) {
       case 'attack': {
         const damage = this.calculatePhysicalDamage(
@@ -429,6 +438,51 @@ export class CombatService {
         this.pushLog(next, `You cast Mend and recover ${recovered} HP.`);
         break;
       }
+      case 'cleanse': {
+        if (next.player.mp < CLEANSE_MANA_COST) {
+          throw new BadRequestException('Not enough MP for Cleanse');
+        }
+
+        const hadBurning = this.getPlayerBurningTurns(next) > 0;
+        const hadSilence = this.getPlayerSilencedTurns(next) > 0;
+        if (!hadBurning && !hadSilence) {
+          throw new BadRequestException('No debuffs to cleanse');
+        }
+
+        next.player.mp -= CLEANSE_MANA_COST;
+        this.setPlayerBurningTurns(next, 0);
+        this.setPlayerSilencedTurns(next, 0);
+
+        const removed: string[] = [];
+        if (hadBurning) {
+          removed.push('Burning');
+        }
+        if (hadSilence) {
+          removed.push('Silence');
+        }
+        this.pushLog(next, `You cast Cleanse and remove ${removed.join(' + ')}.`);
+        break;
+      }
+      case 'interrupt': {
+        if (next.player.mp < INTERRUPT_MANA_COST) {
+          throw new BadRequestException('Not enough MP for Interrupt');
+        }
+
+        const intent = this.resolveEnemyIntent(next);
+        if (!this.isEnemyIntentInterruptible(intent)) {
+          throw new BadRequestException('No interruptible enemy intent');
+        }
+
+        next.player.mp -= INTERRUPT_MANA_COST;
+        this.setEnemyInterruptedTurns(next, 1);
+        const damage = Math.max(
+          1,
+          this.calculateMagicDamage(next.player, next.enemy, this.getPlayerMagicAttackBonus(next), 0) - 2,
+        );
+        next.enemy.currentHp = Math.max(0, next.enemy.currentHp - damage);
+        this.pushLog(next, `You cast Interrupt for ${damage} damage and disrupt ${next.enemy.name}.`);
+        break;
+      }
       default: {
         throw new BadRequestException('Unsupported combat action');
       }
@@ -455,6 +509,15 @@ export class CombatService {
     }
 
     this.tickStatusDurations(next);
+    if (next.player.hp <= 0) {
+      next.status = 'lost';
+      next.turn = 'player';
+      next.endedAt = next.updatedAt;
+      this.clearEnemyTelegraph(next);
+      this.pushLog(next, 'You have been defeated.');
+      return next;
+    }
+
     next.turn = 'player';
     next.round += 1;
     this.updateEnemyTelegraph(next);
@@ -683,7 +746,13 @@ export class CombatService {
       }
     }
 
-    const intent = this.resolveEnemyIntent(encounter);
+    const interrupted = this.getEnemyInterruptedTurns(encounter) > 0;
+    const intent = interrupted ? 'basic_strike' : this.resolveEnemyIntent(encounter);
+    if (interrupted) {
+      this.setEnemyInterruptedTurns(encounter, 0);
+      this.pushLog(encounter, `${encounter.enemy.name} is interrupted and loses momentum.`);
+    }
+
     let damage = this.calculateEnemyDamage(encounter.enemy, encounter.player);
     let label = `${encounter.enemy.name} hits you`;
 
@@ -700,6 +769,11 @@ export class CombatService {
         encounter.enemy.currentMp -= 3;
         damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + 2;
         label = `${encounter.enemy.name} casts Cinder Burst`;
+        this.setPlayerBurningTurns(
+          encounter,
+          Math.max(this.getPlayerBurningTurns(encounter), PLAYER_BURNING_DURATION_TURNS),
+        );
+        this.pushLog(encounter, `You are Burning for ${PLAYER_BURNING_DURATION_TURNS} turns.`);
         break;
       case 'molten_shell':
         encounter.enemy.currentMp -= CINDER_WARDEN_PURGE_MANA_COST;
@@ -726,9 +800,16 @@ export class CombatService {
         const enraged = Boolean(encounter.scriptState?.avatarEnraged);
         encounter.enemy.currentMp -= CURSE_AVATAR_DISPEL_MANA_COST;
         this.setPlayerRallyTurns(encounter, 0);
+        this.setPlayerSilencedTurns(
+          encounter,
+          Math.max(this.getPlayerSilencedTurns(encounter), PLAYER_SILENCED_DURATION_TURNS),
+        );
         damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + (enraged ? 3 : 2);
         label = `${encounter.enemy.name} casts Null Sigil`;
-        this.pushLog(encounter, 'Your Rally buff is dispelled.');
+        this.pushLog(
+          encounter,
+          `Your Rally buff is dispelled and you are Silenced for ${PLAYER_SILENCED_DURATION_TURNS} turn.`,
+        );
         break;
       }
       case 'cataclysm_ray':
@@ -756,6 +837,10 @@ export class CombatService {
   }
 
   private resolveEnemyIntent(encounter: CombatEncounterState): EnemyIntent {
+    if (this.getEnemyInterruptedTurns(encounter) > 0) {
+      return 'basic_strike';
+    }
+
     const playerRallyTurns = this.getPlayerRallyTurns(encounter);
     const enemyShatterTurns = this.getEnemyShatterTurns(encounter);
 
@@ -797,6 +882,30 @@ export class CombatService {
       default:
         return 'basic_strike';
     }
+  }
+
+  private isEnemyIntentInterruptible(intent: EnemyIntent): boolean {
+    switch (intent) {
+      case 'cinder_burst':
+      case 'molten_shell':
+      case 'iron_recenter':
+      case 'null_sigil':
+      case 'cataclysm_ray':
+      case 'root_smash':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  private isActionBlockedBySilence(action: CombatActionName): boolean {
+    return (
+      action === 'fireball' ||
+      action === 'rally' ||
+      action === 'sunder' ||
+      action === 'mend' ||
+      action === 'interrupt'
+    );
   }
 
   private isAvatarEnragedOrCrossing(encounter: CombatEncounterState): boolean {
@@ -864,6 +973,10 @@ export class CombatService {
     switch (intent) {
       case 'cinder_burst':
         encounter.enemy.currentMp = Math.max(0, encounter.enemy.currentMp - 3);
+        this.setPlayerBurningTurns(
+          encounter,
+          Math.max(this.getPlayerBurningTurns(encounter), PLAYER_BURNING_DURATION_TURNS),
+        );
         break;
       case 'molten_shell':
         encounter.enemy.currentMp = Math.max(0, encounter.enemy.currentMp - CINDER_WARDEN_PURGE_MANA_COST);
@@ -876,6 +989,10 @@ export class CombatService {
       case 'null_sigil':
         encounter.enemy.currentMp = Math.max(0, encounter.enemy.currentMp - CURSE_AVATAR_DISPEL_MANA_COST);
         this.setPlayerRallyTurns(encounter, 0);
+        this.setPlayerSilencedTurns(
+          encounter,
+          Math.max(this.getPlayerSilencedTurns(encounter), PLAYER_SILENCED_DURATION_TURNS),
+        );
         break;
       case 'cataclysm_ray':
         encounter.enemy.currentMp = Math.max(0, encounter.enemy.currentMp - 5);
@@ -894,6 +1011,21 @@ export class CombatService {
     const shatterTurns = this.getEnemyShatterTurns(encounter);
     if (shatterTurns > 0) {
       this.setEnemyShatterTurns(encounter, shatterTurns - 1);
+    }
+
+    const burningTurns = this.getPlayerBurningTurns(encounter);
+    if (burningTurns > 0) {
+      this.setPlayerBurningTurns(encounter, burningTurns - 1);
+    }
+
+    const silencedTurns = this.getPlayerSilencedTurns(encounter);
+    if (silencedTurns > 0) {
+      this.setPlayerSilencedTurns(encounter, silencedTurns - 1);
+    }
+
+    const interruptedTurns = this.getEnemyInterruptedTurns(encounter);
+    if (interruptedTurns > 0) {
+      this.setEnemyInterruptedTurns(encounter, interruptedTurns - 1);
     }
   }
 
@@ -929,6 +1061,54 @@ export class CombatService {
     };
   }
 
+  private getPlayerBurningTurns(encounter: CombatEncounterState): number {
+    const raw = Number(encounter.scriptState?.playerBurningTurns ?? 0);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return 0;
+    }
+
+    return Math.floor(raw);
+  }
+
+  private setPlayerBurningTurns(encounter: CombatEncounterState, turns: number): void {
+    encounter.scriptState = {
+      ...(encounter.scriptState ?? {}),
+      playerBurningTurns: Math.max(0, Math.floor(turns)),
+    };
+  }
+
+  private getPlayerSilencedTurns(encounter: CombatEncounterState): number {
+    const raw = Number(encounter.scriptState?.playerSilencedTurns ?? 0);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return 0;
+    }
+
+    return Math.floor(raw);
+  }
+
+  private setPlayerSilencedTurns(encounter: CombatEncounterState, turns: number): void {
+    encounter.scriptState = {
+      ...(encounter.scriptState ?? {}),
+      playerSilencedTurns: Math.max(0, Math.floor(turns)),
+    };
+  }
+
+  private getEnemyInterruptedTurns(encounter: CombatEncounterState): number {
+    const raw = Number(encounter.scriptState?.enemyInterruptedTurns ?? 0);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return 0;
+    }
+
+    return Math.floor(raw);
+  }
+
+  private setEnemyInterruptedTurns(encounter: CombatEncounterState, turns: number): void {
+    encounter.scriptState = {
+      ...(encounter.scriptState ?? {}),
+      enemyInterruptedTurns: Math.max(0, Math.floor(turns)),
+    };
+  }
+
   private getPlayerAttackBonus(encounter: CombatEncounterState): number {
     return this.getPlayerRallyTurns(encounter) > 0 ? 3 : 0;
   }
@@ -958,6 +1138,31 @@ export class CombatService {
       if (nextTurns === 0) {
         this.pushLog(encounter, `${encounter.enemy.name} recovers from Sunder.`);
       }
+    }
+
+    const burningTurns = this.getPlayerBurningTurns(encounter);
+    if (burningTurns > 0) {
+      encounter.player.hp = Math.max(0, encounter.player.hp - PLAYER_BURNING_DAMAGE);
+      this.pushLog(encounter, `Burning deals ${PLAYER_BURNING_DAMAGE} damage to you.`);
+      const nextTurns = burningTurns - 1;
+      this.setPlayerBurningTurns(encounter, nextTurns);
+      if (nextTurns === 0) {
+        this.pushLog(encounter, 'Burning effect has faded.');
+      }
+    }
+
+    const silencedTurns = this.getPlayerSilencedTurns(encounter);
+    if (silencedTurns > 0) {
+      const nextTurns = silencedTurns - 1;
+      this.setPlayerSilencedTurns(encounter, nextTurns);
+      if (nextTurns === 0) {
+        this.pushLog(encounter, 'Silence effect has faded.');
+      }
+    }
+
+    const interruptedTurns = this.getEnemyInterruptedTurns(encounter);
+    if (interruptedTurns > 0) {
+      this.setEnemyInterruptedTurns(encounter, interruptedTurns - 1);
     }
   }
 
