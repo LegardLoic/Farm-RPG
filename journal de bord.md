@@ -348,6 +348,15 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - suppression des 500 de compatibilite retro sur le flux `combat/start`
   - reprise du demarrage de combat en production sans reset manuel.
 
+### Hotfix Lot 24.2 - Fallback de recuperation sur `combat/start`
+- Backend combat:
+  - ajout d'un fallback de recuperation dans `startCombat`:
+    - si le flux normal echoue, l'API purge les encounters actifs restants (`status = fled`)
+    - tente ensuite un redemarrage propre avec:
+      - floor de tour securise (fallback `1`)
+      - ennemi securise (fallback `forest_goblin`)
+  - objectif: eviter les 500 persistants meme en presence de donnees legacy/non prevues.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth

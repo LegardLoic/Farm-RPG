@@ -94,16 +94,67 @@ export class CombatService {
   ) {}
 
   async startCombat(userId: string, payload: StartCombatDto): Promise<CombatActionResult> {
+    try {
+      return await this.databaseService.withTransaction(async (tx) => {
+        const activeEncounter = await this.findActiveEncounter(tx, userId, true);
+        if (activeEncounter) {
+          return this.toActionResult(activeEncounter);
+        }
+
+        const tower = await this.towerService.getStateForUpdate(tx, userId);
+        const scriptedEnemyKey = this.resolveScriptedEnemyKey(tower);
+        const enemy = this.resolveStartingEnemy(tower.currentFloor, scriptedEnemyKey, payload?.enemyKey);
+        const encounter = this.createEncounter(userId, enemy, tower.currentFloor, scriptedEnemyKey !== null);
+        const row = await this.insertEncounter(tx, encounter);
+
+        return this.toActionResult(this.toEncounterState(row));
+      });
+    } catch {
+      return this.recoverStartCombatFromCorruptedState(userId, payload);
+    }
+  }
+
+  private async recoverStartCombatFromCorruptedState(
+    userId: string,
+    payload: StartCombatDto,
+  ): Promise<CombatActionResult> {
     return this.databaseService.withTransaction(async (tx) => {
-      const activeEncounter = await this.findActiveEncounter(tx, userId, true);
-      if (activeEncounter) {
-        return this.toActionResult(activeEncounter);
+      await tx.query(
+        `
+          UPDATE ${COMBAT_ENCOUNTERS_TABLE}
+          SET status = 'fled',
+              ended_at = NOW(),
+              updated_at = NOW()
+          WHERE user_id = $1
+            AND status = 'active'
+        `,
+        [userId],
+      );
+
+      let towerFloor = 1;
+      let scriptedEnemyKey: string | null = null;
+      try {
+        const tower = await this.towerService.getStateForUpdate(tx, userId);
+        towerFloor = Math.max(1, Number(tower.currentFloor || 1));
+        scriptedEnemyKey = this.resolveScriptedEnemyKey(tower);
+      } catch {
+        towerFloor = 1;
+        scriptedEnemyKey = null;
       }
 
-      const tower = await this.towerService.getStateForUpdate(tx, userId);
-      const scriptedEnemyKey = this.resolveScriptedEnemyKey(tower);
-      const enemy = this.resolveStartingEnemy(tower.currentFloor, scriptedEnemyKey, payload?.enemyKey);
-      const encounter = this.createEncounter(userId, enemy, tower.currentFloor, scriptedEnemyKey !== null);
+      let enemy: CombatEnemyDefinition;
+      try {
+        enemy = this.resolveStartingEnemy(towerFloor, scriptedEnemyKey, payload?.enemyKey);
+      } catch {
+        enemy = COMBAT_ENEMY_DEFINITIONS[DEFAULT_COMBAT_ENEMY_KEY];
+      }
+
+      const encounter = this.createEncounter(
+        userId,
+        enemy,
+        towerFloor,
+        scriptedEnemyKey !== null && enemy.key === scriptedEnemyKey,
+      );
       const row = await this.insertEncounter(tx, encounter);
 
       return this.toActionResult(this.toEncounterState(row));
