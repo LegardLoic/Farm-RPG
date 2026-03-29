@@ -469,6 +469,7 @@ export class GameScene extends Phaser.Scene {
               <div class="combat-card-line"><span>MP</span><strong data-hud="combatEnemyMp">-</strong></div>
               <div class="combat-card-line"><span>Effects</span><strong data-hud="combatEnemyEffects">-</strong></div>
               <div class="combat-card-line"><span>Intent</span><strong data-hud="combatEnemyIntent">-</strong></div>
+              <div class="combat-card-line"><span>Next</span><strong data-hud="combatEnemyIntentNext">-</strong></div>
             </div>
           </div>
           <div class="hud-combat-actions">
@@ -636,7 +637,7 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('combatEnemyHp', this.getCombatEnemyValue('hp'));
     this.setHudText('combatEnemyMp', this.getCombatEnemyValue('mp'));
     this.setHudText('combatEnemyEffects', this.getCombatEnemyEffectsLabel());
-    this.renderCombatEnemyIntent();
+    this.renderCombatEnemyTelegraphs();
 
     if (this.combatStatusBadge) {
       this.combatStatusBadge.dataset.status = this.combatStatus;
@@ -2234,52 +2235,82 @@ export class GameScene extends Phaser.Scene {
     return effects.length > 0 ? effects.join(' | ') : 'None';
   }
 
-  private renderCombatEnemyIntent(): void {
-    const element = this.hudRoot?.querySelector<HTMLElement>('[data-hud="combatEnemyIntent"]');
+  private renderCombatEnemyTelegraphs(): void {
+    this.renderCombatEnemyIntentChip('[data-hud="combatEnemyIntent"]', 'enemyTelegraphIntent', false);
+    this.renderCombatEnemyIntentChip('[data-hud="combatEnemyIntentNext"]', 'enemyTelegraphNextIntent', true);
+  }
+
+  private renderCombatEnemyIntentChip(
+    selector: string,
+    intentKey: 'enemyTelegraphIntent' | 'enemyTelegraphNextIntent',
+    isPreview: boolean,
+  ): void {
+    const element = this.hudRoot?.querySelector<HTMLElement>(selector);
     if (!element) {
       return;
     }
 
-    const intentUi = this.getCombatEnemyIntentUi();
+    const intentUi = this.getCombatEnemyIntentUi(intentKey, isPreview);
     element.classList.add('combat-intent-chip');
     element.textContent = intentUi.label;
     element.dataset.intentTone = intentUi.tone;
     element.dataset.intentPulse = intentUi.pulse ? '1' : '0';
+    element.dataset.intentLayer = isPreview ? 'next' : 'current';
   }
 
-  private getCombatEnemyIntentUi(): { label: string; tone: 'neutral' | 'calm' | 'warning' | 'danger' | 'utility'; pulse: boolean } {
+  private getCombatEnemyIntentUi(
+    intentKey: 'enemyTelegraphIntent' | 'enemyTelegraphNextIntent',
+    isPreview: boolean,
+  ): { label: string; tone: 'neutral' | 'calm' | 'warning' | 'danger' | 'utility'; pulse: boolean } {
     if (!this.combatState || this.combatState.status !== 'active' || this.combatState.turn !== 'player') {
       return { label: '-', tone: 'neutral', pulse: false };
     }
 
-    const intent = this.combatState.scriptState?.enemyTelegraphIntent;
+    const intent = this.combatState.scriptState?.[intentKey];
     if (typeof intent !== 'string' || intent.length === 0) {
+      return isPreview
+        ? { label: 'NO PREVIEW', tone: 'neutral', pulse: false }
+        : { label: 'UNCLEAR', tone: 'warning', pulse: false };
+    }
+
+    const mapped = this.mapEnemyIntentUi(intent);
+    if (!mapped) {
       return { label: 'UNCLEAR', tone: 'warning', pulse: false };
     }
 
+    return {
+      label: isPreview ? `NEXT: ${mapped.preview}` : mapped.current,
+      tone: mapped.tone,
+      pulse: isPreview ? false : mapped.pulse,
+    };
+  }
+
+  private mapEnemyIntentUi(intent: string):
+    | { current: string; preview: string; tone: 'calm' | 'warning' | 'danger' | 'utility'; pulse: boolean }
+    | null {
     switch (intent) {
       case 'basic_strike':
-        return { label: 'ATK: STRIKE', tone: 'calm', pulse: false };
+        return { current: 'ATK: STRIKE', preview: 'STRIKE', tone: 'calm', pulse: false };
       case 'root_smash':
-        return { label: 'SKILL: ROOT SMASH', tone: 'danger', pulse: true };
+        return { current: 'SKILL: ROOT SMASH', preview: 'ROOT SMASH', tone: 'danger', pulse: true };
       case 'opening_punish':
-        return { label: 'SKILL: PUNISH', tone: 'warning', pulse: false };
+        return { current: 'SKILL: PUNISH', preview: 'PUNISH', tone: 'warning', pulse: false };
       case 'cinder_burst':
-        return { label: 'SKILL: CINDER BURST', tone: 'danger', pulse: true };
+        return { current: 'SKILL: CINDER BURST', preview: 'CINDER BURST', tone: 'danger', pulse: true };
       case 'molten_shell':
-        return { label: 'UTILITY: CLEANSE', tone: 'utility', pulse: false };
+        return { current: 'UTILITY: CLEANSE', preview: 'CLEANSE', tone: 'utility', pulse: false };
       case 'twin_slash':
-        return { label: 'SKILL: TWIN SLASH', tone: 'danger', pulse: true };
+        return { current: 'SKILL: TWIN SLASH', preview: 'TWIN SLASH', tone: 'danger', pulse: true };
       case 'iron_recenter':
-        return { label: 'UTILITY: CLEANSE', tone: 'utility', pulse: false };
+        return { current: 'UTILITY: CLEANSE', preview: 'CLEANSE', tone: 'utility', pulse: false };
       case 'cataclysm_ray':
-        return { label: 'ULT: CATACLYSM RAY', tone: 'danger', pulse: true };
+        return { current: 'ULT: CATACLYSM RAY', preview: 'CATACLYSM RAY', tone: 'danger', pulse: true };
       case 'cursed_claw':
-        return { label: 'ATK: CURSED CLAW', tone: 'warning', pulse: false };
+        return { current: 'ATK: CURSED CLAW', preview: 'CURSED CLAW', tone: 'warning', pulse: false };
       case 'null_sigil':
-        return { label: 'UTILITY: DISPEL', tone: 'utility', pulse: false };
+        return { current: 'UTILITY: DISPEL', preview: 'DISPEL', tone: 'utility', pulse: false };
       default:
-        return { label: 'UNCLEAR', tone: 'warning', pulse: false };
+        return null;
     }
   }
 

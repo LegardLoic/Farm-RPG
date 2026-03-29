@@ -90,4 +90,5 @@ Use `.env.example` templates and repository secrets for CI.
 - Scripted boss AI reactions to player status effects (`Rally` dispel / `Sunder` cleanse patterns).
 - Combat HUD enemy telegraph for upcoming scripted boss intent.
 - Combat HUD telegraph rendered as a visual intent chip (tone + pulse for dangerous skills).
+- Combat HUD includes two-step intent preview (`Intent` + `Next`) for scripted enemies.
 - Blacksmith shop unlocked by progression flags.

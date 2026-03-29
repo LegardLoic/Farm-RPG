@@ -656,11 +656,17 @@ export class CombatService {
       return;
     }
 
-    const intent = this.resolveEnemyIntent(encounter);
+    const forecast = this.buildEnemyIntentForecast(encounter, 2);
+    const intent = forecast[0] ?? 'basic_strike';
+    const nextIntent = forecast[1] ?? null;
     encounter.scriptState = {
       ...(encounter.scriptState ?? {}),
       enemyTelegraphIntent: intent,
+      ...(nextIntent ? { enemyTelegraphNextIntent: nextIntent } : {}),
     };
+    if (!nextIntent) {
+      delete encounter.scriptState.enemyTelegraphNextIntent;
+    }
   }
 
   private clearEnemyTelegraph(encounter: CombatEncounterState): void {
@@ -668,7 +674,66 @@ export class CombatService {
       ...(encounter.scriptState ?? {}),
     };
     delete nextState.enemyTelegraphIntent;
+    delete nextState.enemyTelegraphNextIntent;
     encounter.scriptState = nextState;
+  }
+
+  private buildEnemyIntentForecast(encounter: CombatEncounterState, depth: number): EnemyIntent[] {
+    const safeDepth = Math.max(1, Math.floor(depth));
+    const simulated = this.cloneEncounter(encounter);
+    const intents: EnemyIntent[] = [];
+
+    for (let step = 0; step < safeDepth; step += 1) {
+      if (simulated.status !== 'active') {
+        break;
+      }
+
+      const intent = this.resolveEnemyIntent(simulated);
+      intents.push(intent);
+      this.applyEnemyIntentStateForForecast(simulated, intent);
+      this.tickStatusDurationsForForecast(simulated);
+      simulated.round += 1;
+      simulated.turn = 'player';
+    }
+
+    return intents;
+  }
+
+  private applyEnemyIntentStateForForecast(encounter: CombatEncounterState, intent: EnemyIntent): void {
+    switch (intent) {
+      case 'cinder_burst':
+        encounter.enemy.currentMp = Math.max(0, encounter.enemy.currentMp - 3);
+        break;
+      case 'molten_shell':
+        encounter.enemy.currentMp = Math.max(0, encounter.enemy.currentMp - CINDER_WARDEN_PURGE_MANA_COST);
+        this.setEnemyShatterTurns(encounter, 0);
+        break;
+      case 'iron_recenter':
+        encounter.enemy.currentMp = Math.max(0, encounter.enemy.currentMp - ASH_CAPTAIN_PURGE_MANA_COST);
+        this.setEnemyShatterTurns(encounter, 0);
+        break;
+      case 'null_sigil':
+        encounter.enemy.currentMp = Math.max(0, encounter.enemy.currentMp - CURSE_AVATAR_DISPEL_MANA_COST);
+        this.setPlayerRallyTurns(encounter, 0);
+        break;
+      case 'cataclysm_ray':
+        encounter.enemy.currentMp = Math.max(0, encounter.enemy.currentMp - 5);
+        break;
+      default:
+        break;
+    }
+  }
+
+  private tickStatusDurationsForForecast(encounter: CombatEncounterState): void {
+    const rallyTurns = this.getPlayerRallyTurns(encounter);
+    if (rallyTurns > 0) {
+      this.setPlayerRallyTurns(encounter, rallyTurns - 1);
+    }
+
+    const shatterTurns = this.getEnemyShatterTurns(encounter);
+    if (shatterTurns > 0) {
+      this.setEnemyShatterTurns(encounter, shatterTurns - 1);
+    }
   }
 
   private getPlayerRallyTurns(encounter: CombatEncounterState): number {

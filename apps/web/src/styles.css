@@ -824,6 +824,11 @@ body::before {
   animation: combat-intent-pulse 1s ease-in-out infinite;
 }
 
+.combat-card-line .combat-intent-chip[data-intent-layer="next"] {
+  opacity: 0.86;
+  border-style: dashed;
+}
+
 @keyframes combat-intent-pulse {
   0% {
     box-shadow: 0 0 0 rgba(242, 111, 111, 0);

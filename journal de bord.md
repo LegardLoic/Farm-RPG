@@ -248,6 +248,18 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - rendu UI via attributs `data-intent-tone` et `data-intent-pulse`
   - styles CSS dedies + animation `@keyframes combat-intent-pulse`.
 
+### Lot 19 - Preview multi-tour des intentions ennemies
+- Backend combat:
+  - extension du telegraphe serveur avec prevision a 2 pas:
+    - `enemyTelegraphIntent` (tour ennemi imminent)
+    - `enemyTelegraphNextIntent` (tour ennemi suivant)
+  - simulation legere des couts/effets d'intention entre les deux pas (MP, cleanse/dispel, timers de status).
+  - nettoyage des deux telegraphes a la fin du combat.
+- Frontend HUD combat:
+  - ajout d'une ligne `Next` sous `Intent` dans la carte ennemi.
+  - rendu visuel du `Next` en chip dedie (`NEXT: ...`) avec style distinct (bordure dashed, sans pulse).
+  - fallback explicite `NO PREVIEW` quand aucune prevision n'est disponible.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -342,6 +354,6 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Ajouter une route d'admin debug pour reset progression (dev only).
 4. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
-5. Ajouter un systeme de preview multi-tour (prochaine attaque + pattern suivant) pour les boss scripts.
+5. Ajouter des icones d'intention (attaque, magie, cleanse, dispel, ulti) pour renforcer la lisibilite mobile.
 
 
