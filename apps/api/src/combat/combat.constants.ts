@@ -3,10 +3,17 @@ import type { CombatEnemyDefinition } from './combat.types';
 export const COMBAT_ENCOUNTERS_TABLE = 'combat_encounters';
 
 export const COMBAT_STATUSES = ['active', 'won', 'lost', 'fled'] as const;
-export const COMBAT_ACTIONS = ['attack', 'defend', 'fireball'] as const;
+export const COMBAT_ACTIONS = ['attack', 'defend', 'fireball', 'rally', 'sunder'] as const;
 
 export const COMBAT_LOG_LIMIT = 20;
 export const FIREBALL_MANA_COST = 5;
+export const RALLY_MANA_COST = 3;
+export const SUNDER_MANA_COST = 4;
+export const RALLY_DURATION_TURNS = 2;
+export const SUNDER_DURATION_TURNS = 2;
+export const CINDER_WARDEN_PURGE_MANA_COST = 4;
+export const ASH_CAPTAIN_PURGE_MANA_COST = 4;
+export const CURSE_AVATAR_DISPEL_MANA_COST = 5;
 export const DEFAULT_COMBAT_ENEMY_KEY = 'forest_goblin';
 export const TOWER_FLOOR_SCRIPTED_ENEMIES: Record<number, string> = {
   3: 'thorn_beast_alpha',

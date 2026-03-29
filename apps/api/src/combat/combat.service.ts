@@ -18,9 +18,16 @@ import {
   COMBAT_ENCOUNTERS_TABLE,
   COMBAT_ENEMY_DEFINITIONS,
   COMBAT_LOG_LIMIT,
+  CURSE_AVATAR_DISPEL_MANA_COST,
   DEFAULT_COMBAT_ENEMY_KEY,
   DEFAULT_PLAYER_COMBAT_STATE,
   FIREBALL_MANA_COST,
+  RALLY_DURATION_TURNS,
+  RALLY_MANA_COST,
+  CINDER_WARDEN_PURGE_MANA_COST,
+  SUNDER_DURATION_TURNS,
+  SUNDER_MANA_COST,
+  ASH_CAPTAIN_PURGE_MANA_COST,
   TOWER_FLOOR_SCRIPTED_ENEMIES,
 } from './combat.constants';
 import type {
@@ -223,7 +230,12 @@ export class CombatService {
 
     switch (action) {
       case 'attack': {
-        const damage = this.calculatePhysicalDamage(next.player, next.enemy);
+        const damage = this.calculatePhysicalDamage(
+          next.player,
+          next.enemy,
+          this.getPlayerAttackBonus(next),
+          this.getEnemyDefensePenalty(next),
+        );
         next.enemy.currentHp = Math.max(0, next.enemy.currentHp - damage);
         this.pushLog(next, `You attack ${next.enemy.name} for ${damage} damage.`);
         break;
@@ -239,9 +251,42 @@ export class CombatService {
         }
 
         next.player.mp -= FIREBALL_MANA_COST;
-        const damage = this.calculateMagicDamage(next.player, next.enemy);
+        const damage = this.calculateMagicDamage(
+          next.player,
+          next.enemy,
+          this.getPlayerMagicAttackBonus(next),
+          this.getEnemyDefensePenalty(next),
+        );
         next.enemy.currentHp = Math.max(0, next.enemy.currentHp - damage);
         this.pushLog(next, `You cast Fireball on ${next.enemy.name} for ${damage} damage.`);
+        break;
+      }
+      case 'rally': {
+        if (next.player.mp < RALLY_MANA_COST) {
+          throw new BadRequestException('Not enough MP for Rally');
+        }
+
+        next.player.mp -= RALLY_MANA_COST;
+        this.setPlayerRallyTurns(next, RALLY_DURATION_TURNS);
+        this.pushLog(next, `You cast Rally. Attack and magic are boosted for ${RALLY_DURATION_TURNS} turns.`);
+        break;
+      }
+      case 'sunder': {
+        if (next.player.mp < SUNDER_MANA_COST) {
+          throw new BadRequestException('Not enough MP for Sunder');
+        }
+
+        next.player.mp -= SUNDER_MANA_COST;
+        this.setEnemyShatterTurns(next, SUNDER_DURATION_TURNS);
+        const damage = Math.max(
+          1,
+          this.calculatePhysicalDamage(next.player, next.enemy, this.getPlayerAttackBonus(next), 0) - 1,
+        );
+        next.enemy.currentHp = Math.max(0, next.enemy.currentHp - damage);
+        this.pushLog(
+          next,
+          `You use Sunder for ${damage} damage and reduce ${next.enemy.name} defense for ${SUNDER_DURATION_TURNS} turns.`,
+        );
         break;
       }
       default: {
@@ -267,6 +312,7 @@ export class CombatService {
       return next;
     }
 
+    this.tickStatusDurations(next);
     next.turn = 'player';
     next.round += 1;
     return next;
@@ -447,9 +493,16 @@ export class CombatService {
   private resolveEnemyTurn(encounter: CombatEncounterState): void {
     let damage = this.calculateEnemyDamage(encounter.enemy, encounter.player);
     let label = `${encounter.enemy.name} hits you`;
+    const playerRallyTurns = this.getPlayerRallyTurns(encounter);
+    const enemyShatterTurns = this.getEnemyShatterTurns(encounter);
 
     switch (encounter.enemy.key) {
       case 'thorn_beast_alpha': {
+        if (playerRallyTurns > 0 && encounter.round % 2 === 0) {
+          damage += 2;
+          label = `${encounter.enemy.name} punishes your opening`;
+        }
+
         if (encounter.round % 3 === 0) {
           damage += 3;
           label = `${encounter.enemy.name} uses Root Smash`;
@@ -457,6 +510,15 @@ export class CombatService {
         break;
       }
       case 'cinder_warden': {
+        if (enemyShatterTurns > 0 && encounter.enemy.currentMp >= CINDER_WARDEN_PURGE_MANA_COST) {
+          encounter.enemy.currentMp -= CINDER_WARDEN_PURGE_MANA_COST;
+          this.setEnemyShatterTurns(encounter, 0);
+          damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + 1;
+          label = `${encounter.enemy.name} casts Molten Shell`;
+          this.pushLog(encounter, `${encounter.enemy.name} burns away Sunder and restores its armor.`);
+          break;
+        }
+
         if (encounter.enemy.currentMp >= 3 && encounter.round % 2 === 0) {
           encounter.enemy.currentMp -= 3;
           damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + 2;
@@ -465,6 +527,15 @@ export class CombatService {
         break;
       }
       case 'ash_vanguard_captain': {
+        if (enemyShatterTurns > 0 && encounter.enemy.currentMp >= ASH_CAPTAIN_PURGE_MANA_COST) {
+          encounter.enemy.currentMp -= ASH_CAPTAIN_PURGE_MANA_COST;
+          this.setEnemyShatterTurns(encounter, 0);
+          damage = this.calculateEnemyDamage(encounter.enemy, encounter.player) + 2;
+          label = `${encounter.enemy.name} uses Iron Recenter`;
+          this.pushLog(encounter, `${encounter.enemy.name} breaks free from Sunder.`);
+          break;
+        }
+
         if (encounter.round % 3 === 0) {
           const firstStrike = Math.max(1, Math.floor(this.calculateEnemyDamage(encounter.enemy, encounter.player) / 2));
           const secondStrike = Math.max(1, firstStrike - 1);
@@ -486,6 +557,15 @@ export class CombatService {
         }
 
         const enraged = Boolean(encounter.scriptState?.avatarEnraged);
+        if (playerRallyTurns > 0 && encounter.enemy.currentMp >= CURSE_AVATAR_DISPEL_MANA_COST) {
+          encounter.enemy.currentMp -= CURSE_AVATAR_DISPEL_MANA_COST;
+          this.setPlayerRallyTurns(encounter, 0);
+          damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + (enraged ? 3 : 2);
+          label = `${encounter.enemy.name} casts Null Sigil`;
+          this.pushLog(encounter, 'Your Rally buff is dispelled.');
+          break;
+        }
+
         if (enraged && encounter.enemy.currentMp >= 5 && encounter.round % 2 === 0) {
           encounter.enemy.currentMp -= 5;
           damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + 5;
@@ -508,12 +588,88 @@ export class CombatService {
     this.pushLog(encounter, `${label} for ${mitigatedDamage} damage.`);
   }
 
-  private calculatePhysicalDamage(player: CombatUnitState, enemy: CombatEncounterState['enemy']): number {
-    return Math.max(1, player.attack + 2 - enemy.defense);
+  private getPlayerRallyTurns(encounter: CombatEncounterState): number {
+    const raw = Number(encounter.scriptState?.playerRallyTurns ?? 0);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return 0;
+    }
+
+    return Math.floor(raw);
   }
 
-  private calculateMagicDamage(player: CombatUnitState, enemy: CombatEncounterState['enemy']): number {
-    return Math.max(1, player.magicAttack + 4 - enemy.defense);
+  private setPlayerRallyTurns(encounter: CombatEncounterState, turns: number): void {
+    encounter.scriptState = {
+      ...(encounter.scriptState ?? {}),
+      playerRallyTurns: Math.max(0, Math.floor(turns)),
+    };
+  }
+
+  private getEnemyShatterTurns(encounter: CombatEncounterState): number {
+    const raw = Number(encounter.scriptState?.enemyShatterTurns ?? 0);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return 0;
+    }
+
+    return Math.floor(raw);
+  }
+
+  private setEnemyShatterTurns(encounter: CombatEncounterState, turns: number): void {
+    encounter.scriptState = {
+      ...(encounter.scriptState ?? {}),
+      enemyShatterTurns: Math.max(0, Math.floor(turns)),
+    };
+  }
+
+  private getPlayerAttackBonus(encounter: CombatEncounterState): number {
+    return this.getPlayerRallyTurns(encounter) > 0 ? 3 : 0;
+  }
+
+  private getPlayerMagicAttackBonus(encounter: CombatEncounterState): number {
+    return this.getPlayerRallyTurns(encounter) > 0 ? 3 : 0;
+  }
+
+  private getEnemyDefensePenalty(encounter: CombatEncounterState): number {
+    return this.getEnemyShatterTurns(encounter) > 0 ? 3 : 0;
+  }
+
+  private tickStatusDurations(encounter: CombatEncounterState): void {
+    const rallyTurns = this.getPlayerRallyTurns(encounter);
+    if (rallyTurns > 0) {
+      const nextTurns = rallyTurns - 1;
+      this.setPlayerRallyTurns(encounter, nextTurns);
+      if (nextTurns === 0) {
+        this.pushLog(encounter, 'Rally effect has faded.');
+      }
+    }
+
+    const shatterTurns = this.getEnemyShatterTurns(encounter);
+    if (shatterTurns > 0) {
+      const nextTurns = shatterTurns - 1;
+      this.setEnemyShatterTurns(encounter, nextTurns);
+      if (nextTurns === 0) {
+        this.pushLog(encounter, `${encounter.enemy.name} recovers from Sunder.`);
+      }
+    }
+  }
+
+  private calculatePhysicalDamage(
+    player: CombatUnitState,
+    enemy: CombatEncounterState['enemy'],
+    attackBonus = 0,
+    defensePenalty = 0,
+  ): number {
+    const effectiveDefense = Math.max(0, enemy.defense - defensePenalty);
+    return Math.max(1, player.attack + attackBonus + 2 - effectiveDefense);
+  }
+
+  private calculateMagicDamage(
+    player: CombatUnitState,
+    enemy: CombatEncounterState['enemy'],
+    magicAttackBonus = 0,
+    defensePenalty = 0,
+  ): number {
+    const effectiveDefense = Math.max(0, enemy.defense - defensePenalty);
+    return Math.max(1, player.magicAttack + magicAttackBonus + 4 - effectiveDefense);
   }
 
   private calculateEnemyDamage(enemy: CombatEncounterState['enemy'], player: CombatUnitState): number {

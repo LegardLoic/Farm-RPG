@@ -23,8 +23,12 @@ type HudState = {
 type CombatStatus = 'active' | 'won' | 'lost' | 'fled';
 type CombatTurn = 'player' | 'enemy';
 type CombatUiStatus = CombatStatus | 'idle' | 'loading' | 'error';
-type CombatActionName = 'attack' | 'defend' | 'fireball';
+type CombatActionName = 'attack' | 'defend' | 'fireball' | 'rally' | 'sunder';
 type QuestStatus = 'active' | 'completed' | 'claimed';
+
+const FIREBALL_MANA_COST = 5;
+const RALLY_MANA_COST = 3;
+const SUNDER_MANA_COST = 4;
 
 type CombatUnitState = {
   hp: number;
@@ -57,6 +61,7 @@ type CombatEncounterState = {
   turn: CombatTurn;
   round: number;
   logs: string[];
+  scriptState?: Record<string, boolean | number | string>;
   player: CombatUnitState;
   enemy: CombatEnemyState;
   lastAction: string | null;
@@ -132,6 +137,8 @@ export class GameScene extends Phaser.Scene {
   private combatAttackButton: HTMLButtonElement | null = null;
   private combatDefendButton: HTMLButtonElement | null = null;
   private combatFireballButton: HTMLButtonElement | null = null;
+  private combatRallyButton: HTMLButtonElement | null = null;
+  private combatSunderButton: HTMLButtonElement | null = null;
   private combatForfeitButton: HTMLButtonElement | null = null;
   private combatLogsList: HTMLElement | null = null;
   private combatStatusBadge: HTMLElement | null = null;
@@ -226,7 +233,13 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (combatAction === 'attack' || combatAction === 'defend' || combatAction === 'fireball') {
+    if (
+      combatAction === 'attack' ||
+      combatAction === 'defend' ||
+      combatAction === 'fireball' ||
+      combatAction === 'rally' ||
+      combatAction === 'sunder'
+    ) {
       void this.performCombatAction(combatAction);
       return;
     }
@@ -447,12 +460,14 @@ export class GameScene extends Phaser.Scene {
               <span>Player</span>
               <div class="combat-card-line"><span>HP</span><strong data-hud="combatPlayerHp">-</strong></div>
               <div class="combat-card-line"><span>MP</span><strong data-hud="combatPlayerMp">-</strong></div>
+              <div class="combat-card-line"><span>Effects</span><strong data-hud="combatPlayerEffects">-</strong></div>
             </div>
             <div class="combat-card enemy">
               <span>Enemy</span>
               <div class="combat-card-line"><span>Name</span><strong data-hud="combatEnemyName">-</strong></div>
               <div class="combat-card-line"><span>HP</span><strong data-hud="combatEnemyHp">-</strong></div>
               <div class="combat-card-line"><span>MP</span><strong data-hud="combatEnemyMp">-</strong></div>
+              <div class="combat-card-line"><span>Effects</span><strong data-hud="combatEnemyEffects">-</strong></div>
             </div>
           </div>
           <div class="hud-combat-actions">
@@ -460,6 +475,8 @@ export class GameScene extends Phaser.Scene {
             <button class="hud-combat-button" data-combat-action="attack">Attack</button>
             <button class="hud-combat-button secondary" data-combat-action="defend">Defend</button>
             <button class="hud-combat-button" data-combat-action="fireball">Fireball</button>
+            <button class="hud-combat-button secondary" data-combat-action="rally">Rally (+Atk)</button>
+            <button class="hud-combat-button" data-combat-action="sunder">Sunder (-Def)</button>
             <button class="hud-combat-button danger" data-combat-action="forfeit">Fuir</button>
           </div>
           <div class="hud-combat-error" data-hud="combatError" hidden></div>
@@ -512,6 +529,8 @@ export class GameScene extends Phaser.Scene {
     this.combatAttackButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="attack"]');
     this.combatDefendButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="defend"]');
     this.combatFireballButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="fireball"]');
+    this.combatRallyButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="rally"]');
+    this.combatSunderButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="sunder"]');
     this.combatForfeitButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="forfeit"]');
     this.combatLogsList = this.hudRoot.querySelector<HTMLElement>('[data-hud="combatLogs"]');
     this.combatStatusBadge = this.hudRoot.querySelector<HTMLElement>('[data-hud="combatStatus"]');
@@ -546,6 +565,8 @@ export class GameScene extends Phaser.Scene {
     this.combatAttackButton = null;
     this.combatDefendButton = null;
     this.combatFireballButton = null;
+    this.combatRallyButton = null;
+    this.combatSunderButton = null;
     this.combatForfeitButton = null;
     this.combatLogsList = null;
     this.combatStatusBadge = null;
@@ -609,9 +630,11 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('combatResult', this.combatMessage);
     this.setHudText('combatPlayerHp', this.getCombatUnitValue(this.hudState.hp, this.hudState.maxHp));
     this.setHudText('combatPlayerMp', this.getCombatUnitValue(this.hudState.mp, this.hudState.maxMp));
+    this.setHudText('combatPlayerEffects', this.getCombatPlayerEffectsLabel());
     this.setHudText('combatEnemyName', this.combatState ? this.combatState.enemy.name : '-');
     this.setHudText('combatEnemyHp', this.getCombatEnemyValue('hp'));
     this.setHudText('combatEnemyMp', this.getCombatEnemyValue('mp'));
+    this.setHudText('combatEnemyEffects', this.getCombatEnemyEffectsLabel());
 
     if (this.combatStatusBadge) {
       this.combatStatusBadge.dataset.status = this.combatStatus;
@@ -1236,7 +1259,10 @@ export class GameScene extends Phaser.Scene {
   private updateCombatButtons(): void {
     const active = Boolean(this.isAuthenticated && this.combatState && this.combatState.status === 'active');
     const playerTurn = Boolean(active && this.combatState?.turn === 'player');
-    const fireballReady = Boolean(playerTurn && (this.combatState?.player.mp ?? 0) >= 5);
+    const mana = this.combatState?.player.mp ?? 0;
+    const fireballReady = Boolean(playerTurn && mana >= FIREBALL_MANA_COST);
+    const rallyReady = Boolean(playerTurn && mana >= RALLY_MANA_COST);
+    const sunderReady = Boolean(playerTurn && mana >= SUNDER_MANA_COST);
 
     if (this.combatStartButton) {
       this.combatStartButton.disabled = !this.isAuthenticated || this.combatBusy;
@@ -1252,6 +1278,14 @@ export class GameScene extends Phaser.Scene {
 
     if (this.combatFireballButton) {
       this.combatFireballButton.disabled = !fireballReady || this.combatBusy;
+    }
+
+    if (this.combatRallyButton) {
+      this.combatRallyButton.disabled = !rallyReady || this.combatBusy;
+    }
+
+    if (this.combatSunderButton) {
+      this.combatSunderButton.disabled = !sunderReady || this.combatBusy;
     }
 
     if (this.combatForfeitButton) {
@@ -1600,8 +1634,20 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (action === 'fireball' && this.combatState.player.mp < 5) {
+    if (action === 'fireball' && this.combatState.player.mp < FIREBALL_MANA_COST) {
       this.setCombatError('Pas assez de MP pour Fireball.');
+      this.updateHud();
+      return;
+    }
+
+    if (action === 'rally' && this.combatState.player.mp < RALLY_MANA_COST) {
+      this.setCombatError('Pas assez de MP pour Rally.');
+      this.updateHud();
+      return;
+    }
+
+    if (action === 'sunder' && this.combatState.player.mp < SUNDER_MANA_COST) {
+      this.setCombatError('Pas assez de MP pour Sunder.');
       this.updateHud();
       return;
     }
@@ -2155,6 +2201,50 @@ export class GameScene extends Phaser.Scene {
     return this.getCombatUnitValue(this.combatState.enemy.currentMp, this.combatState.enemy.mp);
   }
 
+  private getCombatPlayerEffectsLabel(): string {
+    if (!this.combatState) {
+      return '-';
+    }
+
+    const rallyTurns = this.getCombatScriptTurns('playerRallyTurns');
+    if (rallyTurns <= 0) {
+      return 'None';
+    }
+
+    return `Rally ${rallyTurns}t`;
+  }
+
+  private getCombatEnemyEffectsLabel(): string {
+    if (!this.combatState) {
+      return '-';
+    }
+
+    const effects: string[] = [];
+    const shatterTurns = this.getCombatScriptTurns('enemyShatterTurns');
+    if (shatterTurns > 0) {
+      effects.push(`Sunder ${shatterTurns}t`);
+    }
+
+    if (this.getCombatScriptFlag('avatarEnraged')) {
+      effects.push('Enraged');
+    }
+
+    return effects.length > 0 ? effects.join(' | ') : 'None';
+  }
+
+  private getCombatScriptTurns(key: string): number {
+    const raw = this.combatState?.scriptState?.[key];
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+      return 0;
+    }
+
+    return Math.max(0, Math.floor(raw));
+  }
+
+  private getCombatScriptFlag(key: string): boolean {
+    return this.combatState?.scriptState?.[key] === true;
+  }
+
   private clearCombatError(): void {
     this.combatError = null;
   }
@@ -2610,6 +2700,7 @@ export class GameScene extends Phaser.Scene {
       turn,
       round,
       logs: this.asStringArray(value.logs).slice(-20),
+      scriptState: this.normalizeCombatScriptState(value.scriptState),
       player,
       enemy,
       lastAction: this.asString(value.lastAction),
@@ -2617,6 +2708,25 @@ export class GameScene extends Phaser.Scene {
       updatedAt: this.asString(value.updatedAt) ?? undefined,
       endedAt: this.asString(value.endedAt) ?? null,
     };
+  }
+
+  private normalizeCombatScriptState(value: unknown): Record<string, boolean | number | string> {
+    if (!this.isRecord(value)) {
+      return {};
+    }
+
+    const normalized: Record<string, boolean | number | string> = {};
+    for (const [key, entryValue] of Object.entries(value)) {
+      if (
+        typeof entryValue === 'boolean' ||
+        typeof entryValue === 'number' ||
+        typeof entryValue === 'string'
+      ) {
+        normalized[key] = entryValue;
+      }
+    }
+
+    return normalized;
   }
 
   private normalizePlayerState(value: Record<string, unknown>): CombatUnitState | null {

@@ -200,6 +200,33 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - le chargement n'est execute que si le slot est explicitement confirme
   - reset automatique de la confirmation apres `Capture`, `Delete`, `Restore autosave`, ou si le slot n'existe plus.
 
+### Lot 15 - Skills joueur combat (buff + debuff)
+- Backend combat:
+  - nouvelles actions joueurs: `rally` et `sunder`
+  - `rally`: buff temporaire (attaque + magie) pendant 2 tours
+  - `sunder`: debuff defense ennemi pendant 2 tours + degats leger
+  - couts MP ajoutes et valides serveur:
+    - `rally`: 3 MP
+    - `sunder`: 4 MP
+  - logs de combat enrichis (application et fin des effets).
+- Frontend HUD combat:
+  - nouveaux boutons `Rally (+Atk)` et `Sunder (-Def)`
+  - activation/desactivation selon MP disponible
+  - erreurs UI dediees si MP insuffisant.
+
+### Lot 16 - IA boss reactive aux buffs/debuffs joueur
+- Backend combat:
+  - patterns reactifs ajoutes sur boss scripts:
+    - `cinder_warden`: peut cleanser `Sunder` via `Molten Shell`
+    - `ash_vanguard_captain`: peut casser `Sunder` via `Iron Recenter`
+    - `curse_heart_avatar`: peut dispel `Rally` via `Null Sigil`
+  - logs de combat enrichis pour expliciter les cleanses/dispels.
+- Frontend HUD combat:
+  - affichage des effets actifs:
+    - joueur (`Rally Nt`)
+    - ennemi (`Sunder Nt`, `Enraged` si applicable)
+  - parsing du `scriptState` combat pour rendre les etats temporaires lisibles.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -293,7 +320,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 1. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Ajouter une route d'admin debug pour reset progression (dev only).
-4. Ajouter des skills ennemis cote joueur (interrupt/buff/debuff) pour enrichir les combats boss.
-5. Ajouter un mode "compare slot vs etat courant" avant `Load` (diff rapide niveau/or/etage/items).
+4. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
+5. Ajouter des telegraphes visuels dans le HUD pour annoncer les attaques speciales boss.
 
 

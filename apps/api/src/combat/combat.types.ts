@@ -1,5 +1,5 @@
 export type CombatStatus = 'active' | 'won' | 'lost' | 'fled';
-export type CombatActionName = 'attack' | 'defend' | 'fireball';
+export type CombatActionName = 'attack' | 'defend' | 'fireball' | 'rally' | 'sunder';
 export type CombatTurn = 'player' | 'enemy';
 
 export interface CombatUnitState {
