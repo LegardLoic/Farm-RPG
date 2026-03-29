@@ -88,4 +88,5 @@ Use `.env.example` templates and repository secrets for CI.
 - Confirmation step before loading a slot from the HUD.
 - Player combat skills: `Rally` (buff) and `Sunder` (debuff).
 - Scripted boss AI reactions to player status effects (`Rally` dispel / `Sunder` cleanse patterns).
+- Combat HUD enemy telegraph for upcoming scripted boss intent.
 - Blacksmith shop unlocked by progression flags.

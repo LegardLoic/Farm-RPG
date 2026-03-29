@@ -468,6 +468,7 @@ export class GameScene extends Phaser.Scene {
               <div class="combat-card-line"><span>HP</span><strong data-hud="combatEnemyHp">-</strong></div>
               <div class="combat-card-line"><span>MP</span><strong data-hud="combatEnemyMp">-</strong></div>
               <div class="combat-card-line"><span>Effects</span><strong data-hud="combatEnemyEffects">-</strong></div>
+              <div class="combat-card-line"><span>Intent</span><strong data-hud="combatEnemyIntent">-</strong></div>
             </div>
           </div>
           <div class="hud-combat-actions">
@@ -635,6 +636,7 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('combatEnemyHp', this.getCombatEnemyValue('hp'));
     this.setHudText('combatEnemyMp', this.getCombatEnemyValue('mp'));
     this.setHudText('combatEnemyEffects', this.getCombatEnemyEffectsLabel());
+    this.setHudText('combatEnemyIntent', this.getCombatEnemyIntentLabel());
 
     if (this.combatStatusBadge) {
       this.combatStatusBadge.dataset.status = this.combatStatus;
@@ -2230,6 +2232,42 @@ export class GameScene extends Phaser.Scene {
     }
 
     return effects.length > 0 ? effects.join(' | ') : 'None';
+  }
+
+  private getCombatEnemyIntentLabel(): string {
+    if (!this.combatState || this.combatState.status !== 'active' || this.combatState.turn !== 'player') {
+      return '-';
+    }
+
+    const intent = this.combatState.scriptState?.enemyTelegraphIntent;
+    if (typeof intent !== 'string' || intent.length === 0) {
+      return 'Unclear';
+    }
+
+    switch (intent) {
+      case 'basic_strike':
+        return 'Basic Strike';
+      case 'root_smash':
+        return 'Root Smash';
+      case 'opening_punish':
+        return 'Punish Opening';
+      case 'cinder_burst':
+        return 'Cinder Burst';
+      case 'molten_shell':
+        return 'Molten Shell (Cleanse)';
+      case 'twin_slash':
+        return 'Twin Slash';
+      case 'iron_recenter':
+        return 'Iron Recenter (Cleanse)';
+      case 'cataclysm_ray':
+        return 'Cataclysm Ray';
+      case 'cursed_claw':
+        return 'Cursed Claw';
+      case 'null_sigil':
+        return 'Null Sigil (Dispel)';
+      default:
+        return 'Unclear';
+    }
   }
 
   private getCombatScriptTurns(key: string): number {

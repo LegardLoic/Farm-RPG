@@ -63,6 +63,18 @@ type PlayerProgressionRow = {
   gold: number;
 };
 
+type EnemyIntent =
+  | 'basic_strike'
+  | 'root_smash'
+  | 'opening_punish'
+  | 'cinder_burst'
+  | 'molten_shell'
+  | 'twin_slash'
+  | 'iron_recenter'
+  | 'cataclysm_ray'
+  | 'cursed_claw'
+  | 'null_sigil';
+
 @Injectable()
 export class CombatService {
   constructor(
@@ -177,6 +189,7 @@ export class CombatService {
       forfeited.turn = 'player';
       forfeited.endedAt = new Date().toISOString();
       forfeited.lastAction = null;
+      this.clearEnemyTelegraph(forfeited);
       forfeited.updatedAt = forfeited.endedAt;
 
       const savedRow = await this.saveEncounter(tx, forfeited);
@@ -195,7 +208,7 @@ export class CombatService {
       ? `Boss encounter: floor ${towerFloor} - ${enemy.name}.`
       : `A wild ${enemy.name} appears.`;
 
-    return {
+    const encounter: CombatEncounterState = {
       id: randomUUID(),
       userId,
       enemyKey: enemy.key,
@@ -219,6 +232,9 @@ export class CombatService {
       updatedAt: now,
       endedAt: null,
     };
+
+    this.updateEnemyTelegraph(encounter);
+    return encounter;
   }
 
   private resolvePlayerAction(encounter: CombatEncounterState, action: CombatActionName): CombatEncounterState {
@@ -298,6 +314,7 @@ export class CombatService {
       next.status = 'won';
       next.turn = 'player';
       next.endedAt = next.updatedAt;
+      this.clearEnemyTelegraph(next);
       this.pushLog(next, `${next.enemy.name} is defeated.`);
       return next;
     }
@@ -308,6 +325,7 @@ export class CombatService {
       next.status = 'lost';
       next.turn = 'player';
       next.endedAt = next.updatedAt;
+      this.clearEnemyTelegraph(next);
       this.pushLog(next, 'You have been defeated.');
       return next;
     }
@@ -315,6 +333,7 @@ export class CombatService {
     this.tickStatusDurations(next);
     next.turn = 'player';
     next.round += 1;
+    this.updateEnemyTelegraph(next);
     return next;
   }
 
@@ -491,91 +510,78 @@ export class CombatService {
   }
 
   private resolveEnemyTurn(encounter: CombatEncounterState): void {
+    if (encounter.enemy.key === 'curse_heart_avatar') {
+      const isEnraged = Boolean(encounter.scriptState?.avatarEnraged);
+      const crossedEnrageThreshold = encounter.enemy.currentHp <= Math.floor(encounter.enemy.hp / 2);
+      if (crossedEnrageThreshold && !isEnraged) {
+        encounter.scriptState = {
+          ...(encounter.scriptState ?? {}),
+          avatarEnraged: true,
+        };
+        this.pushLog(encounter, `${encounter.enemy.name} enters an enraged phase.`);
+      }
+    }
+
+    const intent = this.resolveEnemyIntent(encounter);
     let damage = this.calculateEnemyDamage(encounter.enemy, encounter.player);
     let label = `${encounter.enemy.name} hits you`;
-    const playerRallyTurns = this.getPlayerRallyTurns(encounter);
-    const enemyShatterTurns = this.getEnemyShatterTurns(encounter);
 
-    switch (encounter.enemy.key) {
-      case 'thorn_beast_alpha': {
-        if (playerRallyTurns > 0 && encounter.round % 2 === 0) {
-          damage += 2;
-          label = `${encounter.enemy.name} punishes your opening`;
-        }
-
-        if (encounter.round % 3 === 0) {
-          damage += 3;
-          label = `${encounter.enemy.name} uses Root Smash`;
-        }
+    switch (intent) {
+      case 'root_smash':
+        damage += 3;
+        label = `${encounter.enemy.name} uses Root Smash`;
+        break;
+      case 'opening_punish':
+        damage += 2;
+        label = `${encounter.enemy.name} punishes your opening`;
+        break;
+      case 'cinder_burst':
+        encounter.enemy.currentMp -= 3;
+        damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + 2;
+        label = `${encounter.enemy.name} casts Cinder Burst`;
+        break;
+      case 'molten_shell':
+        encounter.enemy.currentMp -= CINDER_WARDEN_PURGE_MANA_COST;
+        this.setEnemyShatterTurns(encounter, 0);
+        damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + 1;
+        label = `${encounter.enemy.name} casts Molten Shell`;
+        this.pushLog(encounter, `${encounter.enemy.name} burns away Sunder and restores its armor.`);
+        break;
+      case 'twin_slash': {
+        const firstStrike = Math.max(1, Math.floor(this.calculateEnemyDamage(encounter.enemy, encounter.player) / 2));
+        const secondStrike = Math.max(1, firstStrike - 1);
+        damage = firstStrike + secondStrike;
+        label = `${encounter.enemy.name} executes Twin Slash`;
         break;
       }
-      case 'cinder_warden': {
-        if (enemyShatterTurns > 0 && encounter.enemy.currentMp >= CINDER_WARDEN_PURGE_MANA_COST) {
-          encounter.enemy.currentMp -= CINDER_WARDEN_PURGE_MANA_COST;
-          this.setEnemyShatterTurns(encounter, 0);
-          damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + 1;
-          label = `${encounter.enemy.name} casts Molten Shell`;
-          this.pushLog(encounter, `${encounter.enemy.name} burns away Sunder and restores its armor.`);
-          break;
-        }
-
-        if (encounter.enemy.currentMp >= 3 && encounter.round % 2 === 0) {
-          encounter.enemy.currentMp -= 3;
-          damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + 2;
-          label = `${encounter.enemy.name} casts Cinder Burst`;
-        }
+      case 'iron_recenter':
+        encounter.enemy.currentMp -= ASH_CAPTAIN_PURGE_MANA_COST;
+        this.setEnemyShatterTurns(encounter, 0);
+        damage = this.calculateEnemyDamage(encounter.enemy, encounter.player) + 2;
+        label = `${encounter.enemy.name} uses Iron Recenter`;
+        this.pushLog(encounter, `${encounter.enemy.name} breaks free from Sunder.`);
         break;
-      }
-      case 'ash_vanguard_captain': {
-        if (enemyShatterTurns > 0 && encounter.enemy.currentMp >= ASH_CAPTAIN_PURGE_MANA_COST) {
-          encounter.enemy.currentMp -= ASH_CAPTAIN_PURGE_MANA_COST;
-          this.setEnemyShatterTurns(encounter, 0);
-          damage = this.calculateEnemyDamage(encounter.enemy, encounter.player) + 2;
-          label = `${encounter.enemy.name} uses Iron Recenter`;
-          this.pushLog(encounter, `${encounter.enemy.name} breaks free from Sunder.`);
-          break;
-        }
-
-        if (encounter.round % 3 === 0) {
-          const firstStrike = Math.max(1, Math.floor(this.calculateEnemyDamage(encounter.enemy, encounter.player) / 2));
-          const secondStrike = Math.max(1, firstStrike - 1);
-          damage = firstStrike + secondStrike;
-          label = `${encounter.enemy.name} executes Twin Slash`;
-        }
-        break;
-      }
-      case 'curse_heart_avatar': {
-        const isEnraged = Boolean(encounter.scriptState?.avatarEnraged);
-        const crossedEnrageThreshold = encounter.enemy.currentHp <= Math.floor(encounter.enemy.hp / 2);
-
-        if (crossedEnrageThreshold && !isEnraged) {
-          encounter.scriptState = {
-            ...(encounter.scriptState ?? {}),
-            avatarEnraged: true,
-          };
-          this.pushLog(encounter, `${encounter.enemy.name} enters an enraged phase.`);
-        }
-
+      case 'null_sigil': {
         const enraged = Boolean(encounter.scriptState?.avatarEnraged);
-        if (playerRallyTurns > 0 && encounter.enemy.currentMp >= CURSE_AVATAR_DISPEL_MANA_COST) {
-          encounter.enemy.currentMp -= CURSE_AVATAR_DISPEL_MANA_COST;
-          this.setPlayerRallyTurns(encounter, 0);
-          damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + (enraged ? 3 : 2);
-          label = `${encounter.enemy.name} casts Null Sigil`;
-          this.pushLog(encounter, 'Your Rally buff is dispelled.');
-          break;
-        }
-
-        if (enraged && encounter.enemy.currentMp >= 5 && encounter.round % 2 === 0) {
-          encounter.enemy.currentMp -= 5;
-          damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + 5;
-          label = `${encounter.enemy.name} unleashes Cataclysm Ray`;
-        } else {
-          damage += enraged ? 2 : 0;
-          label = `${encounter.enemy.name} strikes with Cursed Claw`;
-        }
+        encounter.enemy.currentMp -= CURSE_AVATAR_DISPEL_MANA_COST;
+        this.setPlayerRallyTurns(encounter, 0);
+        damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + (enraged ? 3 : 2);
+        label = `${encounter.enemy.name} casts Null Sigil`;
+        this.pushLog(encounter, 'Your Rally buff is dispelled.');
         break;
       }
+      case 'cataclysm_ray':
+        encounter.enemy.currentMp -= 5;
+        damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + 5;
+        label = `${encounter.enemy.name} unleashes Cataclysm Ray`;
+        break;
+      case 'cursed_claw': {
+        const enraged = Boolean(encounter.scriptState?.avatarEnraged);
+        damage += enraged ? 2 : 0;
+        label = `${encounter.enemy.name} strikes with Cursed Claw`;
+        break;
+      }
+      case 'basic_strike':
       default:
         break;
     }
@@ -586,6 +592,83 @@ export class CombatService {
     encounter.player.defending = false;
     encounter.updatedAt = new Date().toISOString();
     this.pushLog(encounter, `${label} for ${mitigatedDamage} damage.`);
+  }
+
+  private resolveEnemyIntent(encounter: CombatEncounterState): EnemyIntent {
+    const playerRallyTurns = this.getPlayerRallyTurns(encounter);
+    const enemyShatterTurns = this.getEnemyShatterTurns(encounter);
+
+    switch (encounter.enemy.key) {
+      case 'thorn_beast_alpha':
+        if (encounter.round % 3 === 0) {
+          return 'root_smash';
+        }
+        if (playerRallyTurns > 0 && encounter.round % 2 === 0) {
+          return 'opening_punish';
+        }
+        return 'basic_strike';
+      case 'cinder_warden':
+        if (enemyShatterTurns > 0 && encounter.enemy.currentMp >= CINDER_WARDEN_PURGE_MANA_COST) {
+          return 'molten_shell';
+        }
+        if (encounter.enemy.currentMp >= 3 && encounter.round % 2 === 0) {
+          return 'cinder_burst';
+        }
+        return 'basic_strike';
+      case 'ash_vanguard_captain':
+        if (enemyShatterTurns > 0 && encounter.enemy.currentMp >= ASH_CAPTAIN_PURGE_MANA_COST) {
+          return 'iron_recenter';
+        }
+        if (encounter.round % 3 === 0) {
+          return 'twin_slash';
+        }
+        return 'basic_strike';
+      case 'curse_heart_avatar': {
+        const enraged = this.isAvatarEnragedOrCrossing(encounter);
+        if (playerRallyTurns > 0 && encounter.enemy.currentMp >= CURSE_AVATAR_DISPEL_MANA_COST) {
+          return 'null_sigil';
+        }
+        if (enraged && encounter.enemy.currentMp >= 5 && encounter.round % 2 === 0) {
+          return 'cataclysm_ray';
+        }
+        return 'cursed_claw';
+      }
+      default:
+        return 'basic_strike';
+    }
+  }
+
+  private isAvatarEnragedOrCrossing(encounter: CombatEncounterState): boolean {
+    if (encounter.enemy.key !== 'curse_heart_avatar') {
+      return false;
+    }
+
+    if (encounter.scriptState?.avatarEnraged === true) {
+      return true;
+    }
+
+    return encounter.enemy.currentHp <= Math.floor(encounter.enemy.hp / 2);
+  }
+
+  private updateEnemyTelegraph(encounter: CombatEncounterState): void {
+    if (encounter.status !== 'active' || encounter.turn !== 'player') {
+      this.clearEnemyTelegraph(encounter);
+      return;
+    }
+
+    const intent = this.resolveEnemyIntent(encounter);
+    encounter.scriptState = {
+      ...(encounter.scriptState ?? {}),
+      enemyTelegraphIntent: intent,
+    };
+  }
+
+  private clearEnemyTelegraph(encounter: CombatEncounterState): void {
+    const nextState = {
+      ...(encounter.scriptState ?? {}),
+    };
+    delete nextState.enemyTelegraphIntent;
+    encounter.scriptState = nextState;
   }
 
   private getPlayerRallyTurns(encounter: CombatEncounterState): number {
@@ -848,8 +931,7 @@ export class CombatService {
   private toEncounterStateFromJson(value: CombatEncounterState | string): CombatEncounterState {
     const parsed = typeof value === 'string' ? (JSON.parse(value) as CombatEncounterState) : value;
     const enemyTemplate = this.resolveEnemyDefinition(parsed.enemyKey);
-
-    return {
+    const normalized: CombatEncounterState = {
       ...parsed,
       towerFloor: Math.max(1, Number(parsed.towerFloor ?? 1)),
       isScriptedBossEncounter: Boolean(parsed.isScriptedBossEncounter),
@@ -869,6 +951,14 @@ export class CombatService {
       rewards: parsed.rewards ?? null,
       rewardsGranted: Boolean(parsed.rewardsGranted),
     };
+
+    if (normalized.status === 'active' && normalized.turn === 'player') {
+      this.updateEnemyTelegraph(normalized);
+    } else {
+      this.clearEnemyTelegraph(normalized);
+    }
+
+    return normalized;
   }
 
   private toActionResult(encounter: CombatEncounterState): CombatActionResult {

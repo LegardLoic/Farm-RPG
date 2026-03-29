@@ -227,6 +227,17 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - ennemi (`Sunder Nt`, `Enraged` si applicable)
   - parsing du `scriptState` combat pour rendre les etats temporaires lisibles.
 
+### Lot 17 - Telegraphes visuels des intentions ennemies
+- Backend combat:
+  - ajout d'un calcul d'intention ennemie unifie (`enemyTelegraphIntent`) aligne avec la logique IA effective.
+  - telegraphe actualise a chaque debut de tour joueur.
+  - purge du telegraphe quand le combat se termine (`won/lost/fled`).
+- Frontend HUD combat:
+  - nouvel indicateur `Intent` sur la carte ennemie.
+  - mapping lisible des intentions scriptes:
+    - `Root Smash`, `Cinder Burst`, `Molten Shell (Cleanse)`, `Twin Slash`, `Iron Recenter (Cleanse)`, `Null Sigil (Dispel)`, `Cataclysm Ray`, etc.
+  - fallback `Unclear` si l'intention n'est pas disponible.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -321,6 +332,6 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Ajouter une route d'admin debug pour reset progression (dev only).
 4. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
-5. Ajouter des telegraphes visuels dans le HUD pour annoncer les attaques speciales boss.
+5. Passer du telegraphe texte a un telegraphe visuel (icones/couleurs/animation legere) pour les boss.
 
 
