@@ -107,6 +107,21 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - victoire combat -> progression de tour -> progression des quetes
   - les quetes peuvent maintenant se completer sur les paliers 3/5/8/10.
 
+### Lot 9 - Mini-boss et boss scriptes (paliers 3/5/8/10)
+- Ennemis scriptes ajoutes pour les paliers:
+  - etage 3: `thorn_beast_alpha`
+  - etage 5: `cinder_warden`
+  - etage 8: `ash_vanguard_captain`
+  - etage 10: `curse_heart_avatar`
+- Flux de demarrage combat ajuste:
+  - le backend choisit automatiquement l'ennemi en fonction de l'etage courant de tour
+  - les etages scriptes priorisent leur boss, meme si un autre `enemyKey` est propose.
+- IA combat et patterns scripts:
+  - attaques speciales/cycles pour chaque boss
+  - phase d'enrage pour le boss etage 10.
+- Integration TowerService en transaction:
+  - lecture de l'etat de tour dans le `startCombat` pour garantir la coherence du choix d'ennemi.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -118,6 +133,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - simulation tour par tour serveur
   - persistence encounter
   - attribution rewards serveur autoritaire
+  - bosses scriptes sur paliers 3/5/8/10
 - Quetes:
   - definitions cote serveur
   - progression automatique sur victoires
@@ -191,9 +207,9 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Flux PR continue (`develop` -> `main`) deja utilise et valide.
 
 ## 9) Prochaines priorites recommandees
-1. Ajouter mini-boss/boss scriptes lies aux paliers d'etage.
-2. Ajouter autosave apres victoire boss/palier majeur.
-3. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
-4. Etendre le shop (tiers, equipement reel, prerequis de quete).
-5. Ajouter une route d'admin debug pour reset progression (dev only).
+1. Ajouter autosave apres victoire boss/palier majeur.
+2. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
+3. Etendre le shop (tiers, equipement reel, prerequis de quete).
+4. Ajouter une route d'admin debug pour reset progression (dev only).
+5. Ajouter des skills ennemis cote joueur (interrupt/buff/debuff) pour enrichir les combats boss.
 

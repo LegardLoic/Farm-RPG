@@ -76,4 +76,5 @@ Use `.env.example` templates and repository secrets for CI.
 - Turn-based combat with server-authoritative rewards.
 - Persistent tower progression up to floor 10 for MVP.
 - Quest system with claim flow and story milestones tied to tower floors `3/5/8/10`.
+- Scripted mini-boss and boss encounters on floors `3/5/8/10`.
 - Blacksmith shop unlocked by progression flags.

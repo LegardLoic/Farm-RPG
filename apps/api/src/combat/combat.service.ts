@@ -12,6 +12,7 @@ import {
 import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
 import { QuestsService } from '../quests/quests.service';
 import { TowerService } from '../tower/tower.service';
+import type { TowerState } from '../tower/tower.types';
 import {
   COMBAT_ENCOUNTERS_TABLE,
   COMBAT_ENEMY_DEFINITIONS,
@@ -19,6 +20,7 @@ import {
   DEFAULT_COMBAT_ENEMY_KEY,
   DEFAULT_PLAYER_COMBAT_STATE,
   FIREBALL_MANA_COST,
+  TOWER_FLOOR_SCRIPTED_ENEMIES,
 } from './combat.constants';
 import type {
   CombatActionName,
@@ -68,8 +70,10 @@ export class CombatService {
         return this.toActionResult(activeEncounter);
       }
 
-      const enemy = this.resolveEnemyDefinition(payload?.enemyKey);
-      const encounter = this.createEncounter(userId, enemy);
+      const tower = await this.towerService.getStateForUpdate(tx, userId);
+      const scriptedEnemyKey = this.resolveScriptedEnemyKey(tower);
+      const enemy = this.resolveStartingEnemy(tower.currentFloor, scriptedEnemyKey, payload?.enemyKey);
+      const encounter = this.createEncounter(userId, enemy, tower.currentFloor, scriptedEnemyKey !== null);
       const row = await this.insertEncounter(tx, encounter);
 
       return this.toActionResult(this.toEncounterState(row));
@@ -159,23 +163,34 @@ export class CombatService {
     });
   }
 
-  private createEncounter(userId: string, enemy: CombatEnemyDefinition): CombatEncounterState {
+  private createEncounter(
+    userId: string,
+    enemy: CombatEnemyDefinition,
+    towerFloor: number,
+    isScriptedBossEncounter: boolean,
+  ): CombatEncounterState {
     const now = new Date().toISOString();
+    const firstLog = isScriptedBossEncounter
+      ? `Boss encounter: floor ${towerFloor} - ${enemy.name}.`
+      : `A wild ${enemy.name} appears.`;
 
     return {
       id: randomUUID(),
       userId,
       enemyKey: enemy.key,
+      towerFloor,
+      isScriptedBossEncounter,
       turn: 'player',
       status: 'active',
       round: 1,
-      logs: [`A wild ${enemy.name} appears.`],
+      logs: [firstLog],
       player: { ...DEFAULT_PLAYER_COMBAT_STATE },
       enemy: {
         ...enemy,
         currentHp: enemy.hp,
         currentMp: enemy.mp,
       },
+      scriptState: {},
       lastAction: null,
       rewards: null,
       rewardsGranted: false,
@@ -416,13 +431,67 @@ export class CombatService {
   }
 
   private resolveEnemyTurn(encounter: CombatEncounterState): void {
-    const damage = this.calculateEnemyDamage(encounter.enemy, encounter.player);
+    let damage = this.calculateEnemyDamage(encounter.enemy, encounter.player);
+    let label = `${encounter.enemy.name} hits you`;
+
+    switch (encounter.enemy.key) {
+      case 'thorn_beast_alpha': {
+        if (encounter.round % 3 === 0) {
+          damage += 3;
+          label = `${encounter.enemy.name} uses Root Smash`;
+        }
+        break;
+      }
+      case 'cinder_warden': {
+        if (encounter.enemy.currentMp >= 3 && encounter.round % 2 === 0) {
+          encounter.enemy.currentMp -= 3;
+          damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + 2;
+          label = `${encounter.enemy.name} casts Cinder Burst`;
+        }
+        break;
+      }
+      case 'ash_vanguard_captain': {
+        if (encounter.round % 3 === 0) {
+          const firstStrike = Math.max(1, Math.floor(this.calculateEnemyDamage(encounter.enemy, encounter.player) / 2));
+          const secondStrike = Math.max(1, firstStrike - 1);
+          damage = firstStrike + secondStrike;
+          label = `${encounter.enemy.name} executes Twin Slash`;
+        }
+        break;
+      }
+      case 'curse_heart_avatar': {
+        const isEnraged = Boolean(encounter.scriptState?.avatarEnraged);
+        const crossedEnrageThreshold = encounter.enemy.currentHp <= Math.floor(encounter.enemy.hp / 2);
+
+        if (crossedEnrageThreshold && !isEnraged) {
+          encounter.scriptState = {
+            ...(encounter.scriptState ?? {}),
+            avatarEnraged: true,
+          };
+          this.pushLog(encounter, `${encounter.enemy.name} enters an enraged phase.`);
+        }
+
+        const enraged = Boolean(encounter.scriptState?.avatarEnraged);
+        if (enraged && encounter.enemy.currentMp >= 5 && encounter.round % 2 === 0) {
+          encounter.enemy.currentMp -= 5;
+          damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + 5;
+          label = `${encounter.enemy.name} unleashes Cataclysm Ray`;
+        } else {
+          damage += enraged ? 2 : 0;
+          label = `${encounter.enemy.name} strikes with Cursed Claw`;
+        }
+        break;
+      }
+      default:
+        break;
+    }
+
     const mitigatedDamage = encounter.player.defending ? Math.max(1, Math.floor(damage / 2)) : damage;
 
     encounter.player.hp = Math.max(0, encounter.player.hp - mitigatedDamage);
     encounter.player.defending = false;
     encounter.updatedAt = new Date().toISOString();
-    this.pushLog(encounter, `${encounter.enemy.name} hits you for ${mitigatedDamage} damage.`);
+    this.pushLog(encounter, `${label} for ${mitigatedDamage} damage.`);
   }
 
   private calculatePhysicalDamage(player: CombatUnitState, enemy: CombatEncounterState['enemy']): number {
@@ -435,6 +504,46 @@ export class CombatService {
 
   private calculateEnemyDamage(enemy: CombatEncounterState['enemy'], player: CombatUnitState): number {
     return Math.max(1, enemy.attack + 2 - player.defense);
+  }
+
+  private calculateEnemyMagicDamage(enemy: CombatEncounterState['enemy'], player: CombatUnitState): number {
+    return Math.max(1, enemy.magicAttack + 4 - player.defense);
+  }
+
+  private resolveScriptedEnemyKey(tower: TowerState): string | null {
+    if (tower.currentFloor === 10 && tower.bossFloor10Defeated) {
+      return null;
+    }
+
+    return TOWER_FLOOR_SCRIPTED_ENEMIES[tower.currentFloor] ?? null;
+  }
+
+  private resolveStartingEnemy(
+    towerFloor: number,
+    scriptedEnemyKey: string | null,
+    requestedEnemyKey?: string,
+  ): CombatEnemyDefinition {
+    if (scriptedEnemyKey) {
+      return this.resolveEnemyDefinition(scriptedEnemyKey);
+    }
+
+    if (requestedEnemyKey) {
+      return this.resolveEnemyDefinition(requestedEnemyKey);
+    }
+
+    return this.resolveEnemyDefinition(this.resolveDefaultEnemyKeyForFloor(towerFloor));
+  }
+
+  private resolveDefaultEnemyKeyForFloor(towerFloor: number): string {
+    if (towerFloor >= 8) {
+      return 'ash_scout';
+    }
+
+    if (towerFloor >= 5) {
+      return 'forest_goblin';
+    }
+
+    return DEFAULT_COMBAT_ENEMY_KEY;
   }
 
   private resolveEnemyDefinition(enemyKey?: string): CombatEnemyDefinition {
@@ -572,6 +681,8 @@ export class CombatService {
 
     return {
       ...parsed,
+      towerFloor: Math.max(1, Number(parsed.towerFloor ?? 1)),
+      isScriptedBossEncounter: Boolean(parsed.isScriptedBossEncounter),
       logs: Array.isArray(parsed.logs) ? parsed.logs.slice(-COMBAT_LOG_LIMIT) : [],
       player: {
         ...parsed.player,
@@ -584,6 +695,7 @@ export class CombatService {
         currentHp: parsed.enemy?.currentHp ?? enemyTemplate.hp,
         currentMp: parsed.enemy?.currentMp ?? enemyTemplate.mp,
       },
+      scriptState: parsed.scriptState ?? {},
       rewards: parsed.rewards ?? null,
       rewardsGranted: Boolean(parsed.rewardsGranted),
     };

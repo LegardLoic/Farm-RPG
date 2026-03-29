@@ -56,12 +56,15 @@ export interface CombatEncounterState {
   id: string;
   userId: string;
   enemyKey: string;
+  towerFloor: number;
+  isScriptedBossEncounter: boolean;
   turn: CombatTurn;
   status: CombatStatus;
   round: number;
   logs: string[];
   player: CombatUnitState;
   enemy: CombatEnemyDefinition & { currentHp: number; currentMp: number };
+  scriptState?: Record<string, boolean | number | string>;
   lastAction: CombatActionName | null;
   rewards: CombatRewardSummary | null;
   rewardsGranted: boolean;

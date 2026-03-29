@@ -8,6 +8,12 @@ export const COMBAT_ACTIONS = ['attack', 'defend', 'fireball'] as const;
 export const COMBAT_LOG_LIMIT = 20;
 export const FIREBALL_MANA_COST = 5;
 export const DEFAULT_COMBAT_ENEMY_KEY = 'forest_goblin';
+export const TOWER_FLOOR_SCRIPTED_ENEMIES: Record<number, string> = {
+  3: 'thorn_beast_alpha',
+  5: 'cinder_warden',
+  8: 'ash_vanguard_captain',
+  10: 'curse_heart_avatar',
+};
 
 export const DEFAULT_PLAYER_COMBAT_STATE = {
   hp: 32,
@@ -96,6 +102,118 @@ export const COMBAT_ENEMY_DEFINITIONS: Record<string, CombatEnemyDefinition> = {
           minQuantity: 1,
           maxQuantity: 2,
           chance: 0.6,
+        },
+      ],
+    },
+  },
+  thorn_beast_alpha: {
+    key: 'thorn_beast_alpha',
+    name: 'Thorn Beast Alpha',
+    hp: 42,
+    mp: 6,
+    attack: 9,
+    defense: 3,
+    magicAttack: 4,
+    speed: 4,
+    rewards: {
+      experience: 64,
+      gold: 30,
+      loot: [
+        {
+          itemKey: 'thorn_shard',
+          minQuantity: 1,
+          maxQuantity: 2,
+          chance: 0.8,
+        },
+        {
+          itemKey: 'healing_herb',
+          minQuantity: 1,
+          maxQuantity: 2,
+          chance: 0.6,
+        },
+      ],
+    },
+  },
+  cinder_warden: {
+    key: 'cinder_warden',
+    name: 'Cinder Warden',
+    hp: 56,
+    mp: 16,
+    attack: 11,
+    defense: 4,
+    magicAttack: 10,
+    speed: 5,
+    rewards: {
+      experience: 94,
+      gold: 46,
+      loot: [
+        {
+          itemKey: 'ember_dust',
+          minQuantity: 2,
+          maxQuantity: 3,
+          chance: 0.9,
+        },
+        {
+          itemKey: 'mana_tonic',
+          minQuantity: 1,
+          maxQuantity: 1,
+          chance: 0.55,
+        },
+      ],
+    },
+  },
+  ash_vanguard_captain: {
+    key: 'ash_vanguard_captain',
+    name: 'Ash Vanguard Captain',
+    hp: 74,
+    mp: 20,
+    attack: 14,
+    defense: 6,
+    magicAttack: 11,
+    speed: 8,
+    rewards: {
+      experience: 140,
+      gold: 72,
+      loot: [
+        {
+          itemKey: 'scout_badge',
+          minQuantity: 1,
+          maxQuantity: 2,
+          chance: 0.8,
+        },
+        {
+          itemKey: 'iron_ore',
+          minQuantity: 2,
+          maxQuantity: 3,
+          chance: 0.75,
+        },
+      ],
+    },
+  },
+  curse_heart_avatar: {
+    key: 'curse_heart_avatar',
+    name: 'Curse Heart Avatar',
+    hp: 108,
+    mp: 30,
+    attack: 18,
+    defense: 8,
+    magicAttack: 16,
+    speed: 9,
+    rewards: {
+      experience: 220,
+      gold: 120,
+      loot: [
+        {
+          itemKey: 'cursed_core_fragment',
+          minQuantity: 1,
+          maxQuantity: 1,
+          chance: 1,
+        },
+        {
+          itemKey: 'mana_tonic',
+          minQuantity: 1,
+          maxQuantity: 2,
+          chance: 0.8,
         },
       ],
     },

@@ -23,9 +23,13 @@ export class TowerService {
 
   async getState(userId: string): Promise<TowerState> {
     return this.databaseService.withTransaction(async (tx) => {
-      const row = await this.getProgressionForUpdate(tx, userId);
-      return this.toTowerState(row);
+      return this.getStateForUpdate(tx, userId);
     });
+  }
+
+  async getStateForUpdate(executor: TransactionClient, userId: string): Promise<TowerState> {
+    const row = await this.getProgressionForUpdate(executor, userId);
+    return this.toTowerState(row);
   }
 
   async recordCombatVictory(
