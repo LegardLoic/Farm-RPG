@@ -84,4 +84,5 @@ Use `.env.example` templates and repository secrets for CI.
 - Automatic server-side autosave after major tower milestones and boss victory.
 - Restore latest autosave to manual slots from the in-game HUD.
 - Manual save-slot capture/load/delete from the in-game HUD.
+- Save-slot preview in HUD before load (stats, inventory, equipped items).
 - Blacksmith shop unlocked by progression flags.

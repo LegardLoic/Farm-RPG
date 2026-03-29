@@ -511,6 +511,20 @@ body::before {
   line-height: 1.4;
 }
 
+.save-slot-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: -2px;
+}
+
+.save-slot-preview-line {
+  margin: 0;
+  font-size: 0.73rem;
+  color: #9fb0c5;
+  line-height: 1.35;
+}
+
 .save-slot-actions {
   display: flex;
   gap: 8px;

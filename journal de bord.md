@@ -1,4 +1,4 @@
-# Journal de bord - Farm RPG
+﻿# Journal de bord - Farm RPG
 
 Derniere mise a jour: 29 mars 2026
 
@@ -180,6 +180,16 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - en cas d'erreur SQL sur le nettoyage combat, le chargement de save continue,
   - un warning serveur est loggue au lieu de renvoyer un 500.
 
+### Lot 13 - Apercu de contenu des slots avant chargement
+- Frontend HUD `Save Slots` enrichi avec un apercu par slot existant:
+  - stats rapides (`Level`, `Gold`, `Floor current/highest`)
+  - top inventaire (3 items)
+  - resume equipement (nb equips + 3 premiers slots equipes)
+- Technique:
+  - lecture des details via endpoint existant `GET /saves/:slot` (aucun changement API requis)
+  - parsing tolerant des snapshots pour supporter les formats manuels et autosave restaure
+  - rendu avec fallback `preview unavailable` si un snapshot est incomplet/invalide.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -274,5 +284,6 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Ajouter une route d'admin debug pour reset progression (dev only).
 4. Ajouter des skills ennemis cote joueur (interrupt/buff/debuff) pour enrichir les combats boss.
-5. Ajouter un aperçu du contenu de slot (resume inventaire/equipement) avant `Load`.
+5. Ajouter une confirmation UI avant `Load` (modale "etes-vous sur ?") pour eviter les erreurs de manipulation.
+
 

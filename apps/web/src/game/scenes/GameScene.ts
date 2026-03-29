@@ -102,6 +102,17 @@ type SaveSlotState = {
   version: number | null;
   label: string | null;
   updatedAt: string | null;
+  preview: SaveSlotPreview | null;
+};
+
+type SaveSlotPreview = {
+  playerLevel: number | null;
+  gold: number | null;
+  towerCurrentFloor: number | null;
+  towerHighestFloor: number | null;
+  inventoryTop: Array<{ itemKey: string; quantity: number }>;
+  equipmentTop: Array<{ slot: string; itemKey: string }>;
+  equippedCount: number;
 };
 
 export class GameScene extends Phaser.Scene {
@@ -733,6 +744,28 @@ export class GameScene extends Phaser.Scene {
       meta.textContent = this.getSaveSlotMetaLabel(slotState);
       item.appendChild(meta);
 
+      if (slotState.exists) {
+        const preview = document.createElement('div');
+        preview.classList.add('save-slot-preview');
+
+        const previewStats = document.createElement('p');
+        previewStats.classList.add('save-slot-preview-line');
+        previewStats.textContent = this.getSaveSlotStatsPreviewLabel(slotState);
+        preview.appendChild(previewStats);
+
+        const previewInventory = document.createElement('p');
+        previewInventory.classList.add('save-slot-preview-line');
+        previewInventory.textContent = this.getSaveSlotInventoryPreviewLabel(slotState);
+        preview.appendChild(previewInventory);
+
+        const previewEquipment = document.createElement('p');
+        previewEquipment.classList.add('save-slot-preview-line');
+        previewEquipment.textContent = this.getSaveSlotEquipmentPreviewLabel(slotState);
+        preview.appendChild(previewEquipment);
+
+        item.appendChild(preview);
+      }
+
       const actions = document.createElement('div');
       actions.classList.add('save-slot-actions');
 
@@ -1011,6 +1044,7 @@ export class GameScene extends Phaser.Scene {
         version: null,
         label: null,
         updatedAt: null,
+        preview: null,
       };
     });
   }
@@ -1023,6 +1057,47 @@ export class GameScene extends Phaser.Scene {
     const label = slotState.label?.trim() ? slotState.label.trim() : 'Manual save';
     const updated = slotState.updatedAt ? this.formatIsoForHud(slotState.updatedAt) : 'Unknown';
     return `${label} | Updated: ${updated}`;
+  }
+
+  private getSaveSlotStatsPreviewLabel(slotState: SaveSlotState): string {
+    if (!slotState.preview) {
+      return 'Stats: preview unavailable.';
+    }
+
+    const level = slotState.preview.playerLevel !== null ? `${slotState.preview.playerLevel}` : '?';
+    const gold = slotState.preview.gold !== null ? `${slotState.preview.gold}` : '?';
+    const floorCurrent = slotState.preview.towerCurrentFloor !== null ? `${slotState.preview.towerCurrentFloor}` : '?';
+    const floorHighest = slotState.preview.towerHighestFloor !== null ? `${slotState.preview.towerHighestFloor}` : '?';
+
+    return `Stats: Lvl ${level} | Gold ${gold} | Floor ${floorCurrent}/${floorHighest}`;
+  }
+
+  private getSaveSlotInventoryPreviewLabel(slotState: SaveSlotState): string {
+    if (!slotState.preview) {
+      return 'Inventory: preview unavailable.';
+    }
+
+    if (slotState.preview.inventoryTop.length === 0) {
+      return 'Inventory: empty.';
+    }
+
+    const items = slotState.preview.inventoryTop.map((entry) => `${entry.itemKey} x${entry.quantity}`).join(', ');
+    return `Inventory: ${items}`;
+  }
+
+  private getSaveSlotEquipmentPreviewLabel(slotState: SaveSlotState): string {
+    if (!slotState.preview) {
+      return 'Equipment: preview unavailable.';
+    }
+
+    if (slotState.preview.equippedCount === 0) {
+      return 'Equipment: none equipped.';
+    }
+
+    const equipped = slotState.preview.equipmentTop
+      .map((entry) => `${entry.slot}:${entry.itemKey}`)
+      .join(', ');
+    return `Equipment: ${slotState.preview.equippedCount} equipped (${equipped})`;
   }
 
   private computeQuestRenderSignature(): string {
@@ -1072,7 +1147,13 @@ export class GameScene extends Phaser.Scene {
 
   private computeSaveSlotsRenderSignature(): string {
     const slots = this.getSafeSlotStates()
-      .map((slot) => `${slot.slot}:${slot.exists ? '1' : '0'}:${slot.version ?? '-'}:${slot.label ?? '-'}:${slot.updatedAt ?? '-'}`)
+      .map((slot) => {
+        const preview = slot.preview
+          ? `${slot.preview.playerLevel ?? '-'}:${slot.preview.gold ?? '-'}:${slot.preview.towerCurrentFloor ?? '-'}:${slot.preview.towerHighestFloor ?? '-'}:${slot.preview.inventoryTop.map((entry) => `${entry.itemKey}:${entry.quantity}`).join(',')}:${slot.preview.equipmentTop.map((entry) => `${entry.slot}:${entry.itemKey}`).join(',')}:${slot.preview.equippedCount}`
+          : 'none';
+
+        return `${slot.slot}:${slot.exists ? '1' : '0'}:${slot.version ?? '-'}:${slot.label ?? '-'}:${slot.updatedAt ?? '-'}:${preview}`;
+      })
       .join(';');
 
     return [
@@ -1315,7 +1396,12 @@ export class GameScene extends Phaser.Scene {
       const payload = await this.fetchJson<unknown>('/saves', {
         method: 'GET',
       });
-      this.saveSlots = this.normalizeSaveSlotsPayload(payload);
+      const slots = this.normalizeSaveSlotsPayload(payload);
+      const previewsBySlot = await this.loadSaveSlotPreviews(slots);
+      this.saveSlots = slots.map((slot) => ({
+        ...slot,
+        preview: slot.exists ? (previewsBySlot.get(slot.slot) ?? null) : null,
+      }));
     } catch (error) {
       this.saveSlotsError = this.getErrorMessage(error, 'Unable to load save slots.');
       if (this.saveSlots.length === 0) {
@@ -1325,6 +1411,26 @@ export class GameScene extends Phaser.Scene {
       this.saveSlotsBusy = false;
       this.updateHud();
     }
+  }
+
+  private async loadSaveSlotPreviews(slots: SaveSlotState[]): Promise<Map<number, SaveSlotPreview | null>> {
+    const previewsBySlot = new Map<number, SaveSlotPreview | null>();
+    const existingSlots = slots.filter((slot) => slot.exists);
+
+    await Promise.all(
+      existingSlots.map(async (slot) => {
+        try {
+          const payload = await this.fetchJson<unknown>(`/saves/${slot.slot}`, {
+            method: 'GET',
+          });
+          previewsBySlot.set(slot.slot, this.normalizeSaveSlotPreviewPayload(payload));
+        } catch {
+          previewsBySlot.set(slot.slot, null);
+        }
+      }),
+    );
+
+    return previewsBySlot;
   }
 
   private async refreshCombatState(): Promise<void> {
@@ -2139,6 +2245,100 @@ export class GameScene extends Phaser.Scene {
       version,
       label,
       updatedAt,
+      preview: null,
+    };
+  }
+
+  private normalizeSaveSlotPreviewPayload(payload: unknown): SaveSlotPreview | null {
+    if (!this.isRecord(payload)) {
+      return null;
+    }
+
+    const save = this.asRecord(payload.save);
+    if (!save) {
+      return null;
+    }
+
+    const snapshot = this.asRecord(save.snapshot);
+    if (!snapshot) {
+      return null;
+    }
+
+    return this.normalizeSaveSlotPreview(snapshot);
+  }
+
+  private normalizeSaveSlotPreview(snapshot: Record<string, unknown>): SaveSlotPreview | null {
+    const player = this.asRecord(snapshot.player);
+    const tower = this.asRecord(snapshot.tower);
+
+    if (!player && !tower && !Array.isArray(snapshot.inventory) && !Array.isArray(snapshot.equipment)) {
+      return null;
+    }
+
+    const levelValue = player ? this.asNumber(player.level) : null;
+    const goldValue = player ? this.asNumber(player.gold) : null;
+    const floorCurrentValue = tower ? this.asNumber(tower.currentFloor) : null;
+    const floorHighestValue = tower ? this.asNumber(tower.highestFloor) : null;
+
+    const rawInventory = Array.isArray(snapshot.inventory) ? snapshot.inventory : [];
+    const inventory = rawInventory
+      .map((entry) => this.normalizeSaveSlotPreviewInventoryItem(entry))
+      .filter((entry): entry is { itemKey: string; quantity: number } => entry !== null)
+      .sort((left, right) => right.quantity - left.quantity || left.itemKey.localeCompare(right.itemKey));
+
+    const rawEquipment = Array.isArray(snapshot.equipment) ? snapshot.equipment : [];
+    const equipment = rawEquipment
+      .map((entry) => this.normalizeSaveSlotPreviewEquipmentItem(entry))
+      .filter((entry): entry is { slot: string; itemKey: string } => entry !== null)
+      .sort((left, right) => left.slot.localeCompare(right.slot));
+
+    return {
+      playerLevel: levelValue !== null ? Math.max(1, Math.round(levelValue)) : null,
+      gold: goldValue !== null ? Math.max(0, Math.round(goldValue)) : null,
+      towerCurrentFloor: floorCurrentValue !== null ? Math.max(1, Math.round(floorCurrentValue)) : null,
+      towerHighestFloor: floorHighestValue !== null ? Math.max(1, Math.round(floorHighestValue)) : null,
+      inventoryTop: inventory.slice(0, 3),
+      equipmentTop: equipment.slice(0, 3),
+      equippedCount: equipment.length,
+    };
+  }
+
+  private normalizeSaveSlotPreviewInventoryItem(value: unknown): { itemKey: string; quantity: number } | null {
+    if (!this.isRecord(value)) {
+      return null;
+    }
+
+    const itemKey = this.asString(value.itemKey);
+    const quantity = this.asNumber(value.quantity);
+    if (!itemKey || quantity === null) {
+      return null;
+    }
+
+    const roundedQuantity = Math.round(quantity);
+    if (roundedQuantity <= 0) {
+      return null;
+    }
+
+    return {
+      itemKey,
+      quantity: roundedQuantity,
+    };
+  }
+
+  private normalizeSaveSlotPreviewEquipmentItem(value: unknown): { slot: string; itemKey: string } | null {
+    if (!this.isRecord(value)) {
+      return null;
+    }
+
+    const slot = this.asString(value.slot);
+    const itemKey = this.asString(value.itemKey);
+    if (!slot || !itemKey) {
+      return null;
+    }
+
+    return {
+      slot,
+      itemKey,
     };
   }
 
