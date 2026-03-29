@@ -1111,7 +1111,9 @@ export class CombatService {
   private toEncounterStateFromJson(
     value: CombatEncounterState | string,
     rowFallback?: CombatEncounterRow,
+    options?: { refreshEnemyTelegraph?: boolean },
   ): CombatEncounterState {
+    const refreshEnemyTelegraph = options?.refreshEnemyTelegraph ?? true;
     let parsedRaw: unknown = value;
 
     if (typeof value === 'string') {
@@ -1207,10 +1209,12 @@ export class CombatService {
       endedAt,
     };
 
-    if (normalized.status === 'active' && normalized.turn === 'player') {
-      this.updateEnemyTelegraph(normalized);
-    } else {
-      this.clearEnemyTelegraph(normalized);
+    if (refreshEnemyTelegraph) {
+      if (normalized.status === 'active' && normalized.turn === 'player') {
+        this.updateEnemyTelegraph(normalized);
+      } else {
+        this.clearEnemyTelegraph(normalized);
+      }
     }
 
     return normalized;
@@ -1265,7 +1269,9 @@ export class CombatService {
   }
 
   private cloneEncounter(encounter: CombatEncounterState): CombatEncounterState {
-    return this.toEncounterStateFromJson(JSON.stringify(encounter));
+    return this.toEncounterStateFromJson(JSON.stringify(encounter), undefined, {
+      refreshEnemyTelegraph: false,
+    });
   }
 
   private appendLog(encounter: CombatEncounterState, message: string): CombatEncounterState {

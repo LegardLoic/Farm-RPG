@@ -357,6 +357,17 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
       - ennemi securise (fallback `forest_goblin`)
   - objectif: eviter les 500 persistants meme en presence de donnees legacy/non prevues.
 
+### Hotfix Lot 24.3 - Fix recursion `Maximum call stack size exceeded`
+- Cause:
+  - recursion infinie entre:
+    - `toEncounterStateFromJson` -> `updateEnemyTelegraph` -> `buildEnemyIntentForecast` -> `cloneEncounter` -> `toEncounterStateFromJson`
+- Correctif:
+  - ajout d'une option interne pour desactiver le refresh telegraph pendant les clones techniques
+  - `cloneEncounter` desactive explicitement ce refresh pour eviter la boucle
+- Impact:
+  - suppression du crash `RangeError: Maximum call stack size exceeded`
+  - `POST /combat/start` redevient stable en production.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
