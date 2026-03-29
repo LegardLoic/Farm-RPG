@@ -36,10 +36,12 @@ type QuestStatus = 'active' | 'completed' | 'claimed';
 type DebugQaActionName =
   | 'grant-resources'
   | 'set-tower-floor'
+  | 'apply-state-preset'
   | 'apply-loadout-preset'
   | 'complete-quests'
   | 'set-world-flags';
 type DebugLoadoutPresetKey = 'starter' | 'tower_mid' | 'boss_trial';
+type DebugStatePresetKey = 'village_open' | 'mid_tower' | 'act1_done';
 type DebugQaStatus = 'idle' | 'loading' | 'success' | 'error';
 
 const FIREBALL_MANA_COST = 5;
@@ -140,7 +142,7 @@ type SaveSlotPreview = {
 };
 
 type DebugQaPresetOption = {
-  key: DebugLoadoutPresetKey;
+  key: string;
   label: string;
 };
 
@@ -150,10 +152,17 @@ const DEBUG_QA_PRESET_OPTIONS: DebugQaPresetOption[] = [
   { key: 'boss_trial', label: 'Boss trial' },
 ];
 
+const DEBUG_QA_STATE_PRESET_OPTIONS: Array<{ key: DebugStatePresetKey; label: string }> = [
+  { key: 'village_open', label: 'Village open' },
+  { key: 'mid_tower', label: 'Mid tower' },
+  { key: 'act1_done', label: 'Act 1 done' },
+];
+
 function isDebugQaActionName(value: string): value is DebugQaActionName {
   return (
     value === 'grant-resources' ||
     value === 'set-tower-floor' ||
+    value === 'apply-state-preset' ||
     value === 'apply-loadout-preset' ||
     value === 'complete-quests' ||
     value === 'set-world-flags'
@@ -254,12 +263,14 @@ export class GameScene extends Phaser.Scene {
   private debugQaGrantXpInput: HTMLInputElement | null = null;
   private debugQaGrantGoldInput: HTMLInputElement | null = null;
   private debugQaTowerFloorInput: HTMLInputElement | null = null;
+  private debugQaStatePresetSelect: HTMLSelectElement | null = null;
   private debugQaLoadoutPresetSelect: HTMLSelectElement | null = null;
   private debugQaWorldFlagsInput: HTMLTextAreaElement | null = null;
   private debugQaWorldFlagsRemoveInput: HTMLTextAreaElement | null = null;
   private debugQaWorldFlagsReplaceInput: HTMLInputElement | null = null;
   private debugQaGrantButton: HTMLButtonElement | null = null;
   private debugQaTowerFloorButton: HTMLButtonElement | null = null;
+  private debugQaStatePresetButton: HTMLButtonElement | null = null;
   private debugQaLoadoutButton: HTMLButtonElement | null = null;
   private debugQaCompleteQuestsButton: HTMLButtonElement | null = null;
   private debugQaSetWorldFlagsButton: HTMLButtonElement | null = null;
@@ -640,6 +651,12 @@ export class GameScene extends Phaser.Scene {
               <input data-hud="debugQaFloor" type="number" min="1" max="10" step="1" value="10" />
             </label>
             <label class="hud-debug-qa-field debug-qa-field-wide">
+              <span>State preset</span>
+              <select data-hud="debugQaStatePreset">
+                ${DEBUG_QA_STATE_PRESET_OPTIONS.map((preset) => `<option value="${preset.key}">${preset.label}</option>`).join('')}
+              </select>
+            </label>
+            <label class="hud-debug-qa-field debug-qa-field-wide">
               <span>Loadout preset</span>
               <select data-hud="debugQaLoadout">
                 ${DEBUG_QA_PRESET_OPTIONS.map((preset) => `<option value="${preset.key}">${preset.label}</option>`).join('')}
@@ -669,6 +686,7 @@ export class GameScene extends Phaser.Scene {
           <div class="hud-debug-qa-actions">
             <button class="hud-debug-qa-button" data-debug-action="grant-resources">Grant resources</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="set-tower-floor">Set tower floor</button>
+            <button class="hud-debug-qa-button secondary" data-debug-action="apply-state-preset">Apply state preset</button>
             <button class="hud-debug-qa-button" data-debug-action="apply-loadout-preset">Apply loadout</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="complete-quests">Complete quests</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="set-world-flags">Set world flags</button>
@@ -719,12 +737,14 @@ export class GameScene extends Phaser.Scene {
     this.debugQaGrantXpInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaXp"]');
     this.debugQaGrantGoldInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaGold"]');
     this.debugQaTowerFloorInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaFloor"]');
+    this.debugQaStatePresetSelect = this.hudRoot.querySelector<HTMLSelectElement>('[data-hud="debugQaStatePreset"]');
     this.debugQaLoadoutPresetSelect = this.hudRoot.querySelector<HTMLSelectElement>('[data-hud="debugQaLoadout"]');
     this.debugQaWorldFlagsInput = this.hudRoot.querySelector<HTMLTextAreaElement>('[data-hud="debugQaWorldFlags"]');
     this.debugQaWorldFlagsRemoveInput = this.hudRoot.querySelector<HTMLTextAreaElement>('[data-hud="debugQaWorldFlagsRemove"]');
     this.debugQaWorldFlagsReplaceInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaWorldFlagsReplace"]');
     this.debugQaGrantButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="grant-resources"]');
     this.debugQaTowerFloorButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="set-tower-floor"]');
+    this.debugQaStatePresetButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="apply-state-preset"]');
     this.debugQaLoadoutButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="apply-loadout-preset"]');
     this.debugQaCompleteQuestsButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="complete-quests"]');
     this.debugQaSetWorldFlagsButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="set-world-flags"]');
@@ -773,12 +793,14 @@ export class GameScene extends Phaser.Scene {
     this.debugQaGrantXpInput = null;
     this.debugQaGrantGoldInput = null;
     this.debugQaTowerFloorInput = null;
+    this.debugQaStatePresetSelect = null;
     this.debugQaLoadoutPresetSelect = null;
     this.debugQaWorldFlagsInput = null;
     this.debugQaWorldFlagsRemoveInput = null;
     this.debugQaWorldFlagsReplaceInput = null;
     this.debugQaGrantButton = null;
     this.debugQaTowerFloorButton = null;
+    this.debugQaStatePresetButton = null;
     this.debugQaLoadoutButton = null;
     this.debugQaCompleteQuestsButton = null;
     this.debugQaSetWorldFlagsButton = null;
@@ -936,6 +958,9 @@ export class GameScene extends Phaser.Scene {
     if (this.debugQaTowerFloorInput) {
       this.debugQaTowerFloorInput.disabled = disabled;
     }
+    if (this.debugQaStatePresetSelect) {
+      this.debugQaStatePresetSelect.disabled = disabled;
+    }
     if (this.debugQaLoadoutPresetSelect) {
       this.debugQaLoadoutPresetSelect.disabled = disabled;
     }
@@ -958,6 +983,11 @@ export class GameScene extends Phaser.Scene {
       this.debugQaTowerFloorButton.disabled = disabled;
       this.debugQaTowerFloorButton.textContent =
         this.debugQaBusyAction === 'set-tower-floor' ? 'Applying...' : 'Set tower floor';
+    }
+    if (this.debugQaStatePresetButton) {
+      this.debugQaStatePresetButton.disabled = disabled;
+      this.debugQaStatePresetButton.textContent =
+        this.debugQaBusyAction === 'apply-state-preset' ? 'Applying...' : 'Apply state preset';
     }
     if (this.debugQaLoadoutButton) {
       this.debugQaLoadoutButton.disabled = disabled;
@@ -2931,6 +2961,16 @@ export class GameScene extends Phaser.Scene {
           loadingLabel: `Setting tower floor to ${floor}...`,
           successLabel: `Tower floor set to ${floor}.`,
           failureLabel: 'Unable to set tower floor.',
+        };
+      }
+      case 'apply-state-preset': {
+        const presetKey = (this.debugQaStatePresetSelect?.value.trim() || 'mid_tower') as DebugStatePresetKey;
+        return {
+          path: '/debug/admin/apply-state-preset',
+          body: { presetKey },
+          loadingLabel: `Applying ${presetKey} state preset...`,
+          successLabel: `State preset ${presetKey} applied.`,
+          failureLabel: 'Unable to apply state preset.',
         };
       }
       case 'apply-loadout-preset': {

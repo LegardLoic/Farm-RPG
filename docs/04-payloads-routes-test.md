@@ -35,6 +35,7 @@ Ce document regroupe les payloads utilises pendant nos tests manuels (front + AP
 | `/debug/admin/reset-progression` | `POST` | oui (dev only) | `{}` | Remise a zero progression/tour/inventaire/equipement/flags/quetes/saves |
 | `/debug/admin/grant-resources` | `POST` | oui (dev only) | `{ "experience": 250, "gold": 500, "items": [ { "itemKey": "mana_tonic", "quantity": 5 }, { "itemKey": "iron_ore", "quantity": 10 } ] }` | Injecter rapidement des ressources de test |
 | `/debug/admin/set-tower-floor` | `POST` | oui (dev only) | `{ "floor": 8 }` | Forcer l'etage de tour pour tester les paliers boss/quetes |
+| `/debug/admin/apply-state-preset` | `POST` | oui (dev only) | `{ "presetKey": "mid_tower" }` | Appliquer un scenario QA pre-rempli (tour + world flags) |
 | `/debug/admin/complete-quests` | `POST` | oui (dev only) | `{ "questKey": "story_floor_10" }` (ou `{}` pour toutes) | Marquer des quetes en `completed` pour QA rapide |
 | `/debug/admin/set-combat-start-override` | `POST` | oui (dev only) | `{ "enemyKey": "cinder_warden", "isScriptedBossEncounter": true }` | Forcer le prochain `combat/start` sur un ennemi/script precise |
 | `/debug/admin/clear-combat-start-override` | `POST` | oui (dev only) | `{}` | Annuler un override de prochain `combat/start` |
@@ -164,3 +165,16 @@ Valeurs `status`:
 - `active`
 - `completed`
 - `claimed`
+
+### 11) Apply state preset (dev only)
+
+```json
+{
+  "presetKey": "mid_tower"
+}
+```
+
+Presets disponibles:
+- `village_open`
+- `mid_tower`
+- `act1_done`

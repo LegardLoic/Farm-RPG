@@ -17,6 +17,8 @@ import type { QuestDefinition, QuestProgressState, QuestStatus } from '../quests
 import { TOWER_MIN_FLOOR, TOWER_MVP_MAX_FLOOR, TOWER_PROGRESSION_TABLE } from '../tower/tower.constants';
 import {
   DEBUG_FORCE_COMBAT_ENEMY_FLAG_PREFIX,
+  DEBUG_STATE_PRESET_WORLD_FLAG_KEYS,
+  DEBUG_STATE_PRESETS,
   buildDebugForceCombatEnemyFlag,
 } from './debug-admin.constants';
 import { DEBUG_LOADOUT_PRESETS, type DebugLoadoutPresetDefinition } from './debug-loadout.constants';
@@ -153,6 +155,32 @@ type DebugApplyLoadoutPresetResult = {
     itemKey: string;
     quantity: number;
   }>;
+};
+
+type DebugApplyStatePresetResult = {
+  preset: {
+    key: string;
+    towerFloor: number;
+    worldFlags: string[];
+  };
+  tower: {
+    before: {
+      currentFloor: number;
+      highestFloor: number;
+      bossFloor10Defeated: boolean;
+    };
+    after: {
+      currentFloor: number;
+      highestFloor: number;
+      bossFloor10Defeated: boolean;
+    };
+  };
+  worldFlags: {
+    before: string[];
+    after: string[];
+    added: string[];
+    removed: string[];
+  };
 };
 
 type WorldFlagRow = {
@@ -645,6 +673,95 @@ export class DebugAdminService {
     });
   }
 
+  async applyStatePreset(userId: string, presetKey: string): Promise<DebugApplyStatePresetResult> {
+    const preset = this.resolveStatePresetOrThrow(presetKey);
+    const targetFloor = preset.towerFloor;
+    const targetBossDefeated = targetFloor >= TOWER_MVP_MAX_FLOOR;
+    const normalizedPresetFlags = this.normalizeWorldFlagKeys(preset.worldFlags);
+
+    return this.databaseService.withTransaction(async (tx) => {
+      const towerBefore = await this.getTowerProgressionForUpdate(tx, userId);
+      const worldFlagsBefore = await this.getWorldFlagsForUpdate(tx, userId);
+      const worldFlagsBeforeSet = new Set(worldFlagsBefore);
+
+      const towerAfterResult = await tx.query<TowerProgressionRow>(
+        `
+          INSERT INTO ${TOWER_PROGRESSION_TABLE} (
+            user_id,
+            current_floor,
+            highest_floor,
+            boss_floor_10_defeated,
+            created_at,
+            updated_at
+          )
+          VALUES ($1, $2, $3, $4, NOW(), NOW())
+          ON CONFLICT (user_id)
+          DO UPDATE
+            SET current_floor = EXCLUDED.current_floor,
+                highest_floor = EXCLUDED.highest_floor,
+                boss_floor_10_defeated = EXCLUDED.boss_floor_10_defeated,
+                updated_at = NOW()
+          RETURNING user_id, current_floor, highest_floor, boss_floor_10_defeated
+        `,
+        [userId, targetFloor, targetFloor, targetBossDefeated],
+      );
+
+      if (DEBUG_STATE_PRESET_WORLD_FLAG_KEYS.length > 0) {
+        await tx.query(
+          `
+            DELETE FROM ${WORLD_FLAGS_TABLE}
+            WHERE user_id = $1
+              AND flag_key = ANY($2::text[])
+          `,
+          [userId, DEBUG_STATE_PRESET_WORLD_FLAG_KEYS],
+        );
+      }
+
+      for (const flag of normalizedPresetFlags) {
+        await tx.query(
+          `
+            INSERT INTO ${WORLD_FLAGS_TABLE} (user_id, flag_key, unlocked_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (user_id, flag_key) DO NOTHING
+          `,
+          [userId, flag],
+        );
+      }
+
+      const worldFlagsAfter = await this.getWorldFlagsForUpdate(tx, userId);
+      const worldFlagsAfterSet = new Set(worldFlagsAfter);
+      const added = worldFlagsAfter.filter((flag) => !worldFlagsBeforeSet.has(flag));
+      const removed = worldFlagsBefore.filter((flag) => !worldFlagsAfterSet.has(flag));
+      const towerAfter = towerAfterResult.rows[0];
+
+      return {
+        preset: {
+          key: preset.key,
+          towerFloor: preset.towerFloor,
+          worldFlags: normalizedPresetFlags,
+        },
+        tower: {
+          before: {
+            currentFloor: towerBefore.current_floor,
+            highestFloor: towerBefore.highest_floor,
+            bossFloor10Defeated: towerBefore.boss_floor_10_defeated,
+          },
+          after: {
+            currentFloor: towerAfter.current_floor,
+            highestFloor: towerAfter.highest_floor,
+            bossFloor10Defeated: towerAfter.boss_floor_10_defeated,
+          },
+        },
+        worldFlags: {
+          before: worldFlagsBefore,
+          after: worldFlagsAfter,
+          added,
+          removed,
+        },
+      };
+    });
+  }
+
   async setWorldFlags(userId: string, payload: DebugSetWorldFlagsDto): Promise<DebugSetWorldFlagsResult> {
     const requestedFlags = this.normalizeWorldFlagKeys(payload.flags ?? []);
     const requestedRemovedFlags = this.normalizeWorldFlagKeys(payload.removeFlags ?? []);
@@ -780,6 +897,16 @@ export class DebugAdminService {
     const preset = DEBUG_LOADOUT_PRESETS.find((entry) => entry.key === normalizedPresetKey);
     if (!preset) {
       throw new BadRequestException(`Unknown loadout preset: ${normalizedPresetKey}`);
+    }
+
+    return preset;
+  }
+
+  private resolveStatePresetOrThrow(presetKey: string): (typeof DEBUG_STATE_PRESETS)[number] {
+    const normalizedPresetKey = presetKey.trim();
+    const preset = DEBUG_STATE_PRESETS.find((entry) => entry.key === normalizedPresetKey);
+    if (!preset) {
+      throw new BadRequestException(`Unknown state preset: ${normalizedPresetKey}`);
     }
 
     return preset;
@@ -933,7 +1060,7 @@ export class DebugAdminService {
     return result.rows.map((row) => row.flag_key);
   }
 
-  private normalizeWorldFlagKeys(flags: string[]): string[] {
+  private normalizeWorldFlagKeys(flags: readonly string[]): string[] {
     const normalized = new Set<string>();
 
     for (const value of flags) {
