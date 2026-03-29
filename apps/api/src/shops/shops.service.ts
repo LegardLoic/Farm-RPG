@@ -26,16 +26,21 @@ type InventoryRow = {
   quantity: number;
 };
 
+type WorldFlagRow = {
+  flag_key: string;
+};
+
 @Injectable()
 export class ShopsService {
   constructor(private readonly databaseService: DatabaseService) {}
 
   async getBlacksmithShop(userId: string): Promise<BlacksmithShopState> {
     const unlocked = await this.isShopUnlocked(this.databaseService, userId);
+    const worldFlags = unlocked ? await this.getWorldFlags(this.databaseService, userId) : new Set<string>();
 
     return {
       unlocked,
-      offers: unlocked ? BLACKSMITH_OFFERS : [],
+      offers: unlocked ? BLACKSMITH_OFFERS.filter((offer) => this.isOfferAvailable(offer, worldFlags)) : [],
     };
   }
 
@@ -45,11 +50,16 @@ export class ShopsService {
     quantity: number,
   ): Promise<BlacksmithPurchaseResult> {
     return this.databaseService.withTransaction(async (tx) => {
-      const offer = this.resolveOffer(offerKey);
       const unlocked = await this.isShopUnlocked(tx, userId);
 
       if (!unlocked) {
         throw new ForbiddenException('Blacksmith shop is locked');
+      }
+
+      const worldFlags = await this.getWorldFlags(tx, userId);
+      const offer = this.resolveOffer(offerKey);
+      if (!this.isOfferAvailable(offer, worldFlags)) {
+        throw new ForbiddenException(`Blacksmith offer is locked: ${offerKey}`);
       }
 
       const progression = await this.getProgressionForUpdate(tx, userId);
@@ -106,6 +116,23 @@ export class ShopsService {
     }
 
     return offer;
+  }
+
+  private isOfferAvailable(offer: BlacksmithOffer, worldFlags: Set<string>): boolean {
+    return offer.requiredFlags.every((flag) => worldFlags.has(flag));
+  }
+
+  private async getWorldFlags(executor: DatabaseService | TransactionClient, userId: string): Promise<Set<string>> {
+    const result = await executor.query<WorldFlagRow>(
+      `
+        SELECT flag_key
+        FROM ${WORLD_FLAGS_TABLE}
+        WHERE user_id = $1
+      `,
+      [userId],
+    );
+
+    return new Set(result.rows.map((row) => row.flag_key));
   }
 
   private async isShopUnlocked(

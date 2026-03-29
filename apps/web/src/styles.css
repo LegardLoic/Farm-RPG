@@ -357,20 +357,54 @@ body::before {
   font-size: 0.84rem;
 }
 
+.hud-debug-qa-field textarea {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 10px;
+  border: 1px solid rgba(185, 195, 212, 0.22);
+  background: rgba(6, 10, 16, 0.56);
+  color: var(--text);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  resize: vertical;
+}
+
 .hud-debug-qa-field input:focus,
-.hud-debug-qa-field select:focus {
+.hud-debug-qa-field select:focus,
+.hud-debug-qa-field textarea:focus {
   outline: 2px solid rgba(127, 209, 199, 0.42);
   outline-offset: 1px;
 }
 
 .hud-debug-qa-field input:disabled,
-.hud-debug-qa-field select:disabled {
+.hud-debug-qa-field select:disabled,
+.hud-debug-qa-field textarea:disabled {
   opacity: 0.65;
   cursor: not-allowed;
 }
 
 .hud-debug-qa-field.debug-qa-field-wide {
   grid-column: 1 / -1;
+}
+
+.hud-debug-qa-field.hud-debug-qa-toggle {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hud-debug-qa-field.hud-debug-qa-toggle span {
+  margin: 0;
+}
+
+.hud-debug-qa-field.hud-debug-qa-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  accent-color: #7fd1c7;
 }
 
 .hud-debug-qa-actions {

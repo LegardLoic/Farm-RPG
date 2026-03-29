@@ -95,7 +95,7 @@ Use `.env.example` templates and repository secrets for CI.
 - Manual save-slot capture/load/delete from the in-game HUD.
 - Save-slot preview in HUD before load (stats, inventory, equipped items).
 - Confirmation step before loading a slot from the HUD.
-- Player combat skills: `Rally` (buff) and `Sunder` (debuff).
+- Player combat skills: `Rally` (buff), `Sunder` (debuff), and `Mend` (heal).
 - Scripted boss AI reactions to player status effects (`Rally` dispel / `Sunder` cleanse patterns).
 - Combat HUD enemy telegraph for upcoming scripted boss intent.
 - Combat HUD telegraph rendered as a visual intent chip (tone + pulse for dangerous skills).
@@ -104,4 +104,4 @@ Use `.env.example` templates and repository secrets for CI.
 - Combat HUD includes a mini tooltip legend to explain intent icon tags (`ATK`, `MAG`, `CLN`, `DSP`, `ULT`).
 - Web build split: lightweight entry/bootstrap chunks + dedicated `phaser-vendor` chunk.
 - Combat loot now includes floor-based loot tables with rarity tags and boss-specific bonus drops.
-- Blacksmith shop unlocked by progression flags.
+- Blacksmith shop now supports tiered offers with per-offer flag prerequisites.
