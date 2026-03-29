@@ -44,13 +44,14 @@ type DebugQaActionName =
 type DebugLoadoutPresetKey = 'starter' | 'tower_mid' | 'boss_trial';
 type DebugStatePresetKey = 'village_open' | 'mid_tower' | 'act1_done';
 type DebugQaStatus = 'idle' | 'loading' | 'success' | 'error';
+type CombatEffectTone = 'neutral' | 'calm' | 'warning' | 'danger' | 'utility';
 
 const FIREBALL_MANA_COST = 5;
 const RALLY_MANA_COST = 3;
 const SUNDER_MANA_COST = 4;
-const MEND_MANA_COST = 4;
+const MEND_MANA_COST = 3;
 const CLEANSE_MANA_COST = 3;
-const INTERRUPT_MANA_COST = 5;
+const INTERRUPT_MANA_COST = 4;
 
 type CombatUnitState = {
   hp: number;
@@ -90,6 +91,11 @@ type CombatEncounterState = {
   createdAt: string | undefined;
   updatedAt: string | undefined;
   endedAt: string | null | undefined;
+};
+
+type CombatEffectChip = {
+  label: string;
+  tone: CombatEffectTone;
 };
 
 type QuestObjectiveState = {
@@ -883,11 +889,11 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('combatResult', this.combatMessage);
     this.setHudText('combatPlayerHp', this.getCombatUnitValue(this.hudState.hp, this.hudState.maxHp));
     this.setHudText('combatPlayerMp', this.getCombatUnitValue(this.hudState.mp, this.hudState.maxMp));
-    this.setHudText('combatPlayerEffects', this.getCombatPlayerEffectsLabel());
+    this.renderCombatEffectChips('combatPlayerEffects', this.getCombatPlayerEffectChips());
     this.setHudText('combatEnemyName', this.combatState ? this.combatState.enemy.name : '-');
     this.setHudText('combatEnemyHp', this.getCombatEnemyValue('hp'));
     this.setHudText('combatEnemyMp', this.getCombatEnemyValue('mp'));
-    this.setHudText('combatEnemyEffects', this.getCombatEnemyEffectsLabel());
+    this.renderCombatEffectChips('combatEnemyEffects', this.getCombatEnemyEffectChips());
     this.renderCombatEnemyTelegraphs();
 
     if (this.combatStatusBadge) {
@@ -1691,6 +1697,32 @@ export class GameScene extends Phaser.Scene {
     const element = this.hudRoot?.querySelector<HTMLElement>(`[data-hud="${key}"]`);
     if (element) {
       element.textContent = value;
+    }
+  }
+
+  private renderCombatEffectChips(key: string, effects: CombatEffectChip[]): void {
+    const element = this.hudRoot?.querySelector<HTMLElement>(`[data-hud="${key}"]`);
+    if (!element) {
+      return;
+    }
+
+    element.classList.add('combat-effects-value');
+    element.replaceChildren();
+
+    if (effects.length === 0) {
+      const none = document.createElement('span');
+      none.classList.add('combat-effect-chip', 'empty');
+      none.textContent = 'None';
+      element.appendChild(none);
+      return;
+    }
+
+    for (const effect of effects) {
+      const chip = document.createElement('span');
+      chip.classList.add('combat-effect-chip');
+      chip.dataset.effectTone = effect.tone;
+      chip.textContent = effect.label;
+      element.appendChild(chip);
     }
   }
 
@@ -2614,47 +2646,57 @@ export class GameScene extends Phaser.Scene {
     return this.getCombatUnitValue(this.combatState.enemy.currentMp, this.combatState.enemy.mp);
   }
 
-  private getCombatPlayerEffectsLabel(): string {
+  private getCombatPlayerEffectChips(): CombatEffectChip[] {
     if (!this.combatState) {
-      return '-';
+      return [];
     }
 
-    const effects: string[] = [];
+    const effects: CombatEffectChip[] = [];
 
     const rallyTurns = this.getCombatScriptTurns('playerRallyTurns');
     if (rallyTurns > 0) {
-      effects.push(`Rally ${rallyTurns}t`);
+      effects.push({ label: `Rally ${rallyTurns}t`, tone: 'calm' });
     }
 
     const burningTurns = this.getCombatScriptTurns('playerBurningTurns');
     if (burningTurns > 0) {
-      effects.push(`Burning ${burningTurns}t`);
+      effects.push({ label: `Burning ${burningTurns}t`, tone: 'danger' });
     }
 
     const silencedTurns = this.getCombatScriptTurns('playerSilencedTurns');
     if (silencedTurns > 0) {
-      effects.push(`Silenced ${silencedTurns}t`);
+      effects.push({ label: `Silenced ${silencedTurns}t`, tone: 'warning' });
     }
 
-    return effects.length > 0 ? effects.join(' | ') : 'None';
+    const cleanseWindowTurns = this.getCombatScriptTurns('playerCleanseReactionWindowTurns');
+    if (cleanseWindowTurns > 0) {
+      effects.push({ label: `Cleanse window ${cleanseWindowTurns}t`, tone: 'utility' });
+    }
+
+    const interruptWindowTurns = this.getCombatScriptTurns('playerInterruptReactionWindowTurns');
+    if (interruptWindowTurns > 0) {
+      effects.push({ label: `Interrupt window ${interruptWindowTurns}t`, tone: 'warning' });
+    }
+
+    return effects;
   }
 
-  private getCombatEnemyEffectsLabel(): string {
+  private getCombatEnemyEffectChips(): CombatEffectChip[] {
     if (!this.combatState) {
-      return '-';
+      return [];
     }
 
-    const effects: string[] = [];
+    const effects: CombatEffectChip[] = [];
     const shatterTurns = this.getCombatScriptTurns('enemyShatterTurns');
     if (shatterTurns > 0) {
-      effects.push(`Sunder ${shatterTurns}t`);
+      effects.push({ label: `Exposed ${shatterTurns}t`, tone: 'utility' });
     }
 
     if (this.getCombatScriptFlag('avatarEnraged')) {
-      effects.push('Enraged');
+      effects.push({ label: 'Enraged', tone: 'danger' });
     }
 
-    return effects.length > 0 ? effects.join(' | ') : 'None';
+    return effects;
   }
 
   private renderCombatEnemyTelegraphs(): void {

@@ -33,3 +33,6 @@ jobs:
 
       - name: Build
         run: npm run build --if-present
+
+      - name: API Combat Tests
+        run: npm run test --workspace @farm-rpg/api --if-present

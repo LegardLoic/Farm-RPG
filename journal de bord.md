@@ -643,6 +643,46 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - rend 1 MP immediatement apres dispel reussi
   - simulation telegraphe multi-tour alignee avec ces nouvelles reactions (consommation des fenetres cote forecast et runtime).
 
+### Lot 43 - HUD combat: etats tactiques en chips visuelles
+- Frontend HUD combat:
+  - rendu des effets joueur/ennemi en `chips` colores au lieu de texte brut
+  - nouveaux etats tactiques lisibles:
+    - ennemi `Exposed Nt` (fenetre courte apres `Interrupt`)
+    - joueur `Cleanse window Nt`
+    - joueur `Interrupt window Nt`
+  - conservation des telegraphes `Intent` / `Next` et des validations de boutons existantes.
+
+### Lot 44 - Equilibrage skills `Mend` / `Cleanse` / `Interrupt`
+- Backend combat:
+  - `MEND_MANA_COST` ajuste a `3` (au lieu de `4`) pour rendre le sustain plus viable
+  - `INTERRUPT_MANA_COST` ajuste a `4` (au lieu de `5`) pour augmenter l'accessibilite tactique
+  - degats de `Interrupt` legerement reduits pour compenser son avantage utilitaire
+  - remboursement MP de `Cleanse` conditionne a une purge double (`Burning` + `Silence`) pour limiter l'abus.
+- Frontend combat:
+  - constantes HUD alignees sur les nouveaux couts MP (`Mend=3`, `Interrupt=4`).
+
+### Lot 45 - Tests automatises backend combat (premier socle)
+- Backend API:
+  - ajout d'un premier jeu de tests automatises sous `apps/api/test/combat-reaction.test.js`
+  - scenarios verifies:
+    - reaction `cinder_warden` apres `Cleanse`
+    - reaction `ash_vanguard_captain` apres `Interrupt`
+    - reaction `curse_heart_avatar` apres `Cleanse`
+    - consommation correcte des fenetres courtes.
+  - script `npm test --workspace @farm-rpg/api` branche sur ces tests.
+
+### Lot 46 - CI: execution des tests combat API
+- GitHub Actions:
+  - workflow CI enrichi avec une etape `API Combat Tests`
+  - execution de `npm run test --workspace @farm-rpg/api` apres le build.
+
+### Lot 47 - Documentation QA des reactions combat
+- Nouveau document:
+  - `docs/05-qa-checklist-combat-reactive.md`
+- Contenu:
+  - table de scenarios de validation manuelle (Cleanse/Interrupt/boss/telegraphes)
+  - preconditions, action endpoint, resultat API attendu et rendu HUD attendu.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -766,9 +806,9 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 
 ## 9) Prochaines priorites recommandees
 1. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
-2. Ajouter des tests end-to-end cibles (auth + combat + debug QA) pour securiser les regressions en CI.
-3. Equilibrer les couts/valeurs des skills (`Mend`, `Cleanse`, `Interrupt`) apres les nouvelles reactions boss.
-4. Ajouter des indicateurs HUD pour les etats tactiques courts (`Exposed`, reactions script boss) afin d'ameliorer la lisibilite.
-5. Ajouter des presets de charge test CI (fixtures SQL) pour industrialiser les e2e debug/combat.
+2. Etendre les tests automatises vers des parcours API plus larges (`auth`, `debug-admin`, `shops`, `saves`).
+3. Ajouter des fixtures SQL de test pour industrialiser des scenarios d'integration complets en CI.
+4. Ajouter un lot de tuning avance des boss (timings/patterns) avec telemetrie simple des combats.
+5. Ajouter des validations de non-regression UI combat (snapshots/QA scriptes front).
 
 
