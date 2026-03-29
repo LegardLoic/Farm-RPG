@@ -15,7 +15,9 @@ import { SavesService } from '../saves/saves.service';
 import { TowerService } from '../tower/tower.service';
 import type { TowerState } from '../tower/tower.types';
 import {
+  COMBAT_ACTIONS,
   BOSS_SPECIFIC_BONUS_LOOT,
+  COMBAT_STATUSES,
   COMBAT_ENCOUNTERS_TABLE,
   COMBAT_ENEMY_DEFINITIONS,
   COMBAT_LOG_LIMIT,
@@ -941,7 +943,25 @@ export class CombatService {
     );
 
     const row = result.rows[0];
-    return row ? this.toEncounterState(row) : null;
+    if (!row) {
+      return null;
+    }
+
+    try {
+      return this.toEncounterState(row);
+    } catch {
+      await executor.query(
+        `
+          UPDATE ${COMBAT_ENCOUNTERS_TABLE}
+          SET status = 'fled',
+              ended_at = NOW(),
+              updated_at = NOW()
+          WHERE id = $1
+        `,
+        [row.id],
+      );
+      return null;
+    }
   }
 
   private async findEncounterById(
@@ -1034,31 +1054,106 @@ export class CombatService {
   }
 
   private toEncounterState(row: CombatEncounterRow): CombatEncounterState {
-    return this.toEncounterStateFromJson(row.state_json);
+    return this.toEncounterStateFromJson(row.state_json, row);
   }
 
-  private toEncounterStateFromJson(value: CombatEncounterState | string): CombatEncounterState {
-    const parsed = typeof value === 'string' ? (JSON.parse(value) as CombatEncounterState) : value;
-    const enemyTemplate = this.resolveEnemyDefinition(parsed.enemyKey);
+  private toEncounterStateFromJson(
+    value: CombatEncounterState | string,
+    rowFallback?: CombatEncounterRow,
+  ): CombatEncounterState {
+    let parsedRaw: unknown = value;
+
+    if (typeof value === 'string') {
+      try {
+        parsedRaw = JSON.parse(value);
+      } catch {
+        parsedRaw = {};
+      }
+    }
+
+    const parsed =
+      parsedRaw && typeof parsedRaw === 'object'
+        ? (parsedRaw as Partial<CombatEncounterState>)
+        : ({} as Partial<CombatEncounterState>);
+
+    const parsedEnemyKey = typeof parsed.enemyKey === 'string' ? parsed.enemyKey.trim() : '';
+    const enemyTemplate = this.resolveEnemyDefinitionFromState(
+      parsedEnemyKey.length > 0 ? parsedEnemyKey : rowFallback?.enemy_key,
+    );
+    const parsedPlayer =
+      parsed.player && typeof parsed.player === 'object'
+        ? (parsed.player as Partial<CombatUnitState>)
+        : {};
+    const parsedEnemy =
+      parsed.enemy && typeof parsed.enemy === 'object'
+        ? (parsed.enemy as Partial<CombatEnemyDefinition & { currentHp: number; currentMp: number }>)
+        : {};
+    const parsedStatus = parsed.status;
+    const normalizedStatus =
+      typeof parsedStatus === 'string' && COMBAT_STATUSES.includes(parsedStatus as CombatStatus)
+        ? (parsedStatus as CombatStatus)
+        : rowFallback?.status ?? 'active';
+
+    const createdAt = this.normalizeDateLike(
+      typeof parsed.createdAt === 'string' ? parsed.createdAt : rowFallback?.created_at,
+    );
+    const updatedAt = this.normalizeDateLike(
+      typeof parsed.updatedAt === 'string' ? parsed.updatedAt : rowFallback?.updated_at,
+    );
+    const endedAt =
+      parsed.endedAt === null || typeof parsed.endedAt === 'string'
+        ? parsed.endedAt
+        : this.normalizeDateLike(rowFallback?.ended_at);
     const normalized: CombatEncounterState = {
       ...parsed,
+      id:
+        typeof parsed.id === 'string' && parsed.id.length > 0
+          ? parsed.id
+          : rowFallback?.id ?? randomUUID(),
+      userId:
+        typeof parsed.userId === 'string' && parsed.userId.length > 0
+          ? parsed.userId
+          : rowFallback?.user_id ?? '',
+      enemyKey:
+        typeof parsedEnemy.key === 'string' && parsedEnemy.key.length > 0
+          ? parsedEnemy.key
+          : enemyTemplate.key,
       towerFloor: Math.max(1, Number(parsed.towerFloor ?? 1)),
       isScriptedBossEncounter: Boolean(parsed.isScriptedBossEncounter),
-      logs: Array.isArray(parsed.logs) ? parsed.logs.slice(-COMBAT_LOG_LIMIT) : [],
+      turn: parsed.turn === 'enemy' ? 'enemy' : 'player',
+      status: normalizedStatus,
+      round:
+        typeof parsed.round === 'number' && Number.isFinite(parsed.round) && parsed.round > 0
+          ? Math.floor(parsed.round)
+          : 1,
+      logs: Array.isArray(parsed.logs)
+        ? parsed.logs.filter((entry): entry is string => typeof entry === 'string').slice(-COMBAT_LOG_LIMIT)
+        : [],
       player: {
-        ...parsed.player,
-        defending: Boolean(parsed.player.defending),
+        ...DEFAULT_PLAYER_COMBAT_STATE,
+        ...parsedPlayer,
+        defending: Boolean(parsedPlayer.defending),
       },
       enemy: {
         ...enemyTemplate,
-        ...parsed.enemy,
-        rewards: parsed.enemy?.rewards ?? enemyTemplate.rewards,
-        currentHp: parsed.enemy?.currentHp ?? enemyTemplate.hp,
-        currentMp: parsed.enemy?.currentMp ?? enemyTemplate.mp,
+        ...parsedEnemy,
+        rewards: parsedEnemy.rewards ?? enemyTemplate.rewards,
+        currentHp: parsedEnemy.currentHp ?? enemyTemplate.hp,
+        currentMp: parsedEnemy.currentMp ?? enemyTemplate.mp,
       },
-      scriptState: parsed.scriptState ?? {},
+      scriptState:
+        parsed.scriptState && typeof parsed.scriptState === 'object'
+          ? parsed.scriptState
+          : {},
       rewards: parsed.rewards ?? null,
       rewardsGranted: Boolean(parsed.rewardsGranted),
+      lastAction:
+        typeof parsed.lastAction === 'string' && COMBAT_ACTIONS.includes(parsed.lastAction as CombatActionName)
+          ? (parsed.lastAction as CombatActionName)
+          : null,
+      createdAt: createdAt ?? new Date().toISOString(),
+      updatedAt: updatedAt ?? new Date().toISOString(),
+      endedAt,
     };
 
     if (normalized.status === 'active' && normalized.turn === 'player') {
@@ -1068,6 +1163,26 @@ export class CombatService {
     }
 
     return normalized;
+  }
+
+  private resolveEnemyDefinitionFromState(enemyKey?: string): CombatEnemyDefinition {
+    if (!enemyKey) {
+      return COMBAT_ENEMY_DEFINITIONS[DEFAULT_COMBAT_ENEMY_KEY];
+    }
+
+    return COMBAT_ENEMY_DEFINITIONS[enemyKey] ?? COMBAT_ENEMY_DEFINITIONS[DEFAULT_COMBAT_ENEMY_KEY];
+  }
+
+  private normalizeDateLike(value: Date | string | null | undefined): string | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    return value.toISOString();
   }
 
   private toActionResult(encounter: CombatEncounterState): CombatActionResult {

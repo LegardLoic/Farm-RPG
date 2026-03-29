@@ -337,6 +337,17 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - affichage des drops avec tag de rarete (`[RARE]`, `[EPIC]`, etc.)
   - ligne complementaire `Boss loot` quand un drop bonus boss est obtenu.
 
+### Hotfix Lot 24.1 - Correction erreur 500 sur `POST /combat/start`
+- Backend combat:
+  - parsing des `combat_encounters.state_json` rendu tolerant aux anciennes versions partielles:
+    - fallback safe sur `player`, `enemy`, `status`, `turn`, `round`, `timestamps`
+    - fallback enemy definition vers `forest_goblin` si `enemyKey` inconnu/corrompu dans un ancien snapshot
+  - auto-nettoyage d'un encounter actif corrompu:
+    - si parsing impossible, l'entry active est forcee en `fled` puis un nouveau combat peut etre demarre
+- Impact:
+  - suppression des 500 de compatibilite retro sur le flux `combat/start`
+  - reprise du demarrage de combat en production sans reset manuel.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
