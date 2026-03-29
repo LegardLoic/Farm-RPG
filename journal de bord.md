@@ -286,6 +286,15 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - tooltips natifs aussi ajoutes sur les vignettes d'icones dans les chips `Intent`/`Next`
   - support clavier via `focus-within` pour rester utilisable sans souris.
 
+### Lot 22 - Optimisation bundle web (split runtime Phaser)
+- Frontend build:
+  - demarrage web passe en bootstrap asynchrone (`import('./game/bootstrap')`)
+  - extraction de Phaser dans un chunk dedie `phaser-vendor` via `manualChunks`
+- Impact build (web):
+  - chunk d'entree reduit d'environ ~1.5 MB a ~2.2 KB
+  - chunk bootstrap (~62 KB) separe du moteur Phaser
+  - moteur Phaser reste lourd mais isole dans son propre chunk cacheable.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -329,6 +338,10 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - boutique forgeron (offres + achat)
   - progression tour (etage et boss 10)
   - mini tooltip d'aide des tags d'intention (`ATK/MAG/CLN/DSP/ULT`)
+- Chargement web optimise:
+  - entree legere
+  - bootstrap asynchrone
+  - chunk `phaser-vendor` dedie
 - Integration API avec gestion d'erreurs UI.
 
 ## 6) API actuellement disponible
@@ -374,6 +387,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Source de verite gameplay cote serveur (anti-triche de base respectee).
 - Mutations sensibles en transactions SQL.
 - Structure modulaire NestJS maintenue (auth/combat/gameplay/inventory/equipment/saves/quests/shops/tower).
+- Build web decoupe en chunks (`index`, `bootstrap`, `phaser-vendor`) pour de meilleurs temps de chargement initiaux.
 - Flux PR continue (`develop` -> `main`) deja utilise et valide.
 
 ## 9) Prochaines priorites recommandees
@@ -381,6 +395,6 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Ajouter une route d'admin debug pour reset progression (dev only).
 4. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
-5. Ajouter un mini tooltip d'aide dans le HUD pour expliquer les tags d'icone (`ATK/MAG/CLN/DSP/ULT`).
+5. Ajouter des tables de loot par palier d'etage (rarete + drops specifiques mini-boss/boss).
 
 

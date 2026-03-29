@@ -1,7 +1,9 @@
-import Phaser from 'phaser';
-import { createGameConfig } from './game/config';
 import './styles.css';
 
-const game = new Phaser.Game(createGameConfig());
-
-void game;
+void import('./game/bootstrap')
+  .then(({ bootstrapGame }) => {
+    bootstrapGame();
+  })
+  .catch((error: unknown) => {
+    console.error('Failed to bootstrap game runtime', error);
+  });

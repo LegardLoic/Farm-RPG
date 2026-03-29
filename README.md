@@ -93,4 +93,5 @@ Use `.env.example` templates and repository secrets for CI.
 - Combat HUD includes two-step intent preview (`Intent` + `Next`) for scripted enemies.
 - Intent chips include category icons (`ATK`, `MAG`, `CLN`, `DSP`, `ULT`) for faster reading.
 - Combat HUD includes a mini tooltip legend to explain intent icon tags (`ATK`, `MAG`, `CLN`, `DSP`, `ULT`).
+- Web build split: lightweight entry/bootstrap chunks + dedicated `phaser-vendor` chunk.
 - Blacksmith shop unlocked by progression flags.
