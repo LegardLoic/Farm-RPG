@@ -11,6 +11,7 @@ import {
 } from '../gameplay/gameplay.constants';
 import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
 import { QuestsService } from '../quests/quests.service';
+import { SavesService } from '../saves/saves.service';
 import { TowerService } from '../tower/tower.service';
 import type { TowerState } from '../tower/tower.types';
 import {
@@ -60,6 +61,7 @@ export class CombatService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly questsService: QuestsService,
+    private readonly savesService: SavesService,
     private readonly towerService: TowerService,
   ) {}
 
@@ -119,6 +121,18 @@ export class CombatService {
           enemyKey: finalizedState.enemyKey,
           towerHighestFloor: towerProgress.state.highestFloor,
         });
+        if (towerProgress.reachedMilestoneFlags.length > 0) {
+          const autosave = await this.savesService.upsertAutoSaveForMilestone(tx, userId, {
+            reason: towerProgress.reachedMilestoneFlags.includes('boss_floor_10_defeated')
+              ? 'boss_victory'
+              : 'milestone_floor',
+            tower: towerProgress.state,
+            encounterId: finalizedState.id,
+            enemyKey: finalizedState.enemyKey,
+            reachedMilestoneFlags: towerProgress.reachedMilestoneFlags,
+          });
+          this.pushLog(finalizedState, `Autosave updated (v${autosave.version}): ${autosave.reason}.`);
+        }
         this.pushLog(
           finalizedState,
           `Tower progress: floor ${towerProgress.previousFloor} -> ${towerProgress.currentFloor}.`,

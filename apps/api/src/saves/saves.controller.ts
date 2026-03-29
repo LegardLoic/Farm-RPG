@@ -21,6 +21,17 @@ export class SavesController {
     };
   }
 
+  @Get('auto/latest')
+  async getLatestAutoSave(@Req() req: AuthenticatedRequest) {
+    const userId = this.getUserId(req);
+    const autosave = await this.savesService.getAutoSave(userId);
+
+    return {
+      status: 'ok',
+      autosave,
+    };
+  }
+
   @Get(':slot')
   async getSave(@Req() req: AuthenticatedRequest, @Param('slot', ParseIntPipe) slot: number) {
     const userId = this.getUserId(req);

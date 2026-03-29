@@ -62,6 +62,7 @@ Create local env files before starting:
 - `GET /shops/blacksmith`
 - `POST /shops/blacksmith/buy`
 - `GET /saves`
+- `GET /saves/auto/latest`
 - `GET /saves/:slot`
 - `PUT /saves/:slot`
 - `DELETE /saves/:slot`
@@ -77,4 +78,5 @@ Use `.env.example` templates and repository secrets for CI.
 - Persistent tower progression up to floor 10 for MVP.
 - Quest system with claim flow and story milestones tied to tower floors `3/5/8/10`.
 - Scripted mini-boss and boss encounters on floors `3/5/8/10`.
+- Automatic server-side autosave after major tower milestones and boss victory.
 - Blacksmith shop unlocked by progression flags.

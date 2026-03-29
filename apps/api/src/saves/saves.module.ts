@@ -8,5 +8,6 @@ import { SavesService } from './saves.service';
   imports: [AuthModule],
   controllers: [SavesController],
   providers: [SavesService],
+  exports: [SavesService],
 })
 export class SavesModule {}

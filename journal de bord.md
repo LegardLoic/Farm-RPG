@@ -122,6 +122,22 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Integration TowerService en transaction:
   - lecture de l'etat de tour dans le `startCombat` pour garantir la coherence du choix d'ennemi.
 
+### Lot 10 - Autosave serveur apres palier majeur / boss
+- Nouvelle table backend:
+  - `autosaves` (un autosave courant par joueur, versionne)
+- Integration combat transactionnelle:
+  - sur victoire avec franchissement de palier majeur (`3/5/8/10`), un autosave est ecrit automatiquement
+  - sur victoire boss etage 10, autosave ecrit avec raison `boss_victory_floor_10`.
+- Snapshot autosave capture:
+  - progression joueur (level/xp/gold)
+  - etat tour
+  - flags monde
+  - inventaire
+  - equipement
+  - contexte de trigger combat (encounter, ennemi, flags palier).
+- Nouveau endpoint protege:
+  - `GET /saves/auto/latest`
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -150,6 +166,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Inventaire / equipement / saves:
   - endpoints proteges
   - persistence PostgreSQL
+  - autosave serveur versionne sur paliers majeurs/boss
 
 ## 5) Frontend en place (resume)
 - Scene Phaser jouable avec deplacement.
@@ -190,6 +207,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `GET /shops/blacksmith`
 - `POST /shops/blacksmith/buy`
 - `GET /saves`
+- `GET /saves/auto/latest`
 - `GET /saves/:slot`
 - `PUT /saves/:slot`
 - `DELETE /saves/:slot`
@@ -207,9 +225,9 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Flux PR continue (`develop` -> `main`) deja utilise et valide.
 
 ## 9) Prochaines priorites recommandees
-1. Ajouter autosave apres victoire boss/palier majeur.
-2. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
-3. Etendre le shop (tiers, equipement reel, prerequis de quete).
-4. Ajouter une route d'admin debug pour reset progression (dev only).
-5. Ajouter des skills ennemis cote joueur (interrupt/buff/debuff) pour enrichir les combats boss.
+1. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
+2. Etendre le shop (tiers, equipement reel, prerequis de quete).
+3. Ajouter une route d'admin debug pour reset progression (dev only).
+4. Ajouter des skills ennemis cote joueur (interrupt/buff/debuff) pour enrichir les combats boss.
+5. Ajouter une UI web pour consulter/restaurer le dernier autosave.
 

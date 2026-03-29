@@ -21,3 +21,22 @@ export interface SaveSlotRow {
   updated_at: Date | string;
 }
 
+export type AutoSaveTriggerReason = 'milestone_floor' | 'boss_victory';
+
+export interface AutoSaveRecord {
+  version: number;
+  reason: string;
+  createdAt: string;
+  updatedAt: string;
+  snapshot: Record<string, unknown>;
+}
+
+export interface AutoSaveRow {
+  user_id: string;
+  version: number;
+  reason: string;
+  snapshot_json: Record<string, unknown>;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+

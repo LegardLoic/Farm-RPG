@@ -155,6 +155,17 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     `);
 
     await this.query(`
+      CREATE TABLE IF NOT EXISTS autosaves (
+        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
+        reason TEXT NOT NULL,
+        snapshot_json JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await this.query(`
       CREATE TABLE IF NOT EXISTS player_progression (
         user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         level INTEGER NOT NULL DEFAULT 1 CHECK (level >= 1),
