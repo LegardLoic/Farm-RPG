@@ -96,6 +96,14 @@ type AutoSaveState = {
   updatedAt: string;
 };
 
+type SaveSlotState = {
+  slot: number;
+  exists: boolean;
+  version: number | null;
+  label: string | null;
+  updatedAt: string | null;
+};
+
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -127,6 +135,9 @@ export class GameScene extends Phaser.Scene {
   private autosaveMetaValue: HTMLElement | null = null;
   private autosaveActionsRoot: HTMLElement | null = null;
   private autosaveErrorValue: HTMLElement | null = null;
+  private saveSlotsSummaryValue: HTMLElement | null = null;
+  private saveSlotsListRoot: HTMLElement | null = null;
+  private saveSlotsErrorValue: HTMLElement | null = null;
 
   private authStatus = 'Verification...';
   private isAuthenticated = false;
@@ -169,6 +180,11 @@ export class GameScene extends Phaser.Scene {
   private autosaveRestoreSlotBusy: number | null = null;
   private autosaveError: string | null = null;
   private autosaveRenderSignature = '';
+  private saveSlots: SaveSlotState[] = [];
+  private saveSlotsBusy = false;
+  private saveSlotsActionBusyKey: string | null = null;
+  private saveSlotsError: string | null = null;
+  private saveSlotsRenderSignature = '';
 
   private readonly onHudClick = (event: MouseEvent) => {
     const target = event.target as HTMLElement | null;
@@ -224,11 +240,30 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (saveAction === 'restore') {
+    if (saveAction) {
       const rawSlot = button.dataset.slot;
       const slot = rawSlot ? Number(rawSlot) : NaN;
-      if (Number.isInteger(slot) && slot >= 1 && slot <= 3) {
+      if (!Number.isInteger(slot) || slot < 1 || slot > 3) {
+        return;
+      }
+
+      if (saveAction === 'restore') {
         void this.restoreAutoSaveToSlot(slot);
+        return;
+      }
+
+      if (saveAction === 'capture') {
+        void this.captureSaveSlot(slot);
+        return;
+      }
+
+      if (saveAction === 'load') {
+        void this.loadSaveSlot(slot);
+        return;
+      }
+
+      if (saveAction === 'delete') {
+        void this.deleteSaveSlot(slot);
       }
     }
   };
@@ -433,6 +468,14 @@ export class GameScene extends Phaser.Scene {
           <div class="hud-autosave-error" data-hud="autosaveError" hidden></div>
           <div class="hud-autosave-actions" data-hud="autosaveActions"></div>
         </div>
+        <div class="hud-saves">
+          <div class="hud-saves-header">
+            <span>Save Slots</span>
+            <strong data-hud="savesSummary">No slot data</strong>
+          </div>
+          <div class="hud-saves-error" data-hud="savesError" hidden></div>
+          <ul class="hud-saves-list" data-hud="savesList"></ul>
+        </div>
         <div class="hud-help">
           Deplacement: fleches ou ZQSD
           <br />
@@ -461,6 +504,9 @@ export class GameScene extends Phaser.Scene {
     this.autosaveMetaValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="autosaveMeta"]');
     this.autosaveActionsRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="autosaveActions"]');
     this.autosaveErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="autosaveError"]');
+    this.saveSlotsSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="savesSummary"]');
+    this.saveSlotsListRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="savesList"]');
+    this.saveSlotsErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="savesError"]');
     this.hudRoot.addEventListener('click', this.onHudClick);
     this.updateHud();
   }
@@ -492,9 +538,13 @@ export class GameScene extends Phaser.Scene {
     this.autosaveMetaValue = null;
     this.autosaveActionsRoot = null;
     this.autosaveErrorValue = null;
+    this.saveSlotsSummaryValue = null;
+    this.saveSlotsListRoot = null;
+    this.saveSlotsErrorValue = null;
     this.questsRenderSignature = '';
     this.blacksmithRenderSignature = '';
     this.autosaveRenderSignature = '';
+    this.saveSlotsRenderSignature = '';
   }
   private updateHud(): void {
     if (!this.hudRoot) {
@@ -517,6 +567,7 @@ export class GameScene extends Phaser.Scene {
     this.updateQuestHud();
     this.updateBlacksmithHud();
     this.updateAutoSaveHud();
+    this.updateSaveSlotsHud();
 
     if (this.loginButton) {
       this.loginButton.hidden = this.isAuthenticated;
@@ -596,6 +647,19 @@ export class GameScene extends Phaser.Scene {
     this.renderAutoSaveActions();
   }
 
+  private updateSaveSlotsHud(): void {
+    if (this.saveSlotsSummaryValue) {
+      this.saveSlotsSummaryValue.textContent = this.getSaveSlotsSummaryLabel();
+    }
+
+    if (this.saveSlotsErrorValue) {
+      this.saveSlotsErrorValue.hidden = !this.saveSlotsError;
+      this.saveSlotsErrorValue.textContent = this.saveSlotsError ?? '';
+    }
+
+    this.renderSaveSlotsList();
+  }
+
   private renderAutoSaveActions(): void {
     if (!this.autosaveActionsRoot) {
       return;
@@ -621,6 +685,88 @@ export class GameScene extends Phaser.Scene {
       button.textContent = this.autosaveRestoreSlotBusy === slot ? `Restoring S${slot}...` : `Restore to Slot ${slot}`;
       button.disabled = this.autosaveBusy || this.autosaveRestoreSlotBusy !== null;
       this.autosaveActionsRoot.appendChild(button);
+    }
+  }
+
+  private renderSaveSlotsList(): void {
+    if (!this.saveSlotsListRoot) {
+      return;
+    }
+
+    const signature = this.computeSaveSlotsRenderSignature();
+    if (signature === this.saveSlotsRenderSignature) {
+      return;
+    }
+    this.saveSlotsRenderSignature = signature;
+
+    this.saveSlotsListRoot.replaceChildren();
+
+    if (!this.isAuthenticated) {
+      const item = document.createElement('li');
+      item.classList.add('save-slot-item', 'empty');
+      item.textContent = 'Connect to manage save slots.';
+      this.saveSlotsListRoot.appendChild(item);
+      return;
+    }
+
+    const slotStates = this.getSafeSlotStates();
+    for (const slotState of slotStates) {
+      const item = document.createElement('li');
+      item.classList.add('save-slot-item');
+      item.dataset.exists = slotState.exists ? '1' : '0';
+
+      const header = document.createElement('div');
+      header.classList.add('save-slot-header');
+
+      const title = document.createElement('strong');
+      title.textContent = `Slot ${slotState.slot}`;
+      header.appendChild(title);
+
+      const badge = document.createElement('span');
+      badge.classList.add('save-slot-state');
+      badge.textContent = slotState.exists ? `v${slotState.version ?? 1}` : 'Empty';
+      header.appendChild(badge);
+      item.appendChild(header);
+
+      const meta = document.createElement('p');
+      meta.classList.add('save-slot-meta');
+      meta.textContent = this.getSaveSlotMetaLabel(slotState);
+      item.appendChild(meta);
+
+      const actions = document.createElement('div');
+      actions.classList.add('save-slot-actions');
+
+      const captureBusy = this.saveSlotsActionBusyKey === `capture:${slotState.slot}`;
+      const loadBusy = this.saveSlotsActionBusyKey === `load:${slotState.slot}`;
+      const deleteBusy = this.saveSlotsActionBusyKey === `delete:${slotState.slot}`;
+      const hasBusyAction = this.saveSlotsActionBusyKey !== null;
+
+      const captureButton = document.createElement('button');
+      captureButton.classList.add('hud-save-action', 'capture');
+      captureButton.dataset.saveAction = 'capture';
+      captureButton.dataset.slot = `${slotState.slot}`;
+      captureButton.textContent = captureBusy ? 'Saving...' : 'Capture';
+      captureButton.disabled = this.saveSlotsBusy || hasBusyAction;
+      actions.appendChild(captureButton);
+
+      const loadButton = document.createElement('button');
+      loadButton.classList.add('hud-save-action');
+      loadButton.dataset.saveAction = 'load';
+      loadButton.dataset.slot = `${slotState.slot}`;
+      loadButton.textContent = loadBusy ? 'Loading...' : 'Load';
+      loadButton.disabled = this.saveSlotsBusy || hasBusyAction || !slotState.exists;
+      actions.appendChild(loadButton);
+
+      const deleteButton = document.createElement('button');
+      deleteButton.classList.add('hud-save-action', 'danger');
+      deleteButton.dataset.saveAction = 'delete';
+      deleteButton.dataset.slot = `${slotState.slot}`;
+      deleteButton.textContent = deleteBusy ? 'Deleting...' : 'Delete';
+      deleteButton.disabled = this.saveSlotsBusy || hasBusyAction || !slotState.exists;
+      actions.appendChild(deleteButton);
+
+      item.appendChild(actions);
+      this.saveSlotsListRoot.appendChild(item);
     }
   }
 
@@ -834,6 +980,51 @@ export class GameScene extends Phaser.Scene {
     return `Updated: ${this.formatIsoForHud(this.autosave.updatedAt)}`;
   }
 
+  private getSaveSlotsSummaryLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Login required';
+    }
+
+    if (this.saveSlotsBusy && this.saveSlots.length === 0) {
+      return 'Loading...';
+    }
+
+    const usedCount = this.saveSlots.filter((slot) => slot.exists).length;
+    return `${usedCount}/3 used`;
+  }
+
+  private getSafeSlotStates(): SaveSlotState[] {
+    const bySlot = new Map<number, SaveSlotState>();
+    for (const slotState of this.saveSlots) {
+      bySlot.set(slotState.slot, slotState);
+    }
+
+    return [1, 2, 3].map((slot) => {
+      const entry = bySlot.get(slot);
+      if (entry) {
+        return entry;
+      }
+
+      return {
+        slot,
+        exists: false,
+        version: null,
+        label: null,
+        updatedAt: null,
+      };
+    });
+  }
+
+  private getSaveSlotMetaLabel(slotState: SaveSlotState): string {
+    if (!slotState.exists) {
+      return 'Empty slot.';
+    }
+
+    const label = slotState.label?.trim() ? slotState.label.trim() : 'Manual save';
+    const updated = slotState.updatedAt ? this.formatIsoForHud(slotState.updatedAt) : 'Unknown';
+    return `${label} | Updated: ${updated}`;
+  }
+
   private computeQuestRenderSignature(): string {
     const questParts = this.quests.map((quest) => {
       const objectiveParts = quest.objectives.map((objective) => (
@@ -876,6 +1067,20 @@ export class GameScene extends Phaser.Scene {
       this.autosave
         ? `${this.autosave.version}:${this.autosave.reason}:${this.autosave.updatedAt}`
         : 'none',
+    ].join('|');
+  }
+
+  private computeSaveSlotsRenderSignature(): string {
+    const slots = this.getSafeSlotStates()
+      .map((slot) => `${slot.slot}:${slot.exists ? '1' : '0'}:${slot.version ?? '-'}:${slot.label ?? '-'}:${slot.updatedAt ?? '-'}`)
+      .join(';');
+
+    return [
+      this.isAuthenticated ? '1' : '0',
+      this.saveSlotsBusy ? '1' : '0',
+      this.saveSlotsActionBusyKey ?? '-',
+      this.saveSlotsError ?? '',
+      slots,
     ].join('|');
   }
 
@@ -959,6 +1164,7 @@ export class GameScene extends Phaser.Scene {
     if (authenticated) {
       await this.refreshGameplayState();
       await this.refreshAutoSaveState();
+      await this.refreshSaveSlotsState();
       await this.refreshBlacksmithState();
       await this.refreshQuestState();
       await this.refreshCombatState();
@@ -967,6 +1173,7 @@ export class GameScene extends Phaser.Scene {
 
     this.resetGameplayHudState();
     this.resetAutoSaveState();
+    this.resetSaveSlotsState();
     this.resetBlacksmithState();
     this.resetQuestState();
     this.resetCombatState();
@@ -1089,6 +1296,33 @@ export class GameScene extends Phaser.Scene {
       this.autosave = null;
     } finally {
       this.autosaveBusy = false;
+      this.updateHud();
+    }
+  }
+
+  private async refreshSaveSlotsState(): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.resetSaveSlotsState();
+      this.updateHud();
+      return;
+    }
+
+    this.saveSlotsBusy = true;
+    this.saveSlotsError = null;
+    this.updateHud();
+
+    try {
+      const payload = await this.fetchJson<unknown>('/saves', {
+        method: 'GET',
+      });
+      this.saveSlots = this.normalizeSaveSlotsPayload(payload);
+    } catch (error) {
+      this.saveSlotsError = this.getErrorMessage(error, 'Unable to load save slots.');
+      if (this.saveSlots.length === 0) {
+        this.saveSlots = [];
+      }
+    } finally {
+      this.saveSlotsBusy = false;
       this.updateHud();
     }
   }
@@ -1389,10 +1623,88 @@ export class GameScene extends Phaser.Scene {
         method: 'POST',
       });
       await this.refreshAutoSaveState();
+      await this.refreshSaveSlotsState();
     } catch (error) {
       this.autosaveError = this.getErrorMessage(error, `Unable to restore autosave to slot ${slot}.`);
     } finally {
       this.autosaveRestoreSlotBusy = null;
+      this.updateHud();
+    }
+  }
+
+  private async captureSaveSlot(slot: number): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.saveSlotsError = 'Login required to capture saves.';
+      this.updateHud();
+      return;
+    }
+
+    this.saveSlotsActionBusyKey = `capture:${slot}`;
+    this.saveSlotsError = null;
+    this.updateHud();
+
+    try {
+      await this.fetchJson(`/saves/${slot}/capture`, {
+        method: 'POST',
+      });
+      await this.refreshSaveSlotsState();
+    } catch (error) {
+      this.saveSlotsError = this.getErrorMessage(error, `Unable to capture slot ${slot}.`);
+    } finally {
+      this.saveSlotsActionBusyKey = null;
+      this.updateHud();
+    }
+  }
+
+  private async loadSaveSlot(slot: number): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.saveSlotsError = 'Login required to load saves.';
+      this.updateHud();
+      return;
+    }
+
+    this.saveSlotsActionBusyKey = `load:${slot}`;
+    this.saveSlotsError = null;
+    this.updateHud();
+
+    try {
+      await this.fetchJson(`/saves/${slot}/load`, {
+        method: 'POST',
+      });
+      await this.refreshGameplayState();
+      await this.refreshCombatState();
+      await this.refreshQuestState();
+      await this.refreshBlacksmithState();
+      await this.refreshAutoSaveState();
+      await this.refreshSaveSlotsState();
+    } catch (error) {
+      this.saveSlotsError = this.getErrorMessage(error, `Unable to load slot ${slot}.`);
+    } finally {
+      this.saveSlotsActionBusyKey = null;
+      this.updateHud();
+    }
+  }
+
+  private async deleteSaveSlot(slot: number): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.saveSlotsError = 'Login required to delete saves.';
+      this.updateHud();
+      return;
+    }
+
+    this.saveSlotsActionBusyKey = `delete:${slot}`;
+    this.saveSlotsError = null;
+    this.updateHud();
+
+    try {
+      await this.fetchJson(`/saves/${slot}`, {
+        method: 'DELETE',
+      });
+      await this.refreshSaveSlotsState();
+    } catch (error) {
+      this.saveSlotsError = this.getErrorMessage(error, `Unable to delete slot ${slot}.`);
+    } finally {
+      this.saveSlotsActionBusyKey = null;
       this.updateHud();
     }
   }
@@ -1489,6 +1801,14 @@ export class GameScene extends Phaser.Scene {
     this.autosaveRestoreSlotBusy = null;
     this.autosaveError = null;
     this.autosaveRenderSignature = '';
+  }
+
+  private resetSaveSlotsState(): void {
+    this.saveSlots = [];
+    this.saveSlotsBusy = false;
+    this.saveSlotsActionBusyKey = null;
+    this.saveSlotsError = null;
+    this.saveSlotsRenderSignature = '';
   }
 
   private resetBlacksmithState(): void {
@@ -1751,6 +2071,22 @@ export class GameScene extends Phaser.Scene {
     return { offers };
   }
 
+  private normalizeSaveSlotsPayload(payload: unknown): SaveSlotState[] {
+    if (!this.isRecord(payload)) {
+      return [];
+    }
+
+    const rawSlots = payload.slots;
+    if (!Array.isArray(rawSlots)) {
+      return [];
+    }
+
+    return rawSlots
+      .map((entry) => this.normalizeSaveSlot(entry))
+      .filter((entry): entry is SaveSlotState => entry !== null)
+      .sort((left, right) => left.slot - right.slot);
+  }
+
   private normalizeAutoSavePayload(payload: unknown): AutoSaveState | null {
     if (!this.isRecord(payload)) {
       return null;
@@ -1772,6 +2108,36 @@ export class GameScene extends Phaser.Scene {
     return {
       version: Math.max(1, Math.round(version)),
       reason,
+      updatedAt,
+    };
+  }
+
+  private normalizeSaveSlot(value: unknown): SaveSlotState | null {
+    if (!this.isRecord(value)) {
+      return null;
+    }
+
+    const slotValue = this.asNumber(value.slot);
+    if (slotValue === null) {
+      return null;
+    }
+
+    const slot = Math.round(slotValue);
+    if (slot < 1 || slot > 3) {
+      return null;
+    }
+
+    const exists = Boolean(value.exists);
+    const versionValue = this.asNumber(value.version);
+    const version = exists && versionValue !== null ? Math.max(1, Math.round(versionValue)) : null;
+    const label = this.asString(value.label);
+    const updatedAt = this.asString(value.updatedAt);
+
+    return {
+      slot,
+      exists,
+      version,
+      label,
       updatedAt,
     };
   }

@@ -149,6 +149,28 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - boutons de restauration vers Slot 1/2/3
   - etats loading/error sur l'operation.
 
+### Lot 12 - Save slots manuels: capture / load / delete depuis HUD
+- Backend:
+  - nouveaux endpoints proteges:
+    - `POST /saves/:slot/capture`
+    - `POST /saves/:slot/load`
+  - capture d'un snapshot live (`schemaVersion: 1`) vers un slot manuel.
+  - chargement d'un slot vers l'etat live:
+    - progression joueur
+    - etat tour
+    - flags monde
+    - inventaire
+    - equipement
+    - cloture des combats actifs pour eviter les desynchronisations.
+- Frontend:
+  - nouveau panneau HUD `Save Slots`.
+  - actions par slot:
+    - `Capture`
+    - `Load`
+    - `Delete`
+  - feedback UI (loading/error/version/date) sur chaque action.
+  - synchro HUD apres `load` (gameplay/combat/quetes/shop/autosave/slots).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -220,6 +242,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `GET /saves`
 - `GET /saves/auto/latest`
 - `POST /saves/auto/restore/:slot`
+- `POST /saves/:slot/capture`
+- `POST /saves/:slot/load`
 - `GET /saves/:slot`
 - `PUT /saves/:slot`
 - `DELETE /saves/:slot`
@@ -241,5 +265,5 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Ajouter une route d'admin debug pour reset progression (dev only).
 4. Ajouter des skills ennemis cote joueur (interrupt/buff/debuff) pour enrichir les combats boss.
-5. Ajouter une fonction "charger ce save" directe depuis le HUD (hors endpoint brut).
+5. Ajouter un aperçu du contenu de slot (resume inventaire/equipement) avant `Load`.
 

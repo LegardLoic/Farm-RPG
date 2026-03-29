@@ -43,6 +43,28 @@ export class SavesController {
     };
   }
 
+  @Post(':slot/capture')
+  async captureSaveSlot(@Req() req: AuthenticatedRequest, @Param('slot', ParseIntPipe) slot: number) {
+    const userId = this.getUserId(req);
+    const save = await this.savesService.captureSlotFromLiveState(userId, slot);
+
+    return {
+      status: 'ok',
+      save,
+    };
+  }
+
+  @Post(':slot/load')
+  async loadSaveSlot(@Req() req: AuthenticatedRequest, @Param('slot', ParseIntPipe) slot: number) {
+    const userId = this.getUserId(req);
+    const save = await this.savesService.loadSlotToLiveState(userId, slot);
+
+    return {
+      status: 'ok',
+      save,
+    };
+  }
+
   @Get(':slot')
   async getSave(@Req() req: AuthenticatedRequest, @Param('slot', ParseIntPipe) slot: number) {
     const userId = this.getUserId(req);

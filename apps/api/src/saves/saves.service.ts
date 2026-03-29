@@ -11,6 +11,7 @@ import {
   xpRequiredForLevel,
 } from '../gameplay/gameplay.constants';
 import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
+import { TOWER_PROGRESSION_TABLE } from '../tower/tower.constants';
 import type { TowerState } from '../tower/tower.types';
 import { AutoSaveRecord, AutoSaveRow, AutoSaveTriggerReason, SaveSlotRecord, SaveSlotRow, SaveSlotSummary } from './saves.types';
 import { UpsertSaveSlotDto } from './dto/upsert-save-slot.dto';
@@ -18,6 +19,7 @@ import { UpsertSaveSlotDto } from './dto/upsert-save-slot.dto';
 const ALLOWED_SAVE_SLOTS = [1, 2, 3] as const;
 const SAVE_SLOTS_TABLE = 'save_slots';
 const AUTOSAVES_TABLE = 'autosaves';
+const COMBAT_ENCOUNTERS_TABLE = 'combat_encounters';
 
 type InventoryRow = {
   item_key: string;
@@ -46,6 +48,35 @@ type UpsertAutoSaveParams = {
   encounterId: string;
   enemyKey: string;
   reachedMilestoneFlags: string[];
+};
+
+type SaveSnapshotV1 = {
+  schemaVersion: 1;
+  capturedAt: string;
+  world: {
+    zone: string;
+    day: number;
+  };
+  player: {
+    level: number;
+    experience: number;
+    experienceToNextLevel: number;
+    gold: number;
+  };
+  tower: {
+    currentFloor: number;
+    highestFloor: number;
+    bossFloor10Defeated: boolean;
+  };
+  worldFlags: string[];
+  inventory: Array<{ itemKey: string; quantity: number }>;
+  equipment: Array<{ slot: EquipmentSlot; itemKey: string | null }>;
+};
+
+type TowerRow = {
+  current_floor: number;
+  highest_floor: number;
+  boss_floor_10_defeated: boolean;
 };
 
 @Injectable()
@@ -78,6 +109,33 @@ export class SavesService {
     }
 
     return this.toRecord(row);
+  }
+
+  async captureSlotFromLiveState(userId: string, slot: number): Promise<SaveSlotRecord> {
+    this.assertValidSlot(slot);
+
+    return this.databaseService.withTransaction(async (tx) => {
+      const snapshot = await this.buildLiveSnapshot(tx, userId);
+      const label = `Quick Save ${this.toLabelTimestamp(snapshot.capturedAt)}`;
+      const row = await this.upsertSlotSnapshot(tx, userId, slot, label, snapshot);
+      return this.toRecord(row);
+    });
+  }
+
+  async loadSlotToLiveState(userId: string, slot: number): Promise<SaveSlotRecord> {
+    this.assertValidSlot(slot);
+
+    return this.databaseService.withTransaction(async (tx) => {
+      const row = await this.findSaveSlotForUpdate(tx, userId, slot);
+      if (!row) {
+        throw new NotFoundException(`Save slot ${slot} not found`);
+      }
+
+      const snapshot = this.parseSaveSnapshot(row.snapshot_json);
+      await this.applySnapshotToLiveState(tx, userId, snapshot);
+
+      return this.toRecord(row);
+    });
   }
 
   async upsertSlot(userId: string, slot: number, payload: UpsertSaveSlotDto): Promise<SaveSlotRecord> {
@@ -266,6 +324,26 @@ export class SavesService {
     return result.rows[0];
   }
 
+  private async findSaveSlotForUpdate(
+    executor: TransactionClient,
+    userId: string,
+    slot: number,
+  ): Promise<SaveSlotRow | undefined> {
+    const result = await executor.query<SaveSlotRow>(
+      `
+        SELECT user_id, slot, version, label, snapshot_json, created_at, updated_at
+        FROM ${SAVE_SLOTS_TABLE}
+        WHERE user_id = $1
+          AND slot = $2
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [userId, slot],
+    );
+
+    return result.rows[0];
+  }
+
   private assertValidSlot(slot: number): void {
     if (!ALLOWED_SAVE_SLOTS.includes(slot as (typeof ALLOWED_SAVE_SLOTS)[number])) {
       throw new BadRequestException('Save slot must be between 1 and 3');
@@ -408,6 +486,427 @@ export class SavesService {
     );
 
     return result.rows.map((row) => row.flag_key);
+  }
+
+  private async buildLiveSnapshot(executor: TransactionClient, userId: string): Promise<SaveSnapshotV1> {
+    const progression = await this.getOrInitPlayerProgression(executor, userId);
+    const tower = await this.getOrInitTower(executor, userId);
+    const worldFlags = await this.getWorldFlags(executor, userId);
+    const inventory = await this.getInventorySnapshot(executor, userId);
+    const equipment = await this.getEquipmentSnapshot(executor, userId);
+    const capturedAt = new Date().toISOString();
+
+    return {
+      schemaVersion: 1,
+      capturedAt,
+      world: {
+        zone: 'Ferme',
+        day: 1,
+      },
+      player: {
+        level: progression.level,
+        experience: progression.experience,
+        experienceToNextLevel: progression.experience_to_next,
+        gold: progression.gold,
+      },
+      tower: {
+        currentFloor: tower.current_floor,
+        highestFloor: tower.highest_floor,
+        bossFloor10Defeated: tower.boss_floor_10_defeated,
+      },
+      worldFlags,
+      inventory,
+      equipment,
+    };
+  }
+
+  private async applySnapshotToLiveState(
+    executor: TransactionClient,
+    userId: string,
+    snapshot: SaveSnapshotV1,
+  ): Promise<void> {
+    await executor.query(
+      `
+        INSERT INTO ${PLAYER_PROGRESSION_TABLE} (user_id, level, experience, experience_to_next, gold)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (user_id)
+        DO UPDATE
+          SET level = EXCLUDED.level,
+              experience = EXCLUDED.experience,
+              experience_to_next = EXCLUDED.experience_to_next,
+              gold = EXCLUDED.gold,
+              updated_at = NOW()
+      `,
+      [
+        userId,
+        snapshot.player.level,
+        snapshot.player.experience,
+        snapshot.player.experienceToNextLevel,
+        snapshot.player.gold,
+      ],
+    );
+
+    await executor.query(
+      `
+        INSERT INTO ${TOWER_PROGRESSION_TABLE} (
+          user_id,
+          current_floor,
+          highest_floor,
+          boss_floor_10_defeated
+        )
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (user_id)
+        DO UPDATE
+          SET current_floor = EXCLUDED.current_floor,
+              highest_floor = EXCLUDED.highest_floor,
+              boss_floor_10_defeated = EXCLUDED.boss_floor_10_defeated,
+              updated_at = NOW()
+      `,
+      [
+        userId,
+        snapshot.tower.currentFloor,
+        snapshot.tower.highestFloor,
+        snapshot.tower.bossFloor10Defeated,
+      ],
+    );
+
+    await executor.query(
+      `
+        DELETE FROM ${WORLD_FLAGS_TABLE}
+        WHERE user_id = $1
+      `,
+      [userId],
+    );
+    for (const flag of snapshot.worldFlags) {
+      await executor.query(
+        `
+          INSERT INTO ${WORLD_FLAGS_TABLE} (user_id, flag_key, unlocked_at)
+          VALUES ($1, $2, NOW())
+          ON CONFLICT (user_id, flag_key)
+          DO NOTHING
+        `,
+        [userId, flag],
+      );
+    }
+
+    await executor.query(
+      `
+        DELETE FROM ${INVENTORY_ITEMS_TABLE}
+        WHERE user_id = $1
+      `,
+      [userId],
+    );
+    for (const item of snapshot.inventory) {
+      await executor.query(
+        `
+          INSERT INTO ${INVENTORY_ITEMS_TABLE} (user_id, item_key, quantity)
+          VALUES ($1, $2, $3)
+        `,
+        [userId, item.itemKey, item.quantity],
+      );
+    }
+
+    await executor.query(
+      `
+        DELETE FROM ${EQUIPMENT_SLOTS_TABLE}
+        WHERE user_id = $1
+      `,
+      [userId],
+    );
+    for (const equipped of snapshot.equipment) {
+      if (!equipped.itemKey) {
+        continue;
+      }
+
+      await executor.query(
+        `
+          INSERT INTO ${EQUIPMENT_SLOTS_TABLE} (user_id, slot, item_key)
+          VALUES ($1, $2, $3)
+        `,
+        [userId, equipped.slot, equipped.itemKey],
+      );
+    }
+
+    const nowIso = new Date().toISOString();
+    await executor.query(
+      `
+        UPDATE ${COMBAT_ENCOUNTERS_TABLE}
+        SET status = 'fled',
+            updated_at = NOW(),
+            ended_at = NOW(),
+            state_json = COALESCE(state_json, '{}'::jsonb) || jsonb_build_object(
+              'status', 'fled',
+              'turn', 'player',
+              'endedAt', $2,
+              'updatedAt', $2
+            )
+        WHERE user_id = $1
+          AND status = 'active'
+      `,
+      [userId, nowIso],
+    );
+  }
+
+  private async upsertSlotSnapshot(
+    executor: TransactionClient,
+    userId: string,
+    slot: number,
+    label: string | null,
+    snapshot: SaveSnapshotV1,
+  ): Promise<SaveSlotRow> {
+    const result = await executor.query<SaveSlotRow>(
+      `
+        INSERT INTO ${SAVE_SLOTS_TABLE} (
+          user_id,
+          slot,
+          version,
+          label,
+          snapshot_json,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, 1, $3, $4::jsonb, NOW(), NOW())
+        ON CONFLICT (user_id, slot)
+        DO UPDATE
+          SET label = EXCLUDED.label,
+              snapshot_json = EXCLUDED.snapshot_json,
+              version = ${SAVE_SLOTS_TABLE}.version + 1,
+              updated_at = NOW()
+        RETURNING user_id, slot, version, label, snapshot_json, created_at, updated_at
+      `,
+      [userId, slot, label, JSON.stringify(snapshot)],
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      throw new NotFoundException(`Save slot upsert failed for slot ${slot}`);
+    }
+
+    return row;
+  }
+
+  private async getOrInitTower(executor: TransactionClient, userId: string): Promise<TowerRow> {
+    await executor.query(
+      `
+        INSERT INTO ${TOWER_PROGRESSION_TABLE} (user_id, current_floor, highest_floor, boss_floor_10_defeated)
+        VALUES ($1, 1, 1, FALSE)
+        ON CONFLICT (user_id) DO NOTHING
+      `,
+      [userId],
+    );
+
+    const result = await executor.query<TowerRow>(
+      `
+        SELECT current_floor, highest_floor, boss_floor_10_defeated
+        FROM ${TOWER_PROGRESSION_TABLE}
+        WHERE user_id = $1
+        LIMIT 1
+      `,
+      [userId],
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      throw new NotFoundException(`Tower progression missing for user ${userId}`);
+    }
+
+    return row;
+  }
+
+  private parseSaveSnapshot(value: Record<string, unknown> | null): SaveSnapshotV1 {
+    if (!value || typeof value !== 'object') {
+      throw new BadRequestException('Save snapshot format is invalid');
+    }
+
+    const raw = value as Record<string, unknown>;
+    const schemaVersion = Number(raw.schemaVersion);
+    if (schemaVersion === 1) {
+      return this.parseVersion1SaveSnapshot(raw);
+    }
+
+    const kind = this.toStringOrNull(raw.kind);
+    if (kind === 'autosave_milestone') {
+      return this.parseLegacyAutoSaveSnapshot(raw);
+    }
+
+    throw new BadRequestException('Unsupported save snapshot version');
+  }
+
+  private parseVersion1SaveSnapshot(raw: Record<string, unknown>): SaveSnapshotV1 {
+    const world = this.asRecord(raw.world, 'Save snapshot world is invalid');
+    const player = this.asRecord(raw.player, 'Save snapshot player is invalid');
+    const tower = this.asRecord(raw.tower, 'Save snapshot tower is invalid');
+    const worldFlagsRaw = Array.isArray(raw.worldFlags) ? raw.worldFlags : [];
+    const inventoryRaw = Array.isArray(raw.inventory) ? raw.inventory : [];
+    const equipmentRaw = Array.isArray(raw.equipment) ? raw.equipment : [];
+    const capturedAt = this.toStringOrNull(raw.capturedAt) ?? new Date().toISOString();
+
+    const parsed: SaveSnapshotV1 = {
+      schemaVersion: 1,
+      capturedAt,
+      world: {
+        zone: this.toStringOrNull(world.zone) ?? 'Ferme',
+        day: this.toPositiveInt(world.day, 1),
+      },
+      player: {
+        level: this.toPositiveInt(player.level, 1),
+        experience: this.toNonNegativeInt(player.experience, 0),
+        experienceToNextLevel: this.toPositiveInt(player.experienceToNextLevel, 100),
+        gold: this.toNonNegativeInt(player.gold, 0),
+      },
+      tower: {
+        currentFloor: this.toPositiveInt(tower.currentFloor, 1),
+        highestFloor: this.toPositiveInt(tower.highestFloor, 1),
+        bossFloor10Defeated: Boolean(tower.bossFloor10Defeated),
+      },
+      worldFlags: worldFlagsRaw
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+      inventory: inventoryRaw
+        .map((entry) => this.parseInventoryEntry(entry))
+        .filter((entry): entry is { itemKey: string; quantity: number } => entry !== null),
+      equipment: equipmentRaw
+        .map((entry) => this.parseEquipmentEntry(entry))
+        .filter((entry): entry is { slot: EquipmentSlot; itemKey: string | null } => entry !== null),
+    };
+
+    if (parsed.tower.highestFloor < parsed.tower.currentFloor) {
+      parsed.tower.highestFloor = parsed.tower.currentFloor;
+    }
+
+    return parsed;
+  }
+
+  private parseLegacyAutoSaveSnapshot(raw: Record<string, unknown>): SaveSnapshotV1 {
+    const world =
+      raw.world && typeof raw.world === 'object' ? (raw.world as Record<string, unknown>) : ({} as Record<string, unknown>);
+    const player = this.asRecord(raw.player, 'Save snapshot player is invalid');
+    const tower = this.asRecord(raw.tower, 'Save snapshot tower is invalid');
+    const worldFlagsRaw = Array.isArray(raw.worldFlags) ? raw.worldFlags : [];
+    const inventoryRaw = Array.isArray(raw.inventory) ? raw.inventory : [];
+    const equipmentRaw = Array.isArray(raw.equipment) ? raw.equipment : [];
+    const capturedAt = this.toStringOrNull(raw.createdAt) ?? new Date().toISOString();
+
+    const parsed: SaveSnapshotV1 = {
+      schemaVersion: 1,
+      capturedAt,
+      world: {
+        zone: this.toStringOrNull(world.zone) ?? 'Ferme',
+        day: this.toPositiveInt(world.day, 1),
+      },
+      player: {
+        level: this.toPositiveInt(player.level, 1),
+        experience: this.toNonNegativeInt(player.experience, 0),
+        experienceToNextLevel: this.toPositiveInt(player.experienceToNext ?? player.experienceToNextLevel, 100),
+        gold: this.toNonNegativeInt(player.gold, 0),
+      },
+      tower: {
+        currentFloor: this.toPositiveInt(tower.currentFloor, 1),
+        highestFloor: this.toPositiveInt(tower.highestFloor, 1),
+        bossFloor10Defeated: Boolean(tower.bossFloor10Defeated),
+      },
+      worldFlags: worldFlagsRaw
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
+      inventory: inventoryRaw
+        .map((entry) => this.parseInventoryEntry(entry))
+        .filter((entry): entry is { itemKey: string; quantity: number } => entry !== null),
+      equipment: equipmentRaw
+        .map((entry) => this.parseEquipmentEntry(entry))
+        .filter((entry): entry is { slot: EquipmentSlot; itemKey: string | null } => entry !== null),
+    };
+
+    if (parsed.tower.highestFloor < parsed.tower.currentFloor) {
+      parsed.tower.highestFloor = parsed.tower.currentFloor;
+    }
+
+    return parsed;
+  }
+
+  private parseInventoryEntry(value: unknown): { itemKey: string; quantity: number } | null {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    const record = value as Record<string, unknown>;
+    const itemKey = this.toStringOrNull(record.itemKey);
+    const quantity = this.toPositiveInt(record.quantity, 0);
+
+    if (!itemKey || quantity <= 0) {
+      return null;
+    }
+
+    return { itemKey, quantity };
+  }
+
+  private parseEquipmentEntry(value: unknown): { slot: EquipmentSlot; itemKey: string | null } | null {
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    const record = value as Record<string, unknown>;
+    const rawSlot = this.toStringOrNull(record.slot);
+    if (!rawSlot || !EQUIPMENT_SLOTS.includes(rawSlot as EquipmentSlot)) {
+      return null;
+    }
+
+    const itemKey = this.toStringOrNull(record.itemKey);
+
+    return {
+      slot: rawSlot as EquipmentSlot,
+      itemKey,
+    };
+  }
+
+  private asRecord(value: unknown, message: string): Record<string, unknown> {
+    if (!value || typeof value !== 'object') {
+      throw new BadRequestException(message);
+    }
+
+    return value as Record<string, unknown>;
+  }
+
+  private toStringOrNull(value: unknown): string | null {
+    if (typeof value !== 'string') {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private toPositiveInt(value: unknown, fallback: number): number {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return fallback;
+    }
+
+    const rounded = Math.round(value);
+    return rounded > 0 ? rounded : fallback;
+  }
+
+  private toNonNegativeInt(value: unknown, fallback: number): number {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return fallback;
+    }
+
+    const rounded = Math.round(value);
+    return rounded >= 0 ? rounded : fallback;
+  }
+
+  private toLabelTimestamp(iso: string): string {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) {
+      return iso;
+    }
+
+    const dd = `${date.getDate()}`.padStart(2, '0');
+    const mm = `${date.getMonth() + 1}`.padStart(2, '0');
+    const yyyy = date.getFullYear();
+    const hh = `${date.getHours()}`.padStart(2, '0');
+    const min = `${date.getMinutes()}`.padStart(2, '0');
+    return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
   }
 
   private toIsoDate(value: Date | string): string {
