@@ -2909,12 +2909,12 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
 
     try {
-      await this.fetchJson(request.path, {
+      const responsePayload = await this.fetchJson<unknown>(request.path, {
         method: 'POST',
         body: JSON.stringify(request.body),
       });
       this.debugQaStatus = 'success';
-      this.debugQaMessage = request.successLabel;
+      this.debugQaMessage = this.getDebugQaSuccessMessage(action, responsePayload, request.successLabel);
       await this.bootstrapSessionState();
     } catch (error) {
       this.debugQaStatus = 'error';
@@ -3015,6 +3015,58 @@ export class GameScene extends Phaser.Scene {
       default:
         return null;
     }
+  }
+
+  private getDebugQaSuccessMessage(
+    action: DebugQaActionName,
+    payload: unknown,
+    fallback: string,
+  ): string {
+    if (action === 'apply-state-preset') {
+      const message = this.formatApplyStatePresetSuccess(payload);
+      if (message) {
+        return message;
+      }
+    }
+
+    return fallback;
+  }
+
+  private formatApplyStatePresetSuccess(payload: unknown): string | null {
+    const root = this.asRecord(payload);
+    const statePreset = this.asRecord(root?.statePreset);
+    const preset = this.asRecord(statePreset?.preset);
+    const tower = this.asRecord(statePreset?.tower);
+    const towerBefore = this.asRecord(tower?.before);
+    const towerAfter = this.asRecord(tower?.after);
+    const worldFlags = this.asRecord(statePreset?.worldFlags);
+
+    const presetKey = this.asString(preset?.key);
+    const floorBefore = this.asNumber(towerBefore?.currentFloor);
+    const floorAfter = this.asNumber(towerAfter?.currentFloor);
+    const addedFlags = this.asStringArray(worldFlags?.added);
+    const removedFlags = this.asStringArray(worldFlags?.removed);
+
+    if (!presetKey || floorBefore === null || floorAfter === null) {
+      return null;
+    }
+
+    const addedPreview = this.formatDebugQaFlagPreview(addedFlags);
+    const removedPreview = this.formatDebugQaFlagPreview(removedFlags);
+    return `Preset ${presetKey}: floor ${Math.round(floorBefore)} -> ${Math.round(floorAfter)} | +${addedFlags.length} (${addedPreview}) / -${removedFlags.length} (${removedPreview})`;
+  }
+
+  private formatDebugQaFlagPreview(flags: string[]): string {
+    if (flags.length === 0) {
+      return 'none';
+    }
+
+    const preview = flags.slice(0, 3).join(', ');
+    if (flags.length <= 3) {
+      return preview;
+    }
+
+    return `${preview}, ...`;
   }
 
   private readDebugQaNumber(
