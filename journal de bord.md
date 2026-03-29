@@ -388,6 +388,27 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Securite:
   - endpoint disponible uniquement en mode debug (non expose en production via garde existante).
 
+### Lot 26 - Endpoint debug set tower floor (dev only)
+- Backend debug-admin:
+  - nouvel endpoint protege:
+    - `POST /debug/admin/set-tower-floor`
+  - payload:
+    - `floor` (1..10)
+  - operation transactionnelle:
+    - set `tower_progression.current_floor` et `highest_floor` au floor cible
+    - set `boss_floor_10_defeated` automatiquement si floor >= 10
+    - reconciliation des flags de palier:
+      - `floor_3_cleared`
+      - `floor_5_cleared`
+      - `floor_8_cleared`
+      - `boss_floor_10_defeated`
+      - `tower_mvp_complete`
+  - reponse retour:
+    - etat tower `before/after`
+    - liste `appliedFlags` pour debug.
+- Securite:
+  - endpoint disponible uniquement en mode debug (non expose en production via garde existante).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -420,7 +441,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - autosave serveur versionne sur paliers majeurs/boss
 - Debug (dev only):
   - reset progression joueur via endpoint admin protege
-  - injection rapide de XP/or/items pour test local.
+  - injection rapide de XP/or/items pour test local
+  - forcer l'etage de tour pour playtests paliers/boss.
 
 ## 5) Frontend en place (resume)
 - Scene Phaser jouable avec deplacement.
@@ -445,6 +467,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `GET /health`
 - `POST /debug/admin/reset-progression` (dev only)
 - `POST /debug/admin/grant-resources` (dev only)
+- `POST /debug/admin/set-tower-floor` (dev only)
 - `GET /auth/google`
 - `GET /auth/google/callback`
 - `GET /auth/me`
@@ -495,6 +518,6 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
 4. Exposer un glossaire de rarete en UI (couleurs/legende) pour les nouveaux drops.
-5. Ajouter un endpoint debug (dev only) pour fixer rapidement l'etage de tour (set floor) en test.
+5. Ajouter un endpoint debug (dev only) pour marquer automatiquement des quetes comme `completed` pour QA rapide.
 
 

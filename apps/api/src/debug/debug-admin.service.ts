@@ -13,7 +13,7 @@ import {
 import { EQUIPMENT_SLOTS_TABLE } from '../equipment/equipment.constants';
 import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
 import { QUEST_STATES_TABLE } from '../quests/quests.constants';
-import { TOWER_MIN_FLOOR, TOWER_PROGRESSION_TABLE } from '../tower/tower.constants';
+import { TOWER_MIN_FLOOR, TOWER_MVP_MAX_FLOOR, TOWER_PROGRESSION_TABLE } from '../tower/tower.constants';
 import type { DebugGrantItemDto, DebugGrantResourcesDto } from './dto/debug-grant-resources.dto';
 
 type ResetProgressionResult = {
@@ -68,8 +68,31 @@ type DebugGrantResourcesResult = {
   inventoryGranted: Array<{ itemKey: string; quantity: number }>;
 };
 
+type TowerProgressionRow = {
+  user_id: string;
+  current_floor: number;
+  highest_floor: number;
+  boss_floor_10_defeated: boolean;
+};
+
+type DebugSetTowerFloorResult = {
+  before: {
+    currentFloor: number;
+    highestFloor: number;
+    bossFloor10Defeated: boolean;
+  };
+  after: {
+    currentFloor: number;
+    highestFloor: number;
+    bossFloor10Defeated: boolean;
+  };
+  appliedFlags: string[];
+};
+
 const SAVE_SLOTS_TABLE = 'save_slots';
 const AUTOSAVES_TABLE = 'autosaves';
+const TOWER_MILESTONE_FLAGS = ['floor_3_cleared', 'floor_5_cleared', 'floor_8_cleared'] as const;
+const TOWER_BOSS_FLAGS = ['boss_floor_10_defeated', 'tower_mvp_complete'] as const;
 
 @Injectable()
 export class DebugAdminService {
@@ -261,6 +284,89 @@ export class DebugAdminService {
     });
   }
 
+  async setTowerFloor(userId: string, requestedFloor: number): Promise<DebugSetTowerFloorResult> {
+    const targetFloor = Math.max(TOWER_MIN_FLOOR, Math.min(TOWER_MVP_MAX_FLOOR, Math.floor(requestedFloor)));
+
+    return this.databaseService.withTransaction(async (tx) => {
+      const before = await this.getTowerProgressionForUpdate(tx, userId);
+      const bossDefeated = targetFloor >= TOWER_MVP_MAX_FLOOR;
+
+      const updatedResult = await tx.query<TowerProgressionRow>(
+        `
+          INSERT INTO ${TOWER_PROGRESSION_TABLE} (
+            user_id,
+            current_floor,
+            highest_floor,
+            boss_floor_10_defeated,
+            created_at,
+            updated_at
+          )
+          VALUES ($1, $2, $3, $4, NOW(), NOW())
+          ON CONFLICT (user_id)
+          DO UPDATE
+            SET current_floor = EXCLUDED.current_floor,
+                highest_floor = EXCLUDED.highest_floor,
+                boss_floor_10_defeated = EXCLUDED.boss_floor_10_defeated,
+                updated_at = NOW()
+          RETURNING user_id, current_floor, highest_floor, boss_floor_10_defeated
+        `,
+        [userId, targetFloor, targetFloor, bossDefeated],
+      );
+
+      const appliedFlags: string[] = [];
+      for (const flag of [...TOWER_MILESTONE_FLAGS, ...TOWER_BOSS_FLAGS]) {
+        await tx.query(
+          `
+            DELETE FROM ${WORLD_FLAGS_TABLE}
+            WHERE user_id = $1
+              AND flag_key = $2
+          `,
+          [userId, flag],
+        );
+      }
+
+      if (targetFloor >= 3) {
+        appliedFlags.push('floor_3_cleared');
+      }
+      if (targetFloor >= 5) {
+        appliedFlags.push('floor_5_cleared');
+      }
+      if (targetFloor >= 8) {
+        appliedFlags.push('floor_8_cleared');
+      }
+      if (bossDefeated) {
+        appliedFlags.push('boss_floor_10_defeated', 'tower_mvp_complete');
+      }
+
+      for (const flag of appliedFlags) {
+        await tx.query(
+          `
+            INSERT INTO ${WORLD_FLAGS_TABLE} (user_id, flag_key, unlocked_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (user_id, flag_key) DO NOTHING
+          `,
+          [userId, flag],
+        );
+      }
+
+      const after = updatedResult.rows[0];
+
+      return {
+        before: {
+          currentFloor: before.current_floor,
+          highestFloor: before.highest_floor,
+          bossFloor10Defeated: before.boss_floor_10_defeated,
+        },
+        after: {
+          currentFloor: after.current_floor,
+          highestFloor: after.highest_floor,
+          bossFloor10Defeated: after.boss_floor_10_defeated,
+        },
+        appliedFlags,
+      };
+    });
+  }
+
   private normalizeGrantItems(items: DebugGrantItemDto[]): Array<{ itemKey: string; quantity: number }> {
     const byKey = new Map<string, number>();
 
@@ -347,5 +453,32 @@ export class DebugAdminService {
         progression.gold,
       ],
     );
+  }
+
+  private async getTowerProgressionForUpdate(
+    executor: TransactionClient,
+    userId: string,
+  ): Promise<TowerProgressionRow> {
+    await executor.query(
+      `
+        INSERT INTO ${TOWER_PROGRESSION_TABLE} (user_id, current_floor, highest_floor, boss_floor_10_defeated)
+        VALUES ($1, $2, $3, FALSE)
+        ON CONFLICT (user_id) DO NOTHING
+      `,
+      [userId, TOWER_MIN_FLOOR, TOWER_MIN_FLOOR],
+    );
+
+    const result = await executor.query<TowerProgressionRow>(
+      `
+        SELECT user_id, current_floor, highest_floor, boss_floor_10_defeated
+        FROM ${TOWER_PROGRESSION_TABLE}
+        WHERE user_id = $1
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [userId],
+    );
+
+    return result.rows[0];
   }
 }

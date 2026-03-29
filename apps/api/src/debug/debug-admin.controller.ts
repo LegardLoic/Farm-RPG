@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/auth.types';
 import { DebugGrantResourcesDto } from './dto/debug-grant-resources.dto';
+import { DebugSetTowerFloorDto } from './dto/debug-set-tower-floor.dto';
 import { DebugAdminService } from './debug-admin.service';
 
 @Controller('debug/admin')
@@ -37,6 +38,19 @@ export class DebugAdminController {
       status: 'ok',
       environment: this.configService.get<string>('NODE_ENV', 'development'),
       grant,
+    };
+  }
+
+  @Post('set-tower-floor')
+  async setTowerFloor(@Req() req: AuthenticatedRequest, @Body() body: DebugSetTowerFloorDto) {
+    this.assertDebugEnabled();
+
+    const tower = await this.debugAdminService.setTowerFloor(req.authUser!.id, body.floor);
+
+    return {
+      status: 'ok',
+      environment: this.configService.get<string>('NODE_ENV', 'development'),
+      tower,
     };
   }
 

@@ -32,6 +32,7 @@ Ce document regroupe les payloads utilises pendant nos tests manuels (front + AP
 | `/saves/:slot` | `PUT` | oui | `{ "label": "Manual test", "snapshot": { "schemaVersion": 1, "world": { "zone": "Ferme", "day": 1 } } }` | Upsert manuel d'un snapshot de save |
 | `/debug/admin/reset-progression` | `POST` | oui (dev only) | `{}` | Remise a zero progression/tour/inventaire/equipement/flags/quetes/saves |
 | `/debug/admin/grant-resources` | `POST` | oui (dev only) | `{ "experience": 250, "gold": 500, "items": [ { "itemKey": "mana_tonic", "quantity": 5 }, { "itemKey": "iron_ore", "quantity": 10 } ] }` | Injecter rapidement des ressources de test |
+| `/debug/admin/set-tower-floor` | `POST` | oui (dev only) | `{ "floor": 8 }` | Forcer l'etage de tour pour tester les paliers boss/quetes |
 
 ## Exemples prets a copier (debug)
 
@@ -62,5 +63,13 @@ Ce document regroupe les payloads utilises pendant nos tests manuels (front + AP
     { "itemKey": "mana_tonic", "quantity": 10 },
     { "itemKey": "thorn_shard", "quantity": 8 }
   ]
+}
+```
+
+### 4) Set tower floor (dev only)
+
+```json
+{
+  "floor": 10
 }
 ```
