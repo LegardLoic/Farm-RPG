@@ -615,6 +615,19 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - feedback plus actionnable pour verifier rapidement qu'un preset a bien ete applique
   - pas besoin d'ouvrir des endpoints manuellement pour valider l'effet du preset.
 
+### Lot 41 - Debug QA: `set-quest-status` + recap detaille flags/quete
+- Frontend HUD `Debug QA`:
+  - ajout d'une action `Set quest status` avec:
+    - champ `questKey`
+    - select `status` (`active`, `completed`, `claimed`)
+  - branchement direct sur `POST /debug/admin/set-quest-status`
+  - recap detaille du succes:
+    - `set-world-flags`: total flags + ajouts/retraits + apercu
+    - `set-quest-status`: `previousStatus -> nextStatus`.
+- UX:
+  - verification plus rapide des mutations debug sans devoir ouvrir la console reseau
+  - reduction des erreurs de saisie via select de statut.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -671,7 +684,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - progression tour (etage et boss 10)
   - mini tooltip d'aide des tags d'intention (`ATK/MAG/CLN/DSP/ULT`)
   - glossaire visuel des raretes de loot (`common`, `uncommon`, `rare`, `epic`, `legendary`)
-  - panneau `Debug QA` pour piloter les endpoints debug sans quitter le jeu (DEV/staging), incluant la gestion des world flags, des presets de scenario et leur recap d'application
+  - panneau `Debug QA` pour piloter les endpoints debug sans quitter le jeu (DEV/staging), incluant world flags, presets de scenario, set quest status et recaps detaillees
 - Chargement web optimise:
   - entree legere
   - bootstrap asynchrone
@@ -741,6 +754,6 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 2. Ajouter des tests end-to-end cibles (auth + combat + debug QA) pour securiser les regressions en CI.
 3. Equilibrer les couts/valeurs des skills (`Mend`, `Cleanse`, `Interrupt`) avec une passe de tuning gameplay.
 4. Etendre les scripts boss pour mieux punir/recompenser l'usage de `Interrupt` et `Cleanse`.
-5. Etendre le meme niveau de recap detaille aux autres actions debug critiques (`set-world-flags`, `set-quest-status`).
+5. Ajouter des presets de charge test CI (fixtures SQL) pour industrialiser les e2e debug/combat.
 
 

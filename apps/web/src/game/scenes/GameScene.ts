@@ -39,7 +39,8 @@ type DebugQaActionName =
   | 'apply-state-preset'
   | 'apply-loadout-preset'
   | 'complete-quests'
-  | 'set-world-flags';
+  | 'set-world-flags'
+  | 'set-quest-status';
 type DebugLoadoutPresetKey = 'starter' | 'tower_mid' | 'boss_trial';
 type DebugStatePresetKey = 'village_open' | 'mid_tower' | 'act1_done';
 type DebugQaStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -158,6 +159,12 @@ const DEBUG_QA_STATE_PRESET_OPTIONS: Array<{ key: DebugStatePresetKey; label: st
   { key: 'act1_done', label: 'Act 1 done' },
 ];
 
+const DEBUG_QA_QUEST_STATUS_OPTIONS: Array<{ key: QuestStatus; label: string }> = [
+  { key: 'active', label: 'Active' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'claimed', label: 'Claimed' },
+];
+
 function isDebugQaActionName(value: string): value is DebugQaActionName {
   return (
     value === 'grant-resources' ||
@@ -165,7 +172,8 @@ function isDebugQaActionName(value: string): value is DebugQaActionName {
     value === 'apply-state-preset' ||
     value === 'apply-loadout-preset' ||
     value === 'complete-quests' ||
-    value === 'set-world-flags'
+    value === 'set-world-flags' ||
+    value === 'set-quest-status'
   );
 }
 
@@ -264,6 +272,8 @@ export class GameScene extends Phaser.Scene {
   private debugQaGrantGoldInput: HTMLInputElement | null = null;
   private debugQaTowerFloorInput: HTMLInputElement | null = null;
   private debugQaStatePresetSelect: HTMLSelectElement | null = null;
+  private debugQaQuestKeyInput: HTMLInputElement | null = null;
+  private debugQaQuestStatusSelect: HTMLSelectElement | null = null;
   private debugQaLoadoutPresetSelect: HTMLSelectElement | null = null;
   private debugQaWorldFlagsInput: HTMLTextAreaElement | null = null;
   private debugQaWorldFlagsRemoveInput: HTMLTextAreaElement | null = null;
@@ -271,6 +281,7 @@ export class GameScene extends Phaser.Scene {
   private debugQaGrantButton: HTMLButtonElement | null = null;
   private debugQaTowerFloorButton: HTMLButtonElement | null = null;
   private debugQaStatePresetButton: HTMLButtonElement | null = null;
+  private debugQaSetQuestStatusButton: HTMLButtonElement | null = null;
   private debugQaLoadoutButton: HTMLButtonElement | null = null;
   private debugQaCompleteQuestsButton: HTMLButtonElement | null = null;
   private debugQaSetWorldFlagsButton: HTMLButtonElement | null = null;
@@ -657,6 +668,16 @@ export class GameScene extends Phaser.Scene {
               </select>
             </label>
             <label class="hud-debug-qa-field debug-qa-field-wide">
+              <span>Quest key</span>
+              <input data-hud="debugQaQuestKey" type="text" placeholder="story_floor_8" value="story_floor_8" />
+            </label>
+            <label class="hud-debug-qa-field">
+              <span>Quest status</span>
+              <select data-hud="debugQaQuestStatus">
+                ${DEBUG_QA_QUEST_STATUS_OPTIONS.map((option) => `<option value="${option.key}">${option.label}</option>`).join('')}
+              </select>
+            </label>
+            <label class="hud-debug-qa-field debug-qa-field-wide">
               <span>Loadout preset</span>
               <select data-hud="debugQaLoadout">
                 ${DEBUG_QA_PRESET_OPTIONS.map((preset) => `<option value="${preset.key}">${preset.label}</option>`).join('')}
@@ -690,6 +711,7 @@ export class GameScene extends Phaser.Scene {
             <button class="hud-debug-qa-button" data-debug-action="apply-loadout-preset">Apply loadout</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="complete-quests">Complete quests</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="set-world-flags">Set world flags</button>
+            <button class="hud-debug-qa-button secondary" data-debug-action="set-quest-status">Set quest status</button>
           </div>
         </div>
             `
@@ -738,6 +760,8 @@ export class GameScene extends Phaser.Scene {
     this.debugQaGrantGoldInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaGold"]');
     this.debugQaTowerFloorInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaFloor"]');
     this.debugQaStatePresetSelect = this.hudRoot.querySelector<HTMLSelectElement>('[data-hud="debugQaStatePreset"]');
+    this.debugQaQuestKeyInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaQuestKey"]');
+    this.debugQaQuestStatusSelect = this.hudRoot.querySelector<HTMLSelectElement>('[data-hud="debugQaQuestStatus"]');
     this.debugQaLoadoutPresetSelect = this.hudRoot.querySelector<HTMLSelectElement>('[data-hud="debugQaLoadout"]');
     this.debugQaWorldFlagsInput = this.hudRoot.querySelector<HTMLTextAreaElement>('[data-hud="debugQaWorldFlags"]');
     this.debugQaWorldFlagsRemoveInput = this.hudRoot.querySelector<HTMLTextAreaElement>('[data-hud="debugQaWorldFlagsRemove"]');
@@ -745,6 +769,7 @@ export class GameScene extends Phaser.Scene {
     this.debugQaGrantButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="grant-resources"]');
     this.debugQaTowerFloorButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="set-tower-floor"]');
     this.debugQaStatePresetButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="apply-state-preset"]');
+    this.debugQaSetQuestStatusButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="set-quest-status"]');
     this.debugQaLoadoutButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="apply-loadout-preset"]');
     this.debugQaCompleteQuestsButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="complete-quests"]');
     this.debugQaSetWorldFlagsButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="set-world-flags"]');
@@ -794,6 +819,8 @@ export class GameScene extends Phaser.Scene {
     this.debugQaGrantGoldInput = null;
     this.debugQaTowerFloorInput = null;
     this.debugQaStatePresetSelect = null;
+    this.debugQaQuestKeyInput = null;
+    this.debugQaQuestStatusSelect = null;
     this.debugQaLoadoutPresetSelect = null;
     this.debugQaWorldFlagsInput = null;
     this.debugQaWorldFlagsRemoveInput = null;
@@ -801,6 +828,7 @@ export class GameScene extends Phaser.Scene {
     this.debugQaGrantButton = null;
     this.debugQaTowerFloorButton = null;
     this.debugQaStatePresetButton = null;
+    this.debugQaSetQuestStatusButton = null;
     this.debugQaLoadoutButton = null;
     this.debugQaCompleteQuestsButton = null;
     this.debugQaSetWorldFlagsButton = null;
@@ -961,6 +989,12 @@ export class GameScene extends Phaser.Scene {
     if (this.debugQaStatePresetSelect) {
       this.debugQaStatePresetSelect.disabled = disabled;
     }
+    if (this.debugQaQuestKeyInput) {
+      this.debugQaQuestKeyInput.disabled = disabled;
+    }
+    if (this.debugQaQuestStatusSelect) {
+      this.debugQaQuestStatusSelect.disabled = disabled;
+    }
     if (this.debugQaLoadoutPresetSelect) {
       this.debugQaLoadoutPresetSelect.disabled = disabled;
     }
@@ -988,6 +1022,11 @@ export class GameScene extends Phaser.Scene {
       this.debugQaStatePresetButton.disabled = disabled;
       this.debugQaStatePresetButton.textContent =
         this.debugQaBusyAction === 'apply-state-preset' ? 'Applying...' : 'Apply state preset';
+    }
+    if (this.debugQaSetQuestStatusButton) {
+      this.debugQaSetQuestStatusButton.disabled = disabled;
+      this.debugQaSetQuestStatusButton.textContent =
+        this.debugQaBusyAction === 'set-quest-status' ? 'Applying...' : 'Set quest status';
     }
     if (this.debugQaLoadoutButton) {
       this.debugQaLoadoutButton.disabled = disabled;
@@ -3012,6 +3051,24 @@ export class GameScene extends Phaser.Scene {
           failureLabel: 'Unable to set world flags.',
         };
       }
+      case 'set-quest-status': {
+        const questKey = this.debugQaQuestKeyInput?.value.trim() ?? '';
+        const status = this.debugQaQuestStatusSelect?.value.trim() as QuestStatus;
+        if (!questKey || !this.isQuestStatusValue(status)) {
+          return null;
+        }
+
+        return {
+          path: '/debug/admin/set-quest-status',
+          body: {
+            questKey,
+            status,
+          },
+          loadingLabel: `Setting quest ${questKey} to ${status}...`,
+          successLabel: `Quest ${questKey} set to ${status}.`,
+          failureLabel: 'Unable to set quest status.',
+        };
+      }
       default:
         return null;
     }
@@ -3024,6 +3081,20 @@ export class GameScene extends Phaser.Scene {
   ): string {
     if (action === 'apply-state-preset') {
       const message = this.formatApplyStatePresetSuccess(payload);
+      if (message) {
+        return message;
+      }
+    }
+
+    if (action === 'set-world-flags') {
+      const message = this.formatSetWorldFlagsSuccess(payload);
+      if (message) {
+        return message;
+      }
+    }
+
+    if (action === 'set-quest-status') {
+      const message = this.formatSetQuestStatusSuccess(payload);
       if (message) {
         return message;
       }
@@ -3054,6 +3125,36 @@ export class GameScene extends Phaser.Scene {
     const addedPreview = this.formatDebugQaFlagPreview(addedFlags);
     const removedPreview = this.formatDebugQaFlagPreview(removedFlags);
     return `Preset ${presetKey}: floor ${Math.round(floorBefore)} -> ${Math.round(floorAfter)} | +${addedFlags.length} (${addedPreview}) / -${removedFlags.length} (${removedPreview})`;
+  }
+
+  private formatSetWorldFlagsSuccess(payload: unknown): string | null {
+    const root = this.asRecord(payload);
+    const worldFlags = this.asRecord(root?.worldFlags);
+    const addedFlags = this.asStringArray(worldFlags?.added);
+    const removedFlags = this.asStringArray(worldFlags?.removed);
+    const afterFlags = this.asStringArray(worldFlags?.after);
+
+    if (!worldFlags) {
+      return null;
+    }
+
+    const addedPreview = this.formatDebugQaFlagPreview(addedFlags);
+    const removedPreview = this.formatDebugQaFlagPreview(removedFlags);
+    return `World flags updated: total ${afterFlags.length} | +${addedFlags.length} (${addedPreview}) / -${removedFlags.length} (${removedPreview})`;
+  }
+
+  private formatSetQuestStatusSuccess(payload: unknown): string | null {
+    const root = this.asRecord(payload);
+    const quest = this.asRecord(root?.quest);
+
+    const questKey = this.asString(quest?.questKey);
+    const previousStatus = this.asString(quest?.previousStatus);
+    const nextStatus = this.asString(quest?.nextStatus);
+    if (!questKey || !previousStatus || !nextStatus) {
+      return null;
+    }
+
+    return `Quest ${questKey}: ${previousStatus} -> ${nextStatus}`;
   }
 
   private formatDebugQaFlagPreview(flags: string[]): string {
@@ -3090,6 +3191,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     return Math.max(0, rounded);
+  }
+
+  private isQuestStatusValue(value: string): value is QuestStatus {
+    return value === 'active' || value === 'completed' || value === 'claimed';
   }
 
   private readDebugQaFlagList(input: HTMLTextAreaElement | null): string[] {
