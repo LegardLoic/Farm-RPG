@@ -45,6 +45,7 @@ Create local env files before starting:
 - `POST /debug/admin/complete-quests` (dev only)
 - `POST /debug/admin/set-combat-start-override` (dev only)
 - `POST /debug/admin/clear-combat-start-override` (dev only)
+- `POST /debug/admin/apply-loadout-preset` (dev only)
 - `GET /auth/google`
 - `GET /auth/google/callback`
 - `GET /auth/me`

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/auth.types';
+import { DebugApplyLoadoutPresetDto } from './dto/debug-apply-loadout-preset.dto';
 import { DebugCompleteQuestsDto } from './dto/debug-complete-quests.dto';
 import { DebugGrantResourcesDto } from './dto/debug-grant-resources.dto';
 import { DebugSetCombatStartOverrideDto } from './dto/debug-set-combat-start-override.dto';
@@ -99,6 +100,19 @@ export class DebugAdminController {
       status: 'ok',
       environment: this.configService.get<string>('NODE_ENV', 'development'),
       cleared,
+    };
+  }
+
+  @Post('apply-loadout-preset')
+  async applyLoadoutPreset(@Req() req: AuthenticatedRequest, @Body() body: DebugApplyLoadoutPresetDto) {
+    this.assertDebugEnabled();
+
+    const loadout = await this.debugAdminService.applyLoadoutPreset(req.authUser!.id, body.presetKey);
+
+    return {
+      status: 'ok',
+      environment: this.configService.get<string>('NODE_ENV', 'development'),
+      loadout,
     };
   }
 

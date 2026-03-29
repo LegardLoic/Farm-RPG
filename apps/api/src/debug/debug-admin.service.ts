@@ -19,7 +19,8 @@ import {
   DEBUG_FORCE_COMBAT_ENEMY_FLAG_PREFIX,
   buildDebugForceCombatEnemyFlag,
 } from './debug-admin.constants';
-import type { DebugGrantItemDto, DebugGrantResourcesDto } from './dto/debug-grant-resources.dto';
+import { DEBUG_LOADOUT_PRESETS, type DebugLoadoutPresetDefinition } from './debug-loadout.constants';
+import type { DebugGrantResourcesDto } from './dto/debug-grant-resources.dto';
 
 type ResetProgressionResult = {
   progression: {
@@ -123,6 +124,34 @@ type DebugSetCombatStartOverrideResult = {
 
 type DebugClearCombatStartOverrideResult = {
   deletedOverrides: number;
+};
+
+type DebugApplyLoadoutPresetResult = {
+  preset: {
+    key: string;
+    name: string;
+    description: string;
+  };
+  progressionBefore: {
+    level: number;
+    experience: number;
+    experienceToNextLevel: number;
+    gold: number;
+  };
+  progressionAfter: {
+    level: number;
+    experience: number;
+    experienceToNextLevel: number;
+    gold: number;
+  };
+  equipmentApplied: Array<{
+    slot: string;
+    itemKey: string;
+  }>;
+  inventoryGranted: Array<{
+    itemKey: string;
+    quantity: number;
+  }>;
 };
 
 const SAVE_SLOTS_TABLE = 'save_slots';
@@ -514,7 +543,110 @@ export class DebugAdminService {
     });
   }
 
-  private normalizeGrantItems(items: DebugGrantItemDto[]): Array<{ itemKey: string; quantity: number }> {
+  async applyLoadoutPreset(userId: string, presetKey: string): Promise<DebugApplyLoadoutPresetResult> {
+    const preset = this.resolveLoadoutPresetOrThrow(presetKey);
+    const equipmentApplied = this.normalizeLoadoutEquipment(preset);
+    const inventoryGranted = this.normalizeGrantItems(preset.inventory);
+
+    return this.databaseService.withTransaction(async (tx) => {
+      const progressionBefore = await this.getProgressionForUpdate(tx, userId);
+      const progressionAfter = this.computeProgressionAfterGrant(
+        progressionBefore,
+        preset.resources.experience,
+        preset.resources.gold,
+      );
+
+      await this.persistProgression(tx, progressionAfter);
+
+      await tx.query(
+        `
+          DELETE FROM ${EQUIPMENT_SLOTS_TABLE}
+          WHERE user_id = $1
+        `,
+        [userId],
+      );
+
+      for (const equipped of equipmentApplied) {
+        await tx.query(
+          `
+            INSERT INTO ${EQUIPMENT_SLOTS_TABLE} (user_id, slot, item_key, created_at, updated_at)
+            VALUES ($1, $2, $3, NOW(), NOW())
+            ON CONFLICT (user_id, slot)
+            DO UPDATE
+              SET item_key = EXCLUDED.item_key,
+                  updated_at = NOW()
+          `,
+          [userId, equipped.slot, equipped.itemKey],
+        );
+      }
+
+      for (const item of inventoryGranted) {
+        await tx.query(
+          `
+            INSERT INTO ${INVENTORY_ITEMS_TABLE} (user_id, item_key, quantity)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id, item_key)
+            DO UPDATE
+              SET quantity = ${INVENTORY_ITEMS_TABLE}.quantity + EXCLUDED.quantity,
+                  updated_at = NOW()
+          `,
+          [userId, item.itemKey, item.quantity],
+        );
+      }
+
+      return {
+        preset: {
+          key: preset.key,
+          name: preset.name,
+          description: preset.description,
+        },
+        progressionBefore: {
+          level: progressionBefore.level,
+          experience: progressionBefore.experience,
+          experienceToNextLevel: progressionBefore.experience_to_next,
+          gold: progressionBefore.gold,
+        },
+        progressionAfter: {
+          level: progressionAfter.level,
+          experience: progressionAfter.experience,
+          experienceToNextLevel: progressionAfter.experience_to_next,
+          gold: progressionAfter.gold,
+        },
+        equipmentApplied,
+        inventoryGranted,
+      };
+    });
+  }
+
+  private resolveLoadoutPresetOrThrow(presetKey: string): DebugLoadoutPresetDefinition {
+    const normalizedPresetKey = presetKey.trim();
+    const preset = DEBUG_LOADOUT_PRESETS.find((entry) => entry.key === normalizedPresetKey);
+    if (!preset) {
+      throw new BadRequestException(`Unknown loadout preset: ${normalizedPresetKey}`);
+    }
+
+    return preset;
+  }
+
+  private normalizeLoadoutEquipment(
+    preset: DebugLoadoutPresetDefinition,
+  ): Array<{ slot: string; itemKey: string }> {
+    const bySlot = new Map<string, string>();
+
+    for (const entry of preset.equipment) {
+      const slot = entry.slot.trim();
+      const itemKey = entry.itemKey.trim();
+      if (!slot || !itemKey) {
+        continue;
+      }
+
+      bySlot.set(slot, itemKey);
+    }
+
+    return [...bySlot.entries()].map(([slot, itemKey]) => ({ slot, itemKey }));
+  }
+
+  private normalizeGrantItems(items: Array<{ itemKey: string; quantity: number }>): Array<{ itemKey: string; quantity: number }> {
     const byKey = new Map<string, number>();
 
     for (const item of items) {

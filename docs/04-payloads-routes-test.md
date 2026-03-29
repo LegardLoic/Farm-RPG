@@ -36,6 +36,7 @@ Ce document regroupe les payloads utilises pendant nos tests manuels (front + AP
 | `/debug/admin/complete-quests` | `POST` | oui (dev only) | `{ "questKey": "story_floor_10" }` (ou `{}` pour toutes) | Marquer des quetes en `completed` pour QA rapide |
 | `/debug/admin/set-combat-start-override` | `POST` | oui (dev only) | `{ "enemyKey": "cinder_warden", "isScriptedBossEncounter": true }` | Forcer le prochain `combat/start` sur un ennemi/script precise |
 | `/debug/admin/clear-combat-start-override` | `POST` | oui (dev only) | `{}` | Annuler un override de prochain `combat/start` |
+| `/debug/admin/apply-loadout-preset` | `POST` | oui (dev only) | `{ "presetKey": "boss_trial" }` | Appliquer un preset complet d'equipement+ressources pour playtest |
 
 ## Exemples prets a copier (debug)
 
@@ -105,3 +106,16 @@ Pour completer toutes les quetes non `claimed`:
 ```json
 {}
 ```
+
+### 8) Apply loadout preset (dev only)
+
+```json
+{
+  "presetKey": "tower_mid"
+}
+```
+
+Presets disponibles:
+- `starter`
+- `tower_mid`
+- `boss_trial`

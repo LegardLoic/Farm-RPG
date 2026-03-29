@@ -442,6 +442,20 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Securite:
   - configuration reservee aux routes debug (non exposees en production).
 
+### Lot 29 - Presets debug de loadout complet (dev only)
+- Backend debug-admin:
+  - nouvel endpoint protege:
+    - `POST /debug/admin/apply-loadout-preset`
+  - payload:
+    - `presetKey` (`starter`, `tower_mid`, `boss_trial`)
+  - operation transactionnelle:
+    - applique un preset d'equipement complet par slot
+    - ajoute un bundle d'inventaire de support (potions/materiaux)
+    - ajoute un bonus de ressources (XP/or) pour accelerer les playtests
+    - renvoie progression `before/after` + recap equipement/inventaire applique.
+- Securite:
+  - endpoint disponible uniquement en mode debug (non expose en production via garde existante).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -477,7 +491,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - injection rapide de XP/or/items pour test local
   - forcer l'etage de tour pour playtests paliers/boss
   - completer rapidement une quete (ou toutes les quetes) pour QA des flux de claim/rewards
-  - forcer le prochain `combat/start` sur un ennemi/script cible, puis auto-consommation one-shot.
+  - forcer le prochain `combat/start` sur un ennemi/script cible, puis auto-consommation one-shot
+  - appliquer un preset complet de loadout (equipement+inventaire+ressources) pour QA rapide.
 
 ## 5) Frontend en place (resume)
 - Scene Phaser jouable avec deplacement.
@@ -506,6 +521,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `POST /debug/admin/complete-quests` (dev only)
 - `POST /debug/admin/set-combat-start-override` (dev only)
 - `POST /debug/admin/clear-combat-start-override` (dev only)
+- `POST /debug/admin/apply-loadout-preset` (dev only)
 - `GET /auth/google`
 - `GET /auth/google/callback`
 - `GET /auth/me`
@@ -556,6 +572,6 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
 4. Exposer un glossaire de rarete en UI (couleurs/legende) pour les nouveaux drops.
-5. Ajouter un endpoint debug (dev only) pour appliquer un preset d'equipement complet (loadout) pour playtests rapides.
+5. Ajouter un endpoint debug (dev only) pour forcer des flags monde cibles (village/shops/story) en QA.
 
 
