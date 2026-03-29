@@ -426,6 +426,22 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Securite:
   - endpoint disponible uniquement en mode debug (non expose en production via garde existante).
 
+### Lot 28 - Override debug du prochain `combat/start` (dev only)
+- Backend debug-admin:
+  - nouveaux endpoints proteges:
+    - `POST /debug/admin/set-combat-start-override`
+    - `POST /debug/admin/clear-combat-start-override`
+  - payload de configuration:
+    - `enemyKey`
+    - `isScriptedBossEncounter` (optionnel)
+  - stockage de l'override dans `world_flags` (sans migration DB) avec cle dediee.
+- Backend combat:
+  - `POST /combat/start` consomme automatiquement l'override (one-shot) puis le supprime.
+  - support aussi branche fallback de recuperation pour eviter de perdre l'override en cas d'etat legacy corrompu.
+  - log combat explicite ajoute quand un override debug est applique.
+- Securite:
+  - configuration reservee aux routes debug (non exposees en production).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -460,7 +476,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - reset progression joueur via endpoint admin protege
   - injection rapide de XP/or/items pour test local
   - forcer l'etage de tour pour playtests paliers/boss
-  - completer rapidement une quete (ou toutes les quetes) pour QA des flux de claim/rewards.
+  - completer rapidement une quete (ou toutes les quetes) pour QA des flux de claim/rewards
+  - forcer le prochain `combat/start` sur un ennemi/script cible, puis auto-consommation one-shot.
 
 ## 5) Frontend en place (resume)
 - Scene Phaser jouable avec deplacement.
@@ -487,6 +504,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `POST /debug/admin/grant-resources` (dev only)
 - `POST /debug/admin/set-tower-floor` (dev only)
 - `POST /debug/admin/complete-quests` (dev only)
+- `POST /debug/admin/set-combat-start-override` (dev only)
+- `POST /debug/admin/clear-combat-start-override` (dev only)
 - `GET /auth/google`
 - `GET /auth/google/callback`
 - `GET /auth/me`
@@ -537,6 +556,6 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
 4. Exposer un glossaire de rarete en UI (couleurs/legende) pour les nouveaux drops.
-5. Ajouter un endpoint debug (dev only) pour forcer un ennemi/script precis au `combat/start` pour QA ciblee.
+5. Ajouter un endpoint debug (dev only) pour appliquer un preset d'equipement complet (loadout) pour playtests rapides.
 
 

@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 
-import { COMBAT_ENCOUNTERS_TABLE } from '../combat/combat.constants';
+import { COMBAT_ENCOUNTERS_TABLE, COMBAT_ENEMY_DEFINITIONS } from '../combat/combat.constants';
 import { DatabaseService, type TransactionClient } from '../database/database.service';
 import {
   BASE_PLAYER_EXPERIENCE,
@@ -15,6 +15,10 @@ import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
 import { QUEST_DEFINITIONS, QUEST_STATES_TABLE } from '../quests/quests.constants';
 import type { QuestDefinition, QuestProgressState, QuestStatus } from '../quests/quests.types';
 import { TOWER_MIN_FLOOR, TOWER_MVP_MAX_FLOOR, TOWER_PROGRESSION_TABLE } from '../tower/tower.constants';
+import {
+  DEBUG_FORCE_COMBAT_ENEMY_FLAG_PREFIX,
+  buildDebugForceCombatEnemyFlag,
+} from './debug-admin.constants';
 import type { DebugGrantItemDto, DebugGrantResourcesDto } from './dto/debug-grant-resources.dto';
 
 type ResetProgressionResult = {
@@ -109,6 +113,16 @@ type DebugCompleteQuestsResult = {
     questKey: string;
     reason: 'already_claimed';
   }>;
+};
+
+type DebugSetCombatStartOverrideResult = {
+  enemyKey: string;
+  isScriptedBossEncounter: boolean;
+  oneShot: true;
+};
+
+type DebugClearCombatStartOverrideResult = {
+  deletedOverrides: number;
 };
 
 const SAVE_SLOTS_TABLE = 'save_slots';
@@ -450,6 +464,56 @@ export class DebugAdminService {
     });
   }
 
+  async setCombatStartOverride(
+    userId: string,
+    enemyKey: string,
+    isScriptedBossEncounter: boolean,
+  ): Promise<DebugSetCombatStartOverrideResult> {
+    const normalizedEnemyKey = enemyKey.trim();
+    if (!normalizedEnemyKey) {
+      throw new BadRequestException('enemyKey is required');
+    }
+
+    if (!COMBAT_ENEMY_DEFINITIONS[normalizedEnemyKey]) {
+      throw new BadRequestException(`Unknown enemyKey: ${normalizedEnemyKey}`);
+    }
+
+    const flagKey = buildDebugForceCombatEnemyFlag({
+      enemyKey: normalizedEnemyKey,
+      isScriptedBossEncounter,
+    });
+
+    return this.databaseService.withTransaction(async (tx) => {
+      await this.deleteCombatStartOverrides(tx, userId);
+
+      await tx.query(
+        `
+          INSERT INTO ${WORLD_FLAGS_TABLE} (user_id, flag_key, unlocked_at)
+          VALUES ($1, $2, NOW())
+          ON CONFLICT (user_id, flag_key)
+          DO UPDATE
+            SET unlocked_at = NOW()
+        `,
+        [userId, flagKey],
+      );
+
+      return {
+        enemyKey: normalizedEnemyKey,
+        isScriptedBossEncounter,
+        oneShot: true as const,
+      };
+    });
+  }
+
+  async clearCombatStartOverride(userId: string): Promise<DebugClearCombatStartOverrideResult> {
+    return this.databaseService.withTransaction(async (tx) => {
+      const deletedOverrides = await this.deleteCombatStartOverrides(tx, userId);
+      return {
+        deletedOverrides,
+      };
+    });
+  }
+
   private normalizeGrantItems(items: DebugGrantItemDto[]): Array<{ itemKey: string; quantity: number }> {
     const byKey = new Map<string, number>();
 
@@ -563,6 +627,19 @@ export class DebugAdminService {
     );
 
     return result.rows[0];
+  }
+
+  private async deleteCombatStartOverrides(executor: TransactionClient, userId: string): Promise<number> {
+    const result = await executor.query(
+      `
+        DELETE FROM ${WORLD_FLAGS_TABLE}
+        WHERE user_id = $1
+          AND flag_key LIKE $2
+      `,
+      [userId, `${DEBUG_FORCE_COMBAT_ENEMY_FLAG_PREFIX}:%`],
+    );
+
+    return result.rowCount ?? 0;
   }
 
   private async ensureQuestRows(executor: TransactionClient, userId: string): Promise<void> {

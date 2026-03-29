@@ -34,6 +34,8 @@ Ce document regroupe les payloads utilises pendant nos tests manuels (front + AP
 | `/debug/admin/grant-resources` | `POST` | oui (dev only) | `{ "experience": 250, "gold": 500, "items": [ { "itemKey": "mana_tonic", "quantity": 5 }, { "itemKey": "iron_ore", "quantity": 10 } ] }` | Injecter rapidement des ressources de test |
 | `/debug/admin/set-tower-floor` | `POST` | oui (dev only) | `{ "floor": 8 }` | Forcer l'etage de tour pour tester les paliers boss/quetes |
 | `/debug/admin/complete-quests` | `POST` | oui (dev only) | `{ "questKey": "story_floor_10" }` (ou `{}` pour toutes) | Marquer des quetes en `completed` pour QA rapide |
+| `/debug/admin/set-combat-start-override` | `POST` | oui (dev only) | `{ "enemyKey": "cinder_warden", "isScriptedBossEncounter": true }` | Forcer le prochain `combat/start` sur un ennemi/script precise |
+| `/debug/admin/clear-combat-start-override` | `POST` | oui (dev only) | `{}` | Annuler un override de prochain `combat/start` |
 
 ## Exemples prets a copier (debug)
 
@@ -84,6 +86,21 @@ Ce document regroupe les payloads utilises pendant nos tests manuels (front + AP
 ```
 
 Pour completer toutes les quetes non `claimed`:
+
+```json
+{}
+```
+
+### 6) Set combat start override (dev only, one-shot)
+
+```json
+{
+  "enemyKey": "curse_heart_avatar",
+  "isScriptedBossEncounter": true
+}
+```
+
+### 7) Clear combat start override (dev only)
 
 ```json
 {}

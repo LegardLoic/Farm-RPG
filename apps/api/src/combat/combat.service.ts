@@ -7,6 +7,7 @@ import {
   BASE_PLAYER_GOLD,
   BASE_PLAYER_LEVEL,
   PLAYER_PROGRESSION_TABLE,
+  WORLD_FLAGS_TABLE,
   xpRequiredForLevel,
 } from '../gameplay/gameplay.constants';
 import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
@@ -14,6 +15,10 @@ import { QuestsService } from '../quests/quests.service';
 import { SavesService } from '../saves/saves.service';
 import { TowerService } from '../tower/tower.service';
 import type { TowerState } from '../tower/tower.types';
+import {
+  DEBUG_FORCE_COMBAT_ENEMY_FLAG_PREFIX,
+  parseDebugForceCombatEnemyFlag,
+} from '../debug/debug-admin.constants';
 import {
   COMBAT_ACTIONS,
   BOSS_SPECIFIC_BONUS_LOOT,
@@ -84,6 +89,11 @@ type ResolvedLootDrop = CombatLootDropDefinition & {
   source: CombatLootSource;
 };
 
+type DebugForcedCombatStart = {
+  enemy: CombatEnemyDefinition;
+  isScriptedBossEncounter: boolean;
+};
+
 @Injectable()
 export class CombatService {
   constructor(
@@ -101,10 +111,26 @@ export class CombatService {
           return this.toActionResult(activeEncounter);
         }
 
+        const forcedStart = await this.consumeDebugCombatStartOverride(tx, userId);
         const tower = await this.towerService.getStateForUpdate(tx, userId);
-        const scriptedEnemyKey = this.resolveScriptedEnemyKey(tower);
-        const enemy = this.resolveStartingEnemy(tower.currentFloor, scriptedEnemyKey, payload?.enemyKey);
-        const encounter = this.createEncounter(userId, enemy, tower.currentFloor, scriptedEnemyKey !== null);
+        const scriptedEnemyKey = forcedStart
+          ? forcedStart.isScriptedBossEncounter
+            ? forcedStart.enemy.key
+            : null
+          : this.resolveScriptedEnemyKey(tower);
+        const enemy = forcedStart
+          ? forcedStart.enemy
+          : this.resolveStartingEnemy(tower.currentFloor, scriptedEnemyKey, payload?.enemyKey);
+        const encounter = this.createEncounter(
+          userId,
+          enemy,
+          tower.currentFloor,
+          forcedStart ? forcedStart.isScriptedBossEncounter : scriptedEnemyKey !== null,
+        );
+        if (forcedStart) {
+          const mode = forcedStart.isScriptedBossEncounter ? 'scripted boss mode' : 'normal mode';
+          this.pushLog(encounter, `Debug override consumed: forced enemy ${enemy.name} (${enemy.key}) in ${mode}.`);
+        }
         const row = await this.insertEncounter(tx, encounter);
 
         return this.toActionResult(this.toEncounterState(row));
@@ -133,18 +159,29 @@ export class CombatService {
 
       let towerFloor = 1;
       let scriptedEnemyKey: string | null = null;
+      const forcedStart = await this.consumeDebugCombatStartOverride(tx, userId);
       try {
         const tower = await this.towerService.getStateForUpdate(tx, userId);
         towerFloor = Math.max(1, Number(tower.currentFloor || 1));
-        scriptedEnemyKey = this.resolveScriptedEnemyKey(tower);
+        scriptedEnemyKey = forcedStart
+          ? forcedStart.isScriptedBossEncounter
+            ? forcedStart.enemy.key
+            : null
+          : this.resolveScriptedEnemyKey(tower);
       } catch {
         towerFloor = 1;
-        scriptedEnemyKey = null;
+        scriptedEnemyKey = forcedStart
+          ? forcedStart.isScriptedBossEncounter
+            ? forcedStart.enemy.key
+            : null
+          : null;
       }
 
       let enemy: CombatEnemyDefinition;
       try {
-        enemy = this.resolveStartingEnemy(towerFloor, scriptedEnemyKey, payload?.enemyKey);
+        enemy = forcedStart
+          ? forcedStart.enemy
+          : this.resolveStartingEnemy(towerFloor, scriptedEnemyKey, payload?.enemyKey);
       } catch {
         enemy = COMBAT_ENEMY_DEFINITIONS[DEFAULT_COMBAT_ENEMY_KEY];
       }
@@ -153,8 +190,14 @@ export class CombatService {
         userId,
         enemy,
         towerFloor,
-        scriptedEnemyKey !== null && enemy.key === scriptedEnemyKey,
+        forcedStart
+          ? forcedStart.isScriptedBossEncounter
+          : scriptedEnemyKey !== null && enemy.key === scriptedEnemyKey,
       );
+      if (forcedStart) {
+        const mode = forcedStart.isScriptedBossEncounter ? 'scripted boss mode' : 'normal mode';
+        this.pushLog(encounter, `Debug override consumed: forced enemy ${enemy.name} (${enemy.key}) in ${mode}.`);
+      }
       const row = await this.insertEncounter(tx, encounter);
 
       return this.toActionResult(this.toEncounterState(row));
@@ -923,6 +966,57 @@ export class CombatService {
 
   private calculateEnemyMagicDamage(enemy: CombatEncounterState['enemy'], player: CombatUnitState): number {
     return Math.max(1, enemy.magicAttack + 4 - player.defense);
+  }
+
+  private async consumeDebugCombatStartOverride(
+    executor: TransactionClient,
+    userId: string,
+  ): Promise<DebugForcedCombatStart | null> {
+    if ((process.env.NODE_ENV ?? 'development') === 'production') {
+      return null;
+    }
+
+    const pattern = `${DEBUG_FORCE_COMBAT_ENEMY_FLAG_PREFIX}:%`;
+    const selected = await executor.query<{ flag_key: string }>(
+      `
+        SELECT flag_key
+        FROM ${WORLD_FLAGS_TABLE}
+        WHERE user_id = $1
+          AND flag_key LIKE $2
+        ORDER BY unlocked_at DESC
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [userId, pattern],
+    );
+    const selectedRow = selected.rows[0];
+    if (!selectedRow) {
+      return null;
+    }
+
+    await executor.query(
+      `
+        DELETE FROM ${WORLD_FLAGS_TABLE}
+        WHERE user_id = $1
+          AND flag_key LIKE $2
+      `,
+      [userId, pattern],
+    );
+
+    const parsedOverride = parseDebugForceCombatEnemyFlag(selectedRow.flag_key);
+    if (!parsedOverride) {
+      return null;
+    }
+
+    const enemy = COMBAT_ENEMY_DEFINITIONS[parsedOverride.enemyKey];
+    if (!enemy) {
+      return null;
+    }
+
+    return {
+      enemy,
+      isScriptedBossEncounter: parsedOverride.isScriptedBossEncounter,
+    };
   }
 
   private resolveScriptedEnemyKey(tower: TowerState): string | null {

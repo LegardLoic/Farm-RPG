@@ -5,6 +5,7 @@ import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/auth.types';
 import { DebugCompleteQuestsDto } from './dto/debug-complete-quests.dto';
 import { DebugGrantResourcesDto } from './dto/debug-grant-resources.dto';
+import { DebugSetCombatStartOverrideDto } from './dto/debug-set-combat-start-override.dto';
 import { DebugSetTowerFloorDto } from './dto/debug-set-tower-floor.dto';
 import { DebugAdminService } from './debug-admin.service';
 
@@ -65,6 +66,39 @@ export class DebugAdminController {
       status: 'ok',
       environment: this.configService.get<string>('NODE_ENV', 'development'),
       quests,
+    };
+  }
+
+  @Post('set-combat-start-override')
+  async setCombatStartOverride(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: DebugSetCombatStartOverrideDto,
+  ) {
+    this.assertDebugEnabled();
+
+    const override = await this.debugAdminService.setCombatStartOverride(
+      req.authUser!.id,
+      body.enemyKey,
+      body.isScriptedBossEncounter,
+    );
+
+    return {
+      status: 'ok',
+      environment: this.configService.get<string>('NODE_ENV', 'development'),
+      override,
+    };
+  }
+
+  @Post('clear-combat-start-override')
+  async clearCombatStartOverride(@Req() req: AuthenticatedRequest) {
+    this.assertDebugEnabled();
+
+    const cleared = await this.debugAdminService.clearCombatStartOverride(req.authUser!.id);
+
+    return {
+      status: 'ok',
+      environment: this.configService.get<string>('NODE_ENV', 'development'),
+      cleared,
     };
   }
 

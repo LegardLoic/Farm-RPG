@@ -43,6 +43,8 @@ Create local env files before starting:
 - `POST /debug/admin/grant-resources` (dev only)
 - `POST /debug/admin/set-tower-floor` (dev only)
 - `POST /debug/admin/complete-quests` (dev only)
+- `POST /debug/admin/set-combat-start-override` (dev only)
+- `POST /debug/admin/clear-combat-start-override` (dev only)
 - `GET /auth/google`
 - `GET /auth/google/callback`
 - `GET /auth/me`
