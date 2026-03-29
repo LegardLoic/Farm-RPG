@@ -198,6 +198,17 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     `);
 
     await this.query(`
+      CREATE TABLE IF NOT EXISTS tower_progression (
+        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        current_floor INTEGER NOT NULL DEFAULT 1 CHECK (current_floor >= 1),
+        highest_floor INTEGER NOT NULL DEFAULT 1 CHECK (highest_floor >= 1),
+        boss_floor_10_defeated BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await this.query(`
       CREATE TABLE IF NOT EXISTS combat_encounters (
         id UUID PRIMARY KEY,
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

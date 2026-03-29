@@ -7,6 +7,9 @@ type HudState = {
   level: number;
   xp: number;
   xpToNext: number;
+  towerCurrentFloor: number;
+  towerHighestFloor: number;
+  towerBossFloor10Defeated: boolean;
   blacksmithUnlocked: boolean;
   blacksmithCurseLifted: boolean;
   hp: number;
@@ -123,6 +126,9 @@ export class GameScene extends Phaser.Scene {
     level: 1,
     xp: 0,
     xpToNext: 100,
+    towerCurrentFloor: 1,
+    towerHighestFloor: 1,
+    towerBossFloor10Defeated: false,
     blacksmithUnlocked: false,
     blacksmithCurseLifted: false,
     hp: 32,
@@ -322,6 +328,8 @@ export class GameScene extends Phaser.Scene {
           <div class="hud-stat"><span>Or</span><strong data-hud="gold"></strong></div>
           <div class="hud-stat"><span>Niveau</span><strong data-hud="level"></strong></div>
           <div class="hud-stat"><span>XP</span><strong data-hud="xp"></strong></div>
+          <div class="hud-stat"><span>Etage</span><strong data-hud="towerFloor"></strong></div>
+          <div class="hud-stat"><span>Boss 10</span><strong data-hud="towerBoss10"></strong></div>
           <div class="hud-stat"><span>Forgeron</span><strong data-hud="blacksmithStatus"></strong></div>
           <div class="hud-stat"><span>PV</span><strong data-hud="hp"></strong></div>
           <div class="hud-stat"><span>PM</span><strong data-hud="mp"></strong></div>
@@ -454,6 +462,8 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('gold', `${this.hudState.gold} po`);
     this.setHudText('level', `${this.hudState.level}`);
     this.setHudText('xp', `${this.hudState.xp} / ${this.hudState.xpToNext}`);
+    this.setHudText('towerFloor', `${this.hudState.towerCurrentFloor} (best ${this.hudState.towerHighestFloor})`);
+    this.setHudText('towerBoss10', this.hudState.towerBossFloor10Defeated ? 'Defeated' : 'Pending');
     this.setHudText('blacksmithStatus', this.getBlacksmithStatusLabel());
     this.setHudText('hp', `${this.formatValue(this.hudState.hp)} / ${this.formatValue(this.hudState.maxHp)}`);
     this.setHudText('mp', `${this.formatValue(this.hudState.mp)} / ${this.formatValue(this.hudState.maxMp)}`);
@@ -1250,6 +1260,23 @@ export class GameScene extends Phaser.Scene {
         this.hudState.blacksmithCurseLifted = Boolean(blacksmith.curseLifted);
       }
     }
+
+    const tower = this.asRecord(payload.tower);
+    if (tower) {
+      const currentFloor = this.asNumber(tower.currentFloor);
+      const highestFloor = this.asNumber(tower.highestFloor);
+      const bossFloor10Defeated = tower.bossFloor10Defeated;
+
+      if (currentFloor !== null) {
+        this.hudState.towerCurrentFloor = Math.max(1, Math.round(currentFloor));
+      }
+
+      if (highestFloor !== null) {
+        this.hudState.towerHighestFloor = Math.max(1, Math.round(highestFloor));
+      }
+
+      this.hudState.towerBossFloor10Defeated = Boolean(bossFloor10Defeated);
+    }
   }
 
   private resetGameplayHudState(): void {
@@ -1259,6 +1286,9 @@ export class GameScene extends Phaser.Scene {
     this.hudState.level = 1;
     this.hudState.xp = 0;
     this.hudState.xpToNext = 100;
+    this.hudState.towerCurrentFloor = 1;
+    this.hudState.towerHighestFloor = 1;
+    this.hudState.towerBossFloor10Defeated = false;
     this.hudState.blacksmithUnlocked = false;
     this.hudState.blacksmithCurseLifted = false;
   }

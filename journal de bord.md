@@ -81,6 +81,20 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - bouton d'achat
   - etats lock/loading/error.
 
+### Lot 7 - Progression de tour (etages MVP)
+- Nouveau module backend `tower`.
+- Endpoint protege:
+  - `GET /tower/state`
+- Nouvelle table:
+  - `tower_progression` (current_floor, highest_floor, boss_floor_10_defeated)
+- Integration combat -> tour:
+  - chaque victoire combat avance la progression d'etage (cap MVP a 10)
+  - insertion de flags milestone (`floor_3_cleared`, `floor_5_cleared`, `floor_8_cleared`, `boss_floor_10_defeated`, `tower_mvp_complete`)
+- `GET /gameplay/state` enrichi avec l'etat de la tour.
+- HUD web enrichi:
+  - affichage etage courant / meilleur etage
+  - statut boss etage 10.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -100,6 +114,10 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - boutique forgeron protegee
   - achat serveur autoritaire
   - deduction or + ajout item en transaction
+- Tour:
+  - progression des etages persistee
+  - endpoint de lecture d'etat
+  - progression automatique sur victoire combat
 - Inventaire / equipement / saves:
   - endpoints proteges
   - persistence PostgreSQL
@@ -114,6 +132,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - quetes + claim
   - statut village (forgeron)
   - boutique forgeron (offres + achat)
+  - progression tour (etage et boss 10)
 - Integration API avec gestion d'erreurs UI.
 
 ## 6) API actuellement disponible
@@ -124,6 +143,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `POST /auth/refresh`
 - `POST /auth/logout`
 - `GET /gameplay/state`
+- `GET /tower/state`
 - `GET /inventory`
 - `POST /inventory/add`
 - `POST /inventory/use`
@@ -153,12 +173,12 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 8) Points techniques importants
 - Source de verite gameplay cote serveur (anti-triche de base respectee).
 - Mutations sensibles en transactions SQL.
-- Structure modulaire NestJS maintenue (auth/combat/gameplay/inventory/equipment/saves/quests/shops).
+- Structure modulaire NestJS maintenue (auth/combat/gameplay/inventory/equipment/saves/quests/shops/tower).
 - Flux PR continue (`develop` -> `main`) deja utilise et valide.
 
 ## 9) Prochaines priorites recommandees
 1. Ajouter un systeme de quetes "histoire" et paliers etage 3/5/8/10.
-2. Introduire progression de tour (floor courant, mini-boss, boss etage 10).
+2. Ajouter mini-boss/boss scriptes lies aux paliers d'etage.
 3. Ajouter autosave apres victoire boss/palier majeur.
 4. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
 5. Etendre le shop (tiers, equipement reel, prerequis de quete).

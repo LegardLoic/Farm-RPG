@@ -12,6 +12,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { QuestsModule } from './quests/quests.module';
 import { SavesModule } from './saves/saves.module';
 import { ShopsModule } from './shops/shops.module';
+import { TowerModule } from './tower/tower.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ShopsModule } from './shops/shops.module';
     GameplayModule,
     QuestsModule,
     ShopsModule,
+    TowerModule,
     SavesModule,
     CombatModule,
   ],

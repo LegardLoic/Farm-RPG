@@ -51,6 +51,7 @@ Create local env files before starting:
 - `POST /equipment/equip`
 - `POST /equipment/unequip`
 - `GET /gameplay/state`
+- `GET /tower/state`
 - `POST /combat/start`
 - `GET /combat/current`
 - `GET /combat/:id`

@@ -3,17 +3,22 @@ import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/auth.types';
 import { GameplayService } from './gameplay.service';
+import { TowerService } from '../tower/tower.service';
 
 @Controller('gameplay')
 @UseGuards(AccessTokenGuard)
 export class GameplayController {
-  constructor(private readonly gameplayService: GameplayService) {}
+  constructor(
+    private readonly gameplayService: GameplayService,
+    private readonly towerService: TowerService,
+  ) {}
 
   @Get('state')
   async getState(@Req() req: AuthenticatedRequest) {
-    const [progression, village] = await Promise.all([
+    const [progression, village, tower] = await Promise.all([
       this.gameplayService.getPlayerProgression(req.authUser!.id),
       this.gameplayService.getVillageState(req.authUser!.id),
+      this.towerService.getState(req.authUser!.id),
     ]);
 
     return {
@@ -22,6 +27,7 @@ export class GameplayController {
       world: this.gameplayService.getWorldState(),
       progression,
       village,
+      tower,
     };
   }
 }

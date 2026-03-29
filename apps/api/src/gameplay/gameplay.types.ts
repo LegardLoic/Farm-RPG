@@ -16,3 +16,11 @@ export interface GameplayVillageState {
     curseLifted: boolean;
   };
 }
+
+export interface GameplayTowerState {
+  currentFloor: number;
+  highestFloor: number;
+  bossFloor10Defeated: boolean;
+  mvpCompleted: boolean;
+  nextBossFloor: number | null;
+}

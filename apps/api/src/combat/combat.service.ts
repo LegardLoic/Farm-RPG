@@ -11,6 +11,7 @@ import {
 } from '../gameplay/gameplay.constants';
 import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
 import { QuestsService } from '../quests/quests.service';
+import { TowerService } from '../tower/tower.service';
 import {
   COMBAT_ENCOUNTERS_TABLE,
   COMBAT_ENEMY_DEFINITIONS,
@@ -57,6 +58,7 @@ export class CombatService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly questsService: QuestsService,
+    private readonly towerService: TowerService,
   ) {}
 
   async startCombat(userId: string, payload: StartCombatDto): Promise<CombatActionResult> {
@@ -107,12 +109,20 @@ export class CombatService {
 
       const nextState = this.resolvePlayerAction(encounter, action);
       const finalizedState = await this.applyVictoryRewardsIfNeeded(tx, userId, nextState);
+      if (finalizedState.status === 'won') {
+        await this.questsService.recordCombatVictory(tx, userId, finalizedState.enemyKey);
+        const towerProgress = await this.towerService.recordCombatVictory(tx, userId);
+        this.pushLog(
+          finalizedState,
+          `Tower progress: floor ${towerProgress.previousFloor} -> ${towerProgress.currentFloor}.`,
+        );
+        for (const flag of towerProgress.reachedMilestoneFlags) {
+          this.pushLog(finalizedState, `Milestone unlocked: ${flag}.`);
+        }
+      }
+
       const savedRow = await this.saveEncounter(tx, finalizedState);
       const savedEncounter = this.toEncounterState(savedRow);
-
-      if (savedEncounter.status === 'won') {
-        await this.questsService.recordCombatVictory(tx, userId, savedEncounter.enemyKey);
-      }
 
       return this.toActionResult(savedEncounter);
     });
