@@ -11,13 +11,17 @@ export class GameplayController {
 
   @Get('state')
   async getState(@Req() req: AuthenticatedRequest) {
-    const progression = await this.gameplayService.getPlayerProgression(req.authUser!.id);
+    const [progression, village] = await Promise.all([
+      this.gameplayService.getPlayerProgression(req.authUser!.id),
+      this.gameplayService.getVillageState(req.authUser!.id),
+    ]);
 
     return {
       status: 'ok',
       player: req.authUser,
       world: this.gameplayService.getWorldState(),
       progression,
+      village,
     };
   }
 }

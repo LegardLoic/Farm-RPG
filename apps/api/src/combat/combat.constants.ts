@@ -1,7 +1,6 @@
 import type { CombatEnemyDefinition } from './combat.types';
 
 export const COMBAT_ENCOUNTERS_TABLE = 'combat_encounters';
-export const PLAYER_PROGRESSION_TABLE = 'player_progression';
 
 export const COMBAT_STATUSES = ['active', 'won', 'lost', 'fled'] as const;
 export const COMBAT_ACTIONS = ['attack', 'defend', 'fireball'] as const;
@@ -9,10 +8,6 @@ export const COMBAT_ACTIONS = ['attack', 'defend', 'fireball'] as const;
 export const COMBAT_LOG_LIMIT = 20;
 export const FIREBALL_MANA_COST = 5;
 export const DEFAULT_COMBAT_ENEMY_KEY = 'forest_goblin';
-
-export const BASE_PLAYER_LEVEL = 1;
-export const BASE_PLAYER_EXPERIENCE = 0;
-export const BASE_PLAYER_GOLD = 120;
 
 export const DEFAULT_PLAYER_COMBAT_STATE = {
   hp: 32,

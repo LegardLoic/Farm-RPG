@@ -167,6 +167,37 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     `);
 
     await this.query(`
+      CREATE TABLE IF NOT EXISTS quest_states (
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        quest_key TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('active', 'completed', 'claimed')),
+        progress_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, quest_key)
+      );
+    `);
+
+    await this.query(`
+      CREATE INDEX IF NOT EXISTS quest_states_user_id_idx
+      ON quest_states(user_id);
+    `);
+
+    await this.query(`
+      CREATE TABLE IF NOT EXISTS world_flags (
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        flag_key TEXT NOT NULL,
+        unlocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, flag_key)
+      );
+    `);
+
+    await this.query(`
+      CREATE INDEX IF NOT EXISTS world_flags_user_id_idx
+      ON world_flags(user_id);
+    `);
+
+    await this.query(`
       CREATE TABLE IF NOT EXISTS combat_encounters (
         id UUID PRIMARY KEY,
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

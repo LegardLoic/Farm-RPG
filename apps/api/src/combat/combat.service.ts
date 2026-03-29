@@ -2,18 +2,22 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { randomUUID } from 'crypto';
 
 import { DatabaseService, type TransactionClient } from '../database/database.service';
-import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
 import {
   BASE_PLAYER_EXPERIENCE,
   BASE_PLAYER_GOLD,
   BASE_PLAYER_LEVEL,
+  PLAYER_PROGRESSION_TABLE,
+  xpRequiredForLevel,
+} from '../gameplay/gameplay.constants';
+import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
+import { QuestsService } from '../quests/quests.service';
+import {
   COMBAT_ENCOUNTERS_TABLE,
   COMBAT_ENEMY_DEFINITIONS,
   COMBAT_LOG_LIMIT,
   DEFAULT_COMBAT_ENEMY_KEY,
   DEFAULT_PLAYER_COMBAT_STATE,
   FIREBALL_MANA_COST,
-  PLAYER_PROGRESSION_TABLE,
 } from './combat.constants';
 import type {
   CombatActionName,
@@ -50,7 +54,10 @@ type PlayerProgressionRow = {
 
 @Injectable()
 export class CombatService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly questsService: QuestsService,
+  ) {}
 
   async startCombat(userId: string, payload: StartCombatDto): Promise<CombatActionResult> {
     return this.databaseService.withTransaction(async (tx) => {
@@ -101,8 +108,13 @@ export class CombatService {
       const nextState = this.resolvePlayerAction(encounter, action);
       const finalizedState = await this.applyVictoryRewardsIfNeeded(tx, userId, nextState);
       const savedRow = await this.saveEncounter(tx, finalizedState);
+      const savedEncounter = this.toEncounterState(savedRow);
 
-      return this.toActionResult(this.toEncounterState(savedRow));
+      if (savedEncounter.status === 'won') {
+        await this.questsService.recordCombatVictory(tx, userId, savedEncounter.enemyKey);
+      }
+
+      return this.toActionResult(savedEncounter);
     });
   }
 
@@ -288,7 +300,7 @@ export class CombatService {
         VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (user_id) DO NOTHING
       `,
-      [userId, BASE_PLAYER_LEVEL, BASE_PLAYER_EXPERIENCE, this.xpRequiredForLevel(BASE_PLAYER_LEVEL), BASE_PLAYER_GOLD],
+      [userId, BASE_PLAYER_LEVEL, BASE_PLAYER_EXPERIENCE, xpRequiredForLevel(BASE_PLAYER_LEVEL), BASE_PLAYER_GOLD],
     );
 
     const result = await executor.query<PlayerProgressionRow>(
@@ -341,12 +353,12 @@ export class CombatService {
   ): PlayerProgressionRow {
     let level = progression.level;
     let experience = progression.experience + gainedExperience;
-    let experienceToNext = this.xpRequiredForLevel(level);
+    let experienceToNext = xpRequiredForLevel(level);
 
     while (experience >= experienceToNext) {
       experience -= experienceToNext;
       level += 1;
-      experienceToNext = this.xpRequiredForLevel(level);
+      experienceToNext = xpRequiredForLevel(level);
     }
 
     return {
@@ -356,10 +368,6 @@ export class CombatService {
       experience_to_next: experienceToNext,
       gold: progression.gold + gainedGold,
     };
-  }
-
-  private xpRequiredForLevel(level: number): number {
-    return 100 + Math.max(0, level - 1) * 25;
   }
 
   private rollLootItems(lootTable: CombatLootDropDefinition[]): CombatRewardItem[] {

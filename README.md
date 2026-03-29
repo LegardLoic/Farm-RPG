@@ -56,6 +56,8 @@ Create local env files before starting:
 - `GET /combat/:id`
 - `POST /combat/:id/action`
 - `POST /combat/:id/forfeit`
+- `GET /quests`
+- `POST /quests/:questKey/claim`
 - `GET /saves`
 - `GET /saves/:slot`
 - `PUT /saves/:slot`

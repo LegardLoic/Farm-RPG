@@ -7,6 +7,8 @@ type HudState = {
   level: number;
   xp: number;
   xpToNext: number;
+  blacksmithUnlocked: boolean;
+  blacksmithCurseLifted: boolean;
   hp: number;
   maxHp: number;
   mp: number;
@@ -19,6 +21,7 @@ type CombatStatus = 'active' | 'won' | 'lost' | 'fled';
 type CombatTurn = 'player' | 'enemy';
 type CombatUiStatus = CombatStatus | 'idle' | 'loading' | 'error';
 type CombatActionName = 'attack' | 'defend' | 'fireball';
+type QuestStatus = 'active' | 'completed' | 'claimed';
 
 type CombatUnitState = {
   hp: number;
@@ -59,6 +62,23 @@ type CombatEncounterState = {
   endedAt: string | null | undefined;
 };
 
+type QuestObjectiveState = {
+  key: string;
+  description: string;
+  current: number;
+  target: number;
+  completed: boolean;
+};
+
+type QuestState = {
+  key: string;
+  title: string;
+  description: string;
+  status: QuestStatus;
+  canClaim: boolean;
+  objectives: QuestObjectiveState[];
+};
+
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -80,6 +100,9 @@ export class GameScene extends Phaser.Scene {
   private combatLogsList: HTMLElement | null = null;
   private combatStatusBadge: HTMLElement | null = null;
   private combatErrorValue: HTMLElement | null = null;
+  private questsSummaryValue: HTMLElement | null = null;
+  private questsListRoot: HTMLElement | null = null;
+  private questsErrorValue: HTMLElement | null = null;
 
   private authStatus = 'Verification...';
   private isAuthenticated = false;
@@ -89,6 +112,8 @@ export class GameScene extends Phaser.Scene {
     level: 1,
     xp: 0,
     xpToNext: 100,
+    blacksmithUnlocked: false,
+    blacksmithCurseLifted: false,
     hp: 32,
     maxHp: 32,
     mp: 15,
@@ -104,6 +129,10 @@ export class GameScene extends Phaser.Scene {
   private combatMessage = 'Aucun combat actif.';
   private combatError: string | null = null;
   private combatBusy = false;
+  private quests: QuestState[] = [];
+  private questBusy = false;
+  private questError: string | null = null;
+  private questsRenderSignature = '';
 
   private readonly onHudClick = (event: MouseEvent) => {
     const target = event.target as HTMLElement | null;
@@ -114,6 +143,7 @@ export class GameScene extends Phaser.Scene {
 
     const hudAction = button.dataset.hudAction;
     const combatAction = button.dataset.combatAction;
+    const questAction = button.dataset.questAction;
 
     if (hudAction === 'login') {
       window.location.href = `${API_BASE_URL}/auth/google`;
@@ -137,6 +167,14 @@ export class GameScene extends Phaser.Scene {
 
     if (combatAction === 'forfeit') {
       void this.forfeitCombat();
+      return;
+    }
+
+    if (questAction === 'claim') {
+      const questKey = button.dataset.questKey;
+      if (questKey) {
+        void this.claimQuest(questKey);
+      }
     }
   };
 
@@ -260,6 +298,7 @@ export class GameScene extends Phaser.Scene {
           <div class="hud-stat"><span>Or</span><strong data-hud="gold"></strong></div>
           <div class="hud-stat"><span>Niveau</span><strong data-hud="level"></strong></div>
           <div class="hud-stat"><span>XP</span><strong data-hud="xp"></strong></div>
+          <div class="hud-stat"><span>Forgeron</span><strong data-hud="blacksmithStatus"></strong></div>
           <div class="hud-stat"><span>PV</span><strong data-hud="hp"></strong></div>
           <div class="hud-stat"><span>PM</span><strong data-hud="mp"></strong></div>
           <div class="hud-stat"><span>Endurance</span><strong data-hud="stamina"></strong></div>
@@ -312,6 +351,14 @@ export class GameScene extends Phaser.Scene {
           <div class="hud-combat-error" data-hud="combatError" hidden></div>
           <ul class="hud-combat-log" data-hud="combatLogs"></ul>
         </div>
+        <div class="hud-quests">
+          <div class="hud-quests-header">
+            <span>Quests</span>
+            <strong data-hud="questsSummary">No quests loaded.</strong>
+          </div>
+          <div class="hud-quests-error" data-hud="questsError" hidden></div>
+          <ul class="hud-quests-list" data-hud="questsList"></ul>
+        </div>
         <div class="hud-help">
           Deplacement: fleches ou ZQSD
           <br />
@@ -330,6 +377,9 @@ export class GameScene extends Phaser.Scene {
     this.combatLogsList = this.hudRoot.querySelector<HTMLElement>('[data-hud="combatLogs"]');
     this.combatStatusBadge = this.hudRoot.querySelector<HTMLElement>('[data-hud="combatStatus"]');
     this.combatErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="combatError"]');
+    this.questsSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="questsSummary"]');
+    this.questsListRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="questsList"]');
+    this.questsErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="questsError"]');
     this.hudRoot.addEventListener('click', this.onHudClick);
     this.updateHud();
   }
@@ -351,6 +401,10 @@ export class GameScene extends Phaser.Scene {
     this.combatLogsList = null;
     this.combatStatusBadge = null;
     this.combatErrorValue = null;
+    this.questsSummaryValue = null;
+    this.questsListRoot = null;
+    this.questsErrorValue = null;
+    this.questsRenderSignature = '';
   }
   private updateHud(): void {
     if (!this.hudRoot) {
@@ -361,12 +415,14 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('gold', `${this.hudState.gold} po`);
     this.setHudText('level', `${this.hudState.level}`);
     this.setHudText('xp', `${this.hudState.xp} / ${this.hudState.xpToNext}`);
+    this.setHudText('blacksmithStatus', this.getBlacksmithStatusLabel());
     this.setHudText('hp', `${this.formatValue(this.hudState.hp)} / ${this.formatValue(this.hudState.maxHp)}`);
     this.setHudText('mp', `${this.formatValue(this.hudState.mp)} / ${this.formatValue(this.hudState.maxMp)}`);
     this.setHudText('stamina', `${Math.max(0, Math.round(this.hudState.stamina))} / 8`);
     this.setHudText('area', this.hudState.area);
     this.setHudText('authStatus', this.authStatus);
     this.updateCombatHud();
+    this.updateQuestHud();
 
     if (this.loginButton) {
       this.loginButton.hidden = this.isAuthenticated;
@@ -401,6 +457,142 @@ export class GameScene extends Phaser.Scene {
 
     this.renderCombatLogs();
     this.updateCombatButtons();
+  }
+
+  private updateQuestHud(): void {
+    if (this.questsSummaryValue) {
+      this.questsSummaryValue.textContent = this.getQuestSummaryLabel();
+    }
+
+    if (this.questsErrorValue) {
+      this.questsErrorValue.hidden = !this.questError;
+      this.questsErrorValue.textContent = this.questError ?? '';
+    }
+
+    this.renderQuestList();
+  }
+
+  private renderQuestList(): void {
+    if (!this.questsListRoot) {
+      return;
+    }
+
+    const signature = this.computeQuestRenderSignature();
+    if (signature === this.questsRenderSignature) {
+      return;
+    }
+    this.questsRenderSignature = signature;
+
+    this.questsListRoot.replaceChildren();
+
+    if (!this.isAuthenticated) {
+      const item = document.createElement('li');
+      item.classList.add('quest-item', 'empty');
+      item.textContent = 'Connect to see quests.';
+      this.questsListRoot.appendChild(item);
+      return;
+    }
+
+    if (this.quests.length === 0) {
+      const item = document.createElement('li');
+      item.classList.add('quest-item', 'empty');
+      item.textContent = this.questBusy ? 'Loading quests...' : 'No quests available.';
+      this.questsListRoot.appendChild(item);
+      return;
+    }
+
+    for (const quest of this.quests) {
+      const item = document.createElement('li');
+      item.classList.add('quest-item');
+      item.dataset.status = quest.status;
+
+      const header = document.createElement('div');
+      header.classList.add('quest-item-header');
+
+      const title = document.createElement('strong');
+      title.textContent = quest.title;
+      header.appendChild(title);
+
+      const badge = document.createElement('span');
+      badge.classList.add('quest-status');
+      badge.textContent = this.getQuestStatusLabel(quest.status);
+      header.appendChild(badge);
+
+      item.appendChild(header);
+
+      const description = document.createElement('p');
+      description.classList.add('quest-description');
+      description.textContent = quest.description;
+      item.appendChild(description);
+
+      const objectives = document.createElement('ul');
+      objectives.classList.add('quest-objectives');
+      for (const objective of quest.objectives) {
+        const objectiveItem = document.createElement('li');
+        objectiveItem.textContent = `${objective.description}: ${objective.current}/${objective.target}`;
+        if (objective.completed) {
+          objectiveItem.classList.add('completed');
+        }
+        objectives.appendChild(objectiveItem);
+      }
+      item.appendChild(objectives);
+
+      if (quest.canClaim) {
+        const claimButton = document.createElement('button');
+        claimButton.classList.add('hud-quest-claim');
+        claimButton.textContent = 'Claim';
+        claimButton.dataset.questAction = 'claim';
+        claimButton.dataset.questKey = quest.key;
+        claimButton.disabled = this.questBusy;
+        item.appendChild(claimButton);
+      }
+
+      this.questsListRoot.appendChild(item);
+    }
+  }
+
+  private getQuestSummaryLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Login required';
+    }
+
+    if (this.questBusy && this.quests.length === 0) {
+      return 'Loading...';
+    }
+
+    const active = this.quests.filter((quest) => quest.status === 'active').length;
+    const completed = this.quests.filter((quest) => quest.status === 'completed').length;
+    const claimed = this.quests.filter((quest) => quest.status === 'claimed').length;
+    return `Active ${active} | Ready ${completed} | Claimed ${claimed}`;
+  }
+
+  private computeQuestRenderSignature(): string {
+    const questParts = this.quests.map((quest) => {
+      const objectiveParts = quest.objectives.map((objective) => (
+        `${objective.key}:${objective.current}/${objective.target}:${objective.completed ? '1' : '0'}`
+      ));
+
+      return `${quest.key}:${quest.status}:${quest.canClaim ? '1' : '0'}:${objectiveParts.join(',')}`;
+    });
+
+    return [
+      this.isAuthenticated ? '1' : '0',
+      this.questBusy ? '1' : '0',
+      this.questError ?? '',
+      questParts.join(';'),
+    ].join('|');
+  }
+
+  private getQuestStatusLabel(status: QuestStatus): string {
+    if (status === 'active') {
+      return 'Active';
+    }
+
+    if (status === 'completed') {
+      return 'Ready';
+    }
+
+    return 'Claimed';
   }
 
   private updateCombatButtons(): void {
@@ -470,11 +662,13 @@ export class GameScene extends Phaser.Scene {
     const authenticated = await this.refreshAuthState();
     if (authenticated) {
       await this.refreshGameplayState();
+      await this.refreshQuestState();
       await this.refreshCombatState();
       return;
     }
 
     this.resetGameplayHudState();
+    this.resetQuestState();
     this.resetCombatState();
     this.updateHud();
   }
@@ -513,6 +707,33 @@ export class GameScene extends Phaser.Scene {
     } catch {
       // Keep previous HUD progression values if gameplay refresh fails.
     } finally {
+      this.updateHud();
+    }
+  }
+
+  private async refreshQuestState(): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.resetQuestState();
+      this.updateHud();
+      return;
+    }
+
+    this.questBusy = true;
+    this.questError = null;
+    this.updateHud();
+
+    try {
+      const payload = await this.fetchJson<unknown>('/quests', {
+        method: 'GET',
+      });
+      this.quests = this.normalizeQuestsPayload(payload);
+    } catch (error) {
+      this.questError = this.getErrorMessage(error, 'Unable to load quests.');
+      if (this.quests.length === 0) {
+        this.quests = [];
+      }
+    } finally {
+      this.questBusy = false;
       this.updateHud();
     }
   }
@@ -583,6 +804,7 @@ export class GameScene extends Phaser.Scene {
 
       this.applyCombatSnapshot(encounter);
       await this.refreshGameplayState();
+      await this.refreshQuestState();
     } catch (error) {
       this.setCombatError(this.getErrorMessage(error, 'Impossible de demarrer le combat.'));
       if (this.combatState) {
@@ -644,6 +866,7 @@ export class GameScene extends Phaser.Scene {
 
       this.applyCombatSnapshot(encounter);
       await this.refreshGameplayState();
+      await this.refreshQuestState();
     } catch (error) {
       this.setCombatError(this.getErrorMessage(error, 'Impossible de jouer cette action.'));
       if (this.combatState) {
@@ -693,6 +916,7 @@ export class GameScene extends Phaser.Scene {
 
       this.applyCombatSnapshot(encounter);
       await this.refreshGameplayState();
+      await this.refreshQuestState();
     } catch (error) {
       this.setCombatError(this.getErrorMessage(error, 'Impossible de fuir le combat.'));
       if (this.combatState) {
@@ -718,6 +942,31 @@ export class GameScene extends Phaser.Scene {
       // Ignore logout errors and re-sync state below.
     } finally {
       await this.bootstrapSessionState();
+    }
+  }
+
+  private async claimQuest(questKey: string): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.questError = 'Login required to claim quests.';
+      this.updateHud();
+      return;
+    }
+
+    this.questBusy = true;
+    this.questError = null;
+    this.updateHud();
+
+    try {
+      await this.fetchJson(`/quests/${questKey}/claim`, {
+        method: 'POST',
+      });
+      await this.refreshGameplayState();
+      await this.refreshQuestState();
+    } catch (error) {
+      this.questError = this.getErrorMessage(error, 'Unable to claim this quest.');
+    } finally {
+      this.questBusy = false;
+      this.updateHud();
     }
   }
 
@@ -765,6 +1014,15 @@ export class GameScene extends Phaser.Scene {
     if (experienceToNextLevel !== null) {
       this.hudState.xpToNext = Math.max(1, Math.round(experienceToNextLevel));
     }
+
+    const village = this.asRecord(payload.village);
+    if (village) {
+      const blacksmith = this.asRecord(village.blacksmith);
+      if (blacksmith) {
+        this.hudState.blacksmithUnlocked = Boolean(blacksmith.unlocked);
+        this.hudState.blacksmithCurseLifted = Boolean(blacksmith.curseLifted);
+      }
+    }
   }
 
   private resetGameplayHudState(): void {
@@ -774,6 +1032,15 @@ export class GameScene extends Phaser.Scene {
     this.hudState.level = 1;
     this.hudState.xp = 0;
     this.hudState.xpToNext = 100;
+    this.hudState.blacksmithUnlocked = false;
+    this.hudState.blacksmithCurseLifted = false;
+  }
+
+  private resetQuestState(): void {
+    this.quests = [];
+    this.questBusy = false;
+    this.questError = null;
+    this.questsRenderSignature = '';
   }
 
   private applyCombatSnapshot(snapshot: CombatEncounterState): void {
@@ -897,6 +1164,18 @@ export class GameScene extends Phaser.Scene {
     this.combatError = message;
   }
 
+  private getBlacksmithStatusLabel(): string {
+    if (!this.hudState.blacksmithCurseLifted) {
+      return 'Cursed';
+    }
+
+    if (!this.hudState.blacksmithUnlocked) {
+      return 'Recovering';
+    }
+
+    return 'Unlocked';
+  }
+
   private async fetchJson<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
     headers.set('Accept', 'application/json');
@@ -971,6 +1250,73 @@ export class GameScene extends Phaser.Scene {
     }
 
     return fallback;
+  }
+
+  private normalizeQuestsPayload(payload: unknown): QuestState[] {
+    if (!this.isRecord(payload)) {
+      return [];
+    }
+
+    const rawQuests = payload.quests;
+    if (!Array.isArray(rawQuests)) {
+      return [];
+    }
+
+    return rawQuests
+      .map((entry) => this.normalizeQuestState(entry))
+      .filter((entry): entry is QuestState => entry !== null);
+  }
+
+  private normalizeQuestState(value: unknown): QuestState | null {
+    if (!this.isRecord(value)) {
+      return null;
+    }
+
+    const key = this.asString(value.key);
+    const title = this.asString(value.title);
+    const description = this.asString(value.description);
+    const status = this.asQuestStatus(value.status);
+    const rawObjectives = value.objectives;
+
+    if (!key || !title || !description || !status || !Array.isArray(rawObjectives)) {
+      return null;
+    }
+
+    const objectives = rawObjectives
+      .map((objective) => this.normalizeQuestObjective(objective))
+      .filter((objective): objective is QuestObjectiveState => objective !== null);
+
+    return {
+      key,
+      title,
+      description,
+      status,
+      canClaim: Boolean(value.canClaim),
+      objectives,
+    };
+  }
+
+  private normalizeQuestObjective(value: unknown): QuestObjectiveState | null {
+    if (!this.isRecord(value)) {
+      return null;
+    }
+
+    const key = this.asString(value.key);
+    const description = this.asString(value.description);
+    const current = this.asNumber(value.current);
+    const target = this.asNumber(value.target);
+
+    if (!key || !description || current === null || target === null) {
+      return null;
+    }
+
+    return {
+      key,
+      description,
+      current: Math.max(0, Math.round(current)),
+      target: Math.max(1, Math.round(target)),
+      completed: Boolean(value.completed),
+    };
   }
 
   private normalizeCombatPayload(payload: unknown): CombatEncounterState | null {
@@ -1138,6 +1484,14 @@ export class GameScene extends Phaser.Scene {
 
   private asCombatStatus(value: unknown): CombatStatus | null {
     if (value === 'active' || value === 'won' || value === 'lost' || value === 'fled') {
+      return value;
+    }
+
+    return null;
+  }
+
+  private asQuestStatus(value: unknown): QuestStatus | null {
+    if (value === 'active' || value === 'completed' || value === 'claimed') {
       return value;
     }
 
