@@ -33,6 +33,7 @@ Ce document regroupe les payloads utilises pendant nos tests manuels (front + AP
 | `/debug/admin/reset-progression` | `POST` | oui (dev only) | `{}` | Remise a zero progression/tour/inventaire/equipement/flags/quetes/saves |
 | `/debug/admin/grant-resources` | `POST` | oui (dev only) | `{ "experience": 250, "gold": 500, "items": [ { "itemKey": "mana_tonic", "quantity": 5 }, { "itemKey": "iron_ore", "quantity": 10 } ] }` | Injecter rapidement des ressources de test |
 | `/debug/admin/set-tower-floor` | `POST` | oui (dev only) | `{ "floor": 8 }` | Forcer l'etage de tour pour tester les paliers boss/quetes |
+| `/debug/admin/complete-quests` | `POST` | oui (dev only) | `{ "questKey": "story_floor_10" }` (ou `{}` pour toutes) | Marquer des quetes en `completed` pour QA rapide |
 
 ## Exemples prets a copier (debug)
 
@@ -72,4 +73,18 @@ Ce document regroupe les payloads utilises pendant nos tests manuels (front + AP
 {
   "floor": 10
 }
+```
+
+### 5) Complete quests (dev only)
+
+```json
+{
+  "questKey": "story_floor_10"
+}
+```
+
+Pour completer toutes les quetes non `claimed`:
+
+```json
+{}
 ```

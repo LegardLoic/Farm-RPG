@@ -42,6 +42,7 @@ Create local env files before starting:
 - `POST /debug/admin/reset-progression` (dev only)
 - `POST /debug/admin/grant-resources` (dev only)
 - `POST /debug/admin/set-tower-floor` (dev only)
+- `POST /debug/admin/complete-quests` (dev only)
 - `GET /auth/google`
 - `GET /auth/google/callback`
 - `GET /auth/me`

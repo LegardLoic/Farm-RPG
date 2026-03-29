@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/auth.types';
+import { DebugCompleteQuestsDto } from './dto/debug-complete-quests.dto';
 import { DebugGrantResourcesDto } from './dto/debug-grant-resources.dto';
 import { DebugSetTowerFloorDto } from './dto/debug-set-tower-floor.dto';
 import { DebugAdminService } from './debug-admin.service';
@@ -51,6 +52,19 @@ export class DebugAdminController {
       status: 'ok',
       environment: this.configService.get<string>('NODE_ENV', 'development'),
       tower,
+    };
+  }
+
+  @Post('complete-quests')
+  async completeQuests(@Req() req: AuthenticatedRequest, @Body() body: DebugCompleteQuestsDto) {
+    this.assertDebugEnabled();
+
+    const quests = await this.debugAdminService.completeQuests(req.authUser!.id, body?.questKey);
+
+    return {
+      status: 'ok',
+      environment: this.configService.get<string>('NODE_ENV', 'development'),
+      quests,
     };
   }
 

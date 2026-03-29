@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 
 import { COMBAT_ENCOUNTERS_TABLE } from '../combat/combat.constants';
 import { DatabaseService, type TransactionClient } from '../database/database.service';
@@ -12,7 +12,8 @@ import {
 } from '../gameplay/gameplay.constants';
 import { EQUIPMENT_SLOTS_TABLE } from '../equipment/equipment.constants';
 import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
-import { QUEST_STATES_TABLE } from '../quests/quests.constants';
+import { QUEST_DEFINITIONS, QUEST_STATES_TABLE } from '../quests/quests.constants';
+import type { QuestDefinition, QuestProgressState, QuestStatus } from '../quests/quests.types';
 import { TOWER_MIN_FLOOR, TOWER_MVP_MAX_FLOOR, TOWER_PROGRESSION_TABLE } from '../tower/tower.constants';
 import type { DebugGrantItemDto, DebugGrantResourcesDto } from './dto/debug-grant-resources.dto';
 
@@ -87,6 +88,27 @@ type DebugSetTowerFloorResult = {
     bossFloor10Defeated: boolean;
   };
   appliedFlags: string[];
+};
+
+type QuestStateRow = {
+  quest_key: string;
+  status: QuestStatus;
+  progress_json: QuestProgressState | string;
+};
+
+type DebugCompleteQuestsResult = {
+  requested: {
+    questKey: string | null;
+  };
+  updated: Array<{
+    questKey: string;
+    previousStatus: QuestStatus;
+    nextStatus: QuestStatus;
+  }>;
+  skipped: Array<{
+    questKey: string;
+    reason: 'already_claimed';
+  }>;
 };
 
 const SAVE_SLOTS_TABLE = 'save_slots';
@@ -367,6 +389,67 @@ export class DebugAdminService {
     });
   }
 
+  async completeQuests(userId: string, requestedQuestKey?: string): Promise<DebugCompleteQuestsResult> {
+    const normalizedQuestKey = requestedQuestKey?.trim() ?? '';
+    const targetDefinitions = normalizedQuestKey
+      ? [this.getQuestDefinitionOrThrow(normalizedQuestKey)]
+      : QUEST_DEFINITIONS;
+
+    return this.databaseService.withTransaction(async (tx) => {
+      await this.ensureQuestRows(tx, userId);
+
+      const rows = await this.getQuestRowsForUpdate(
+        tx,
+        userId,
+        targetDefinitions.map((definition) => definition.key),
+      );
+      const rowsByKey = new Map(rows.map((row) => [row.quest_key, row]));
+      const now = new Date().toISOString();
+
+      const updated: DebugCompleteQuestsResult['updated'] = [];
+      const skipped: DebugCompleteQuestsResult['skipped'] = [];
+
+      for (const definition of targetDefinitions) {
+        const row = rowsByKey.get(definition.key);
+        if (!row) {
+          throw new NotFoundException(`Quest ${definition.key} was not found`);
+        }
+
+        if (row.status === 'claimed') {
+          skipped.push({ questKey: definition.key, reason: 'already_claimed' });
+          continue;
+        }
+
+        const completedProgress = this.toCompletedQuestProgress(this.normalizeQuestProgress(row.progress_json), definition, now);
+        await tx.query(
+          `
+            UPDATE ${QUEST_STATES_TABLE}
+            SET status = 'completed',
+                progress_json = $3::jsonb,
+                updated_at = NOW()
+            WHERE user_id = $1
+              AND quest_key = $2
+          `,
+          [userId, definition.key, JSON.stringify(completedProgress)],
+        );
+
+        updated.push({
+          questKey: definition.key,
+          previousStatus: row.status,
+          nextStatus: 'completed',
+        });
+      }
+
+      return {
+        requested: {
+          questKey: normalizedQuestKey || null,
+        },
+        updated,
+        skipped,
+      };
+    });
+  }
+
   private normalizeGrantItems(items: DebugGrantItemDto[]): Array<{ itemKey: string; quantity: number }> {
     const byKey = new Map<string, number>();
 
@@ -480,5 +563,114 @@ export class DebugAdminService {
     );
 
     return result.rows[0];
+  }
+
+  private async ensureQuestRows(executor: TransactionClient, userId: string): Promise<void> {
+    for (const definition of QUEST_DEFINITIONS) {
+      await executor.query(
+        `
+          INSERT INTO ${QUEST_STATES_TABLE} (user_id, quest_key, status, progress_json)
+          VALUES ($1, $2, 'active', $3::jsonb)
+          ON CONFLICT (user_id, quest_key) DO NOTHING
+        `,
+        [userId, definition.key, JSON.stringify(this.emptyQuestProgress())],
+      );
+    }
+  }
+
+  private async getQuestRowsForUpdate(
+    executor: TransactionClient,
+    userId: string,
+    questKeys: string[],
+  ): Promise<QuestStateRow[]> {
+    const result = await executor.query<QuestStateRow>(
+      `
+        SELECT quest_key, status, progress_json
+        FROM ${QUEST_STATES_TABLE}
+        WHERE user_id = $1
+          AND quest_key = ANY($2::text[])
+        FOR UPDATE
+      `,
+      [userId, questKeys],
+    );
+
+    return result.rows;
+  }
+
+  private getQuestDefinitionOrThrow(questKey: string): QuestDefinition {
+    const definition = QUEST_DEFINITIONS.find((entry) => entry.key === questKey);
+    if (!definition) {
+      throw new NotFoundException(`Quest ${questKey} was not found`);
+    }
+
+    return definition;
+  }
+
+  private toCompletedQuestProgress(
+    progress: QuestProgressState,
+    definition: QuestDefinition,
+    now: string,
+  ): QuestProgressState {
+    const completed: QuestProgressState = {
+      ...progress,
+      enemyVictories: { ...progress.enemyVictories },
+    };
+
+    for (const objective of definition.objectives) {
+      if (objective.metric === 'victories_total') {
+        completed.victoriesTotal = Math.max(completed.victoriesTotal, objective.target);
+        continue;
+      }
+
+      if (objective.metric === 'tower_highest_floor') {
+        completed.towerHighestFloor = Math.max(completed.towerHighestFloor, objective.target);
+        continue;
+      }
+
+      if (objective.metric === 'enemy_victories' && objective.enemyKey) {
+        const currentEnemyVictories = completed.enemyVictories[objective.enemyKey] ?? 0;
+        completed.enemyVictories[objective.enemyKey] = Math.max(currentEnemyVictories, objective.target);
+      }
+    }
+
+    completed.lastVictoryAt = now;
+    completed.completedAt = now;
+
+    return completed;
+  }
+
+  private normalizeQuestProgress(value: QuestProgressState | string | undefined): QuestProgressState {
+    if (!value) {
+      return this.emptyQuestProgress();
+    }
+
+    let parsed: Partial<QuestProgressState>;
+    try {
+      parsed = typeof value === 'string' ? (JSON.parse(value) as Partial<QuestProgressState>) : value;
+    } catch {
+      return this.emptyQuestProgress();
+    }
+
+    const enemyVictories = parsed.enemyVictories ?? {};
+
+    return {
+      victoriesTotal: Math.max(0, Number(parsed.victoriesTotal ?? 0)),
+      enemyVictories: { ...enemyVictories },
+      towerHighestFloor: Math.max(1, Number(parsed.towerHighestFloor ?? 1)),
+      lastVictoryAt: typeof parsed.lastVictoryAt === 'string' ? parsed.lastVictoryAt : null,
+      completedAt: typeof parsed.completedAt === 'string' ? parsed.completedAt : null,
+      claimedAt: typeof parsed.claimedAt === 'string' ? parsed.claimedAt : null,
+    };
+  }
+
+  private emptyQuestProgress(): QuestProgressState {
+    return {
+      victoriesTotal: 0,
+      enemyVictories: {},
+      towerHighestFloor: 1,
+      lastVictoryAt: null,
+      completedAt: null,
+      claimedAt: null,
+    };
   }
 }

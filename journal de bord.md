@@ -409,6 +409,23 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Securite:
   - endpoint disponible uniquement en mode debug (non expose en production via garde existante).
 
+### Lot 27 - Endpoint debug complete quests (dev only)
+- Backend debug-admin:
+  - nouvel endpoint protege:
+    - `POST /debug/admin/complete-quests`
+  - payload:
+    - optionnel `questKey` (si absent: applique a toutes les quetes)
+  - operation transactionnelle:
+    - initialise les lignes de quetes si necessaire
+    - force les objectifs de progression au seuil requis selon la definition de quete
+    - passe le statut a `completed` pour les quetes non `claimed`
+    - laisse les quetes deja `claimed` inchangees (retourne dans `skipped`)
+  - reponse retour:
+    - cible demandee (`questKey` ou toutes)
+    - liste des quetes mises a jour et des quetes ignorees.
+- Securite:
+  - endpoint disponible uniquement en mode debug (non expose en production via garde existante).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -442,7 +459,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Debug (dev only):
   - reset progression joueur via endpoint admin protege
   - injection rapide de XP/or/items pour test local
-  - forcer l'etage de tour pour playtests paliers/boss.
+  - forcer l'etage de tour pour playtests paliers/boss
+  - completer rapidement une quete (ou toutes les quetes) pour QA des flux de claim/rewards.
 
 ## 5) Frontend en place (resume)
 - Scene Phaser jouable avec deplacement.
@@ -468,6 +486,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `POST /debug/admin/reset-progression` (dev only)
 - `POST /debug/admin/grant-resources` (dev only)
 - `POST /debug/admin/set-tower-floor` (dev only)
+- `POST /debug/admin/complete-quests` (dev only)
 - `GET /auth/google`
 - `GET /auth/google/callback`
 - `GET /auth/me`
@@ -518,6 +537,6 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
 4. Exposer un glossaire de rarete en UI (couleurs/legende) pour les nouveaux drops.
-5. Ajouter un endpoint debug (dev only) pour marquer automatiquement des quetes comme `completed` pour QA rapide.
+5. Ajouter un endpoint debug (dev only) pour forcer un ennemi/script precis au `combat/start` pour QA ciblee.
 
 
