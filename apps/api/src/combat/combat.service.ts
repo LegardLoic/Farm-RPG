@@ -28,11 +28,13 @@ import {
   COMBAT_LOG_LIMIT,
   CURSE_AVATAR_DISPEL_MANA_COST,
   CLEANSE_MANA_COST,
+  CLEANSE_REACTION_WINDOW_TURNS,
   DEFAULT_COMBAT_ENEMY_KEY,
   DEFAULT_PLAYER_COMBAT_STATE,
   FLOOR_LOOT_TABLES,
   FIREBALL_MANA_COST,
   INTERRUPT_MANA_COST,
+  INTERRUPT_REACTION_WINDOW_TURNS,
   MEND_MANA_COST,
   PLAYER_BURNING_DAMAGE,
   PLAYER_BURNING_DURATION_TURNS,
@@ -452,6 +454,7 @@ export class CombatService {
         next.player.mp -= CLEANSE_MANA_COST;
         this.setPlayerBurningTurns(next, 0);
         this.setPlayerSilencedTurns(next, 0);
+        this.setPlayerCleanseReactionWindow(next, CLEANSE_REACTION_WINDOW_TURNS);
 
         const removed: string[] = [];
         if (hadBurning) {
@@ -461,6 +464,12 @@ export class CombatService {
           removed.push('Silence');
         }
         this.pushLog(next, `You cast Cleanse and remove ${removed.join(' + ')}.`);
+
+        const recoveredMp = Math.min(1, next.player.maxMp - next.player.mp);
+        if (recoveredMp > 0) {
+          next.player.mp += recoveredMp;
+          this.pushLog(next, `Cleanse restores ${recoveredMp} MP through purified focus.`);
+        }
         break;
       }
       case 'interrupt': {
@@ -468,19 +477,22 @@ export class CombatService {
           throw new BadRequestException('Not enough MP for Interrupt');
         }
 
-        const intent = this.resolveEnemyIntent(next);
+        const intent = this.resolveEnemyIntent(encounter);
         if (!this.isEnemyIntentInterruptible(intent)) {
           throw new BadRequestException('No interruptible enemy intent');
         }
 
         next.player.mp -= INTERRUPT_MANA_COST;
         this.setEnemyInterruptedTurns(next, 1);
+        this.setPlayerInterruptReactionWindow(next, INTERRUPT_REACTION_WINDOW_TURNS);
         const damage = Math.max(
           1,
           this.calculateMagicDamage(next.player, next.enemy, this.getPlayerMagicAttackBonus(next), 0) - 2,
         );
         next.enemy.currentHp = Math.max(0, next.enemy.currentHp - damage);
         this.pushLog(next, `You cast Interrupt for ${damage} damage and disrupt ${next.enemy.name}.`);
+        this.setEnemyShatterTurns(next, Math.max(this.getEnemyShatterTurns(next), 1));
+        this.pushLog(next, `${next.enemy.name} is exposed by the interruption.`);
         break;
       }
       default: {
@@ -843,6 +855,8 @@ export class CombatService {
 
     const playerRallyTurns = this.getPlayerRallyTurns(encounter);
     const enemyShatterTurns = this.getEnemyShatterTurns(encounter);
+    const usedCleanseRecently = this.getPlayerCleanseReactionWindow(encounter) > 0;
+    const usedInterruptRecently = this.getPlayerInterruptReactionWindow(encounter) > 0;
 
     switch (encounter.enemy.key) {
       case 'thorn_beast_alpha':
@@ -854,6 +868,9 @@ export class CombatService {
         }
         return 'basic_strike';
       case 'cinder_warden':
+        if (usedCleanseRecently && encounter.enemy.currentMp >= 3) {
+          return 'cinder_burst';
+        }
         if (enemyShatterTurns > 0 && encounter.enemy.currentMp >= CINDER_WARDEN_PURGE_MANA_COST) {
           return 'molten_shell';
         }
@@ -865,13 +882,19 @@ export class CombatService {
         if (enemyShatterTurns > 0 && encounter.enemy.currentMp >= ASH_CAPTAIN_PURGE_MANA_COST) {
           return 'iron_recenter';
         }
+        if (usedInterruptRecently) {
+          return 'twin_slash';
+        }
         if (encounter.round % 3 === 0) {
           return 'twin_slash';
         }
         return 'basic_strike';
       case 'curse_heart_avatar': {
         const enraged = this.isAvatarEnragedOrCrossing(encounter);
-        if (playerRallyTurns > 0 && encounter.enemy.currentMp >= CURSE_AVATAR_DISPEL_MANA_COST) {
+        if (
+          (playerRallyTurns > 0 || usedCleanseRecently) &&
+          encounter.enemy.currentMp >= CURSE_AVATAR_DISPEL_MANA_COST
+        ) {
           return 'null_sigil';
         }
         if (enraged && encounter.enemy.currentMp >= 5 && encounter.round % 2 === 0) {
@@ -1027,6 +1050,16 @@ export class CombatService {
     if (interruptedTurns > 0) {
       this.setEnemyInterruptedTurns(encounter, interruptedTurns - 1);
     }
+
+    const cleanseWindowTurns = this.getPlayerCleanseReactionWindow(encounter);
+    if (cleanseWindowTurns > 0) {
+      this.setPlayerCleanseReactionWindow(encounter, cleanseWindowTurns - 1);
+    }
+
+    const interruptWindowTurns = this.getPlayerInterruptReactionWindow(encounter);
+    if (interruptWindowTurns > 0) {
+      this.setPlayerInterruptReactionWindow(encounter, interruptWindowTurns - 1);
+    }
   }
 
   private getPlayerRallyTurns(encounter: CombatEncounterState): number {
@@ -1090,6 +1123,38 @@ export class CombatService {
     encounter.scriptState = {
       ...(encounter.scriptState ?? {}),
       playerSilencedTurns: Math.max(0, Math.floor(turns)),
+    };
+  }
+
+  private getPlayerCleanseReactionWindow(encounter: CombatEncounterState): number {
+    const raw = Number(encounter.scriptState?.playerCleanseReactionWindowTurns ?? 0);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return 0;
+    }
+
+    return Math.floor(raw);
+  }
+
+  private setPlayerCleanseReactionWindow(encounter: CombatEncounterState, turns: number): void {
+    encounter.scriptState = {
+      ...(encounter.scriptState ?? {}),
+      playerCleanseReactionWindowTurns: Math.max(0, Math.floor(turns)),
+    };
+  }
+
+  private getPlayerInterruptReactionWindow(encounter: CombatEncounterState): number {
+    const raw = Number(encounter.scriptState?.playerInterruptReactionWindowTurns ?? 0);
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return 0;
+    }
+
+    return Math.floor(raw);
+  }
+
+  private setPlayerInterruptReactionWindow(encounter: CombatEncounterState, turns: number): void {
+    encounter.scriptState = {
+      ...(encounter.scriptState ?? {}),
+      playerInterruptReactionWindowTurns: Math.max(0, Math.floor(turns)),
     };
   }
 
@@ -1163,6 +1228,16 @@ export class CombatService {
     const interruptedTurns = this.getEnemyInterruptedTurns(encounter);
     if (interruptedTurns > 0) {
       this.setEnemyInterruptedTurns(encounter, interruptedTurns - 1);
+    }
+
+    const cleanseWindowTurns = this.getPlayerCleanseReactionWindow(encounter);
+    if (cleanseWindowTurns > 0) {
+      this.setPlayerCleanseReactionWindow(encounter, cleanseWindowTurns - 1);
+    }
+
+    const interruptWindowTurns = this.getPlayerInterruptReactionWindow(encounter);
+    if (interruptWindowTurns > 0) {
+      this.setPlayerInterruptReactionWindow(encounter, interruptWindowTurns - 1);
     }
   }
 
