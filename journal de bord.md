@@ -273,6 +273,19 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - rendu DOM structure (`combat-intent-icon` + `combat-intent-text`) au lieu d'une simple chaine texte.
   - styles CSS dedies par type d'icone (`data-intent-icon`).
 
+### Lot 21 - Mini tooltip d'aide pour tags d'intention
+- Frontend HUD combat:
+  - ajout d'un bouton `? Tags Intent` sous les cartes de combat.
+  - affichage d'un mini tooltip (hover/focus) avec legende:
+    - `ATK`: attaque physique
+    - `MAG`: attaque magique
+    - `CLN`: retire un debuff ennemi
+    - `DSP`: retire un buff joueur
+    - `ULT`: attaque ultime
+- UX:
+  - tooltips natifs aussi ajoutes sur les vignettes d'icones dans les chips `Intent`/`Next`
+  - support clavier via `focus-within` pour rester utilisable sans souris.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -315,6 +328,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - statut village (forgeron)
   - boutique forgeron (offres + achat)
   - progression tour (etage et boss 10)
+  - mini tooltip d'aide des tags d'intention (`ATK/MAG/CLN/DSP/ULT`)
 - Integration API avec gestion d'erreurs UI.
 
 ## 6) API actuellement disponible

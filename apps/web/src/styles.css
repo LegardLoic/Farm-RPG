@@ -762,6 +762,84 @@ body::before {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.hud-intent-help {
+  position: relative;
+  align-self: flex-start;
+}
+
+.hud-intent-help-trigger {
+  border: 1px solid rgba(185, 195, 212, 0.42);
+  background: rgba(185, 195, 212, 0.12);
+  color: #d2dbe8;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.hud-intent-help-trigger:hover,
+.hud-intent-help-trigger:focus-visible {
+  border-color: rgba(226, 182, 109, 0.48);
+  background: rgba(226, 182, 109, 0.14);
+  color: #ffe3b8;
+  outline: none;
+}
+
+.hud-intent-help-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(270px, calc(100vw - 96px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(226, 182, 109, 0.36);
+  background: rgba(12, 18, 28, 0.95);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 140ms ease, transform 140ms ease;
+  z-index: 3;
+}
+
+.hud-intent-help:hover .hud-intent-help-popover,
+.hud-intent-help:focus-within .hud-intent-help-popover {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.hud-intent-help-line {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.hud-intent-help-line strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ecf1fa;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+}
+
+.hud-intent-help-line span {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #d2dbe8;
+}
+
 .combat-card {
   padding: 12px;
   display: flex;
@@ -964,6 +1042,10 @@ body::before {
   .hud-combat-meta,
   .hud-combat-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hud-intent-help-popover {
+    width: min(240px, calc(100vw - 64px));
   }
 
   .hud-auth-button,

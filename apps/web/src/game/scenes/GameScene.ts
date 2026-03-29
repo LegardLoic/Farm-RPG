@@ -472,6 +472,18 @@ export class GameScene extends Phaser.Scene {
               <div class="combat-card-line"><span>Next</span><strong data-hud="combatEnemyIntentNext">-</strong></div>
             </div>
           </div>
+          <div class="hud-intent-help">
+            <button type="button" class="hud-intent-help-trigger" aria-label="Aide tags intent">
+              ? Tags Intent
+            </button>
+            <div class="hud-intent-help-popover" role="note">
+              <div class="hud-intent-help-line"><strong>ATK</strong><span>attaque physique</span></div>
+              <div class="hud-intent-help-line"><strong>MAG</strong><span>attaque magique</span></div>
+              <div class="hud-intent-help-line"><strong>CLN</strong><span>retire un debuff ennemi</span></div>
+              <div class="hud-intent-help-line"><strong>DSP</strong><span>retire un buff joueur</span></div>
+              <div class="hud-intent-help-line"><strong>ULT</strong><span>attaque ultime</span></div>
+            </div>
+          </div>
           <div class="hud-combat-actions">
             <button class="hud-combat-button primary" data-combat-action="start">Demarrer combat</button>
             <button class="hud-combat-button" data-combat-action="attack">Attack</button>
@@ -2258,6 +2270,9 @@ export class GameScene extends Phaser.Scene {
       icon.classList.add('combat-intent-icon');
       icon.dataset.intentIcon = intentUi.icon;
       icon.textContent = intentUi.iconLabel;
+      const iconTooltip = this.getCombatIntentIconTooltip(intentUi.iconLabel);
+      icon.title = iconTooltip;
+      icon.setAttribute('aria-label', iconTooltip);
       element.appendChild(icon);
     }
 
@@ -2409,6 +2424,23 @@ export class GameScene extends Phaser.Scene {
         };
       default:
         return null;
+    }
+  }
+
+  private getCombatIntentIconTooltip(iconLabel: string): string {
+    switch (iconLabel) {
+      case 'ATK':
+        return 'ATK: attaque physique';
+      case 'MAG':
+        return 'MAG: attaque magique';
+      case 'CLN':
+        return 'CLN: retire un debuff ennemi';
+      case 'DSP':
+        return 'DSP: retire un buff joueur';
+      case 'ULT':
+        return 'ULT: attaque ultime';
+      default:
+        return iconLabel;
     }
   }
 
