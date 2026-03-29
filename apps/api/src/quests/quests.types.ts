@@ -3,6 +3,7 @@ export type QuestStatus = 'active' | 'completed' | 'claimed';
 export interface QuestProgressState {
   victoriesTotal: number;
   enemyVictories: Record<string, number>;
+  towerHighestFloor: number;
   lastVictoryAt: string | null;
   completedAt: string | null;
   claimedAt: string | null;
@@ -11,7 +12,7 @@ export interface QuestProgressState {
 export interface QuestObjectiveDefinition {
   key: string;
   description: string;
-  metric: 'victories_total' | 'enemy_victories';
+  metric: 'victories_total' | 'enemy_victories' | 'tower_highest_floor';
   target: number;
   enemyKey?: string;
 }

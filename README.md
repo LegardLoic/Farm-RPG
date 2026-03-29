@@ -70,3 +70,10 @@ Create local env files before starting:
 
 Never commit OAuth downloaded JSON files (`client_secret_*.json`) or `.env` files.
 Use `.env.example` templates and repository secrets for CI.
+
+## Current gameplay slice
+
+- Turn-based combat with server-authoritative rewards.
+- Persistent tower progression up to floor 10 for MVP.
+- Quest system with claim flow and story milestones tied to tower floors `3/5/8/10`.
+- Blacksmith shop unlocked by progression flags.

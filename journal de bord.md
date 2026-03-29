@@ -95,6 +95,18 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - affichage etage courant / meilleur etage
   - statut boss etage 10.
 
+### Lot 8 - Quetes histoire liees aux paliers de tour
+- Enrichissement du systeme de quetes avec une nouvelle metrique:
+  - `tower_highest_floor`
+- Nouvelles quetes histoire ajoutees:
+  - `story_floor_3`
+  - `story_floor_5`
+  - `story_floor_8`
+  - `story_floor_10`
+- Integration transactionnelle combat:
+  - victoire combat -> progression de tour -> progression des quetes
+  - les quetes peuvent maintenant se completer sur les paliers 3/5/8/10.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -109,6 +121,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Quetes:
   - definitions cote serveur
   - progression automatique sur victoires
+  - objectifs basees sur victoires et paliers de tour
   - claim explicite des recompenses
 - Shops:
   - boutique forgeron protegee
@@ -130,6 +143,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - combat panel
   - progression (niveau/xp/or)
   - quetes + claim
+  - quetes histoire par paliers d'etage
   - statut village (forgeron)
   - boutique forgeron (offres + achat)
   - progression tour (etage et boss 10)
@@ -177,9 +191,9 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Flux PR continue (`develop` -> `main`) deja utilise et valide.
 
 ## 9) Prochaines priorites recommandees
-1. Ajouter un systeme de quetes "histoire" et paliers etage 3/5/8/10.
-2. Ajouter mini-boss/boss scriptes lies aux paliers d'etage.
-3. Ajouter autosave apres victoire boss/palier majeur.
-4. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
-5. Etendre le shop (tiers, equipement reel, prerequis de quete).
+1. Ajouter mini-boss/boss scriptes lies aux paliers d'etage.
+2. Ajouter autosave apres victoire boss/palier majeur.
+3. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
+4. Etendre le shop (tiers, equipement reel, prerequis de quete).
+5. Ajouter une route d'admin debug pour reset progression (dev only).
 

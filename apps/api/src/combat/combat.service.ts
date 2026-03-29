@@ -110,8 +110,11 @@ export class CombatService {
       const nextState = this.resolvePlayerAction(encounter, action);
       const finalizedState = await this.applyVictoryRewardsIfNeeded(tx, userId, nextState);
       if (finalizedState.status === 'won') {
-        await this.questsService.recordCombatVictory(tx, userId, finalizedState.enemyKey);
         const towerProgress = await this.towerService.recordCombatVictory(tx, userId);
+        await this.questsService.recordCombatVictory(tx, userId, {
+          enemyKey: finalizedState.enemyKey,
+          towerHighestFloor: towerProgress.state.highestFloor,
+        });
         this.pushLog(
           finalizedState,
           `Tower progress: floor ${towerProgress.previousFloor} -> ${towerProgress.currentFloor}.`,

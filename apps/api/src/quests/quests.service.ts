@@ -20,6 +20,11 @@ import type {
   QuestView,
 } from './quests.types';
 
+type RecordCombatVictoryInput = {
+  enemyKey: string;
+  towerHighestFloor: number;
+};
+
 type QuestStateRow = {
   quest_key: string;
   status: QuestStatus;
@@ -88,7 +93,7 @@ export class QuestsService {
   async recordCombatVictory(
     executor: TransactionClient,
     userId: string,
-    enemyKey: string,
+    input: RecordCombatVictoryInput,
   ): Promise<void> {
     await this.ensureQuestRows(executor, userId);
     const rows = await this.getQuestRowsForUpdate(executor, userId);
@@ -106,7 +111,8 @@ export class QuestsService {
 
       const progress = this.normalizeProgress(row.progress_json);
       progress.victoriesTotal += 1;
-      progress.enemyVictories[enemyKey] = (progress.enemyVictories[enemyKey] ?? 0) + 1;
+      progress.enemyVictories[input.enemyKey] = (progress.enemyVictories[input.enemyKey] ?? 0) + 1;
+      progress.towerHighestFloor = Math.max(progress.towerHighestFloor, input.towerHighestFloor);
       progress.lastVictoryAt = now;
 
       const completed = this.isQuestCompleted(definition, progress);
@@ -357,6 +363,10 @@ export class QuestsService {
       return progress.victoriesTotal;
     }
 
+    if (objective.metric === 'tower_highest_floor') {
+      return progress.towerHighestFloor;
+    }
+
     if (!objective.enemyKey) {
       return 0;
     }
@@ -384,6 +394,7 @@ export class QuestsService {
     return {
       victoriesTotal: Math.max(0, Number(parsed.victoriesTotal ?? 0)),
       enemyVictories: { ...enemyVictories },
+      towerHighestFloor: Math.max(1, Number(parsed.towerHighestFloor ?? 1)),
       lastVictoryAt: typeof parsed.lastVictoryAt === 'string' ? parsed.lastVictoryAt : null,
       completedAt: typeof parsed.completedAt === 'string' ? parsed.completedAt : null,
       claimedAt: typeof parsed.claimedAt === 'string' ? parsed.claimedAt : null,
@@ -394,6 +405,7 @@ export class QuestsService {
     return {
       victoriesTotal: 0,
       enemyVictories: {},
+      towerHighestFloor: 1,
       lastVictoryAt: null,
       completedAt: null,
       claimedAt: null,
