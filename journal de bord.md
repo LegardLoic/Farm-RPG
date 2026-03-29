@@ -456,6 +456,34 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Securite:
   - endpoint disponible uniquement en mode debug (non expose en production via garde existante).
 
+### Lot 30 - Endpoint debug world flags cibles (dev only)
+- Backend debug-admin:
+  - nouvel endpoint protege:
+    - `POST /debug/admin/set-world-flags`
+  - payload:
+    - `flags[]` (a ajouter)
+    - `removeFlags[]` (a retirer)
+    - `replace` (remplacement complet optionnel)
+  - operation transactionnelle:
+    - lock + lecture des flags existants (`before`)
+    - application `add/remove` ou `replace`
+    - retour `after`, `added`, `removed` pour verification QA rapide.
+- Securite:
+  - endpoint disponible uniquement en mode debug (non expose en production via garde existante).
+
+### Lot 31 - Glossaire visuel des raretes de loot (frontend)
+- Frontend HUD combat:
+  - ajout d'un bloc `Raretés loot` dans la zone combat
+  - badges visuels pour:
+    - `Common`
+    - `Uncommon`
+    - `Rare`
+    - `Epic`
+    - `Legendary`
+- UX:
+  - code couleur lisible et coherent avec les tags de rarete du backend
+  - styles responsive pour conserver la lisibilite sur mobile.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -492,7 +520,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - forcer l'etage de tour pour playtests paliers/boss
   - completer rapidement une quete (ou toutes les quetes) pour QA des flux de claim/rewards
   - forcer le prochain `combat/start` sur un ennemi/script cible, puis auto-consommation one-shot
-  - appliquer un preset complet de loadout (equipement+inventaire+ressources) pour QA rapide.
+  - appliquer un preset complet de loadout (equipement+inventaire+ressources) pour QA rapide
+  - forcer des flags monde cibles (ajout/retrait/remplacement) pour tester village/shop/story.
 
 ## 5) Frontend en place (resume)
 - Scene Phaser jouable avec deplacement.
@@ -507,6 +536,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - boutique forgeron (offres + achat)
   - progression tour (etage et boss 10)
   - mini tooltip d'aide des tags d'intention (`ATK/MAG/CLN/DSP/ULT`)
+  - glossaire visuel des raretes de loot (`common`, `uncommon`, `rare`, `epic`, `legendary`)
 - Chargement web optimise:
   - entree legere
   - bootstrap asynchrone
@@ -522,6 +552,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `POST /debug/admin/set-combat-start-override` (dev only)
 - `POST /debug/admin/clear-combat-start-override` (dev only)
 - `POST /debug/admin/apply-loadout-preset` (dev only)
+- `POST /debug/admin/set-world-flags` (dev only)
 - `GET /auth/google`
 - `GET /auth/google/callback`
 - `GET /auth/me`
@@ -571,7 +602,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 1. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
-4. Exposer un glossaire de rarete en UI (couleurs/legende) pour les nouveaux drops.
-5. Ajouter un endpoint debug (dev only) pour forcer des flags monde cibles (village/shops/story) en QA.
+4. Ajouter un panneau debug frontend pour declencher rapidement les endpoints QA (`grant/loadout/floor/flags`) sans outil externe.
+5. Ajouter un endpoint debug (dev only) pour forcer l'etat de quete (`active/completed/claimed`) sur une quete cible.
 
 

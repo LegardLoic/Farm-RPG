@@ -21,6 +21,7 @@ import {
 } from './debug-admin.constants';
 import { DEBUG_LOADOUT_PRESETS, type DebugLoadoutPresetDefinition } from './debug-loadout.constants';
 import type { DebugGrantResourcesDto } from './dto/debug-grant-resources.dto';
+import type { DebugSetWorldFlagsDto } from './dto/debug-set-world-flags.dto';
 
 type ResetProgressionResult = {
   progression: {
@@ -154,10 +155,27 @@ type DebugApplyLoadoutPresetResult = {
   }>;
 };
 
+type WorldFlagRow = {
+  flag_key: string;
+};
+
+type DebugSetWorldFlagsResult = {
+  requested: {
+    flags: string[];
+    removeFlags: string[];
+    replace: boolean;
+  };
+  before: string[];
+  after: string[];
+  added: string[];
+  removed: string[];
+};
+
 const SAVE_SLOTS_TABLE = 'save_slots';
 const AUTOSAVES_TABLE = 'autosaves';
 const TOWER_MILESTONE_FLAGS = ['floor_3_cleared', 'floor_5_cleared', 'floor_8_cleared'] as const;
 const TOWER_BOSS_FLAGS = ['boss_floor_10_defeated', 'tower_mvp_complete'] as const;
+const WORLD_FLAG_PATTERN = /^[a-z0-9_:-]+$/;
 
 @Injectable()
 export class DebugAdminService {
@@ -618,6 +636,70 @@ export class DebugAdminService {
     });
   }
 
+  async setWorldFlags(userId: string, payload: DebugSetWorldFlagsDto): Promise<DebugSetWorldFlagsResult> {
+    const requestedFlags = this.normalizeWorldFlagKeys(payload.flags ?? []);
+    const requestedRemovedFlags = this.normalizeWorldFlagKeys(payload.removeFlags ?? []);
+    const replace = Boolean(payload.replace);
+
+    if (!replace && requestedFlags.length === 0 && requestedRemovedFlags.length === 0) {
+      throw new BadRequestException('Provide flags/removeFlags, or set replace=true');
+    }
+
+    return this.databaseService.withTransaction(async (tx) => {
+      const before = await this.getWorldFlagsForUpdate(tx, userId);
+      const beforeSet = new Set(before);
+
+      if (replace) {
+        await tx.query(
+          `
+            DELETE FROM ${WORLD_FLAGS_TABLE}
+            WHERE user_id = $1
+          `,
+          [userId],
+        );
+      } else if (requestedRemovedFlags.length > 0) {
+        await tx.query(
+          `
+            DELETE FROM ${WORLD_FLAGS_TABLE}
+            WHERE user_id = $1
+              AND flag_key = ANY($2::text[])
+          `,
+          [userId, requestedRemovedFlags],
+        );
+      }
+
+      const flagsToInsert = replace ? requestedFlags : requestedFlags.filter((flag) => !beforeSet.has(flag));
+
+      for (const flag of flagsToInsert) {
+        await tx.query(
+          `
+            INSERT INTO ${WORLD_FLAGS_TABLE} (user_id, flag_key, unlocked_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (user_id, flag_key) DO NOTHING
+          `,
+          [userId, flag],
+        );
+      }
+
+      const after = await this.getWorldFlagsForUpdate(tx, userId);
+      const afterSet = new Set(after);
+      const removed = before.filter((flag) => !afterSet.has(flag));
+      const added = after.filter((flag) => !beforeSet.has(flag));
+
+      return {
+        requested: {
+          flags: requestedFlags,
+          removeFlags: requestedRemovedFlags,
+          replace,
+        },
+        before,
+        after,
+        added,
+        removed,
+      };
+    });
+  }
+
   private resolveLoadoutPresetOrThrow(presetKey: string): DebugLoadoutPresetDefinition {
     const normalizedPresetKey = presetKey.trim();
     const preset = DEBUG_LOADOUT_PRESETS.find((entry) => entry.key === normalizedPresetKey);
@@ -759,6 +841,40 @@ export class DebugAdminService {
     );
 
     return result.rows[0];
+  }
+
+  private async getWorldFlagsForUpdate(executor: TransactionClient, userId: string): Promise<string[]> {
+    const result = await executor.query<WorldFlagRow>(
+      `
+        SELECT flag_key
+        FROM ${WORLD_FLAGS_TABLE}
+        WHERE user_id = $1
+        ORDER BY flag_key ASC
+        FOR UPDATE
+      `,
+      [userId],
+    );
+
+    return result.rows.map((row) => row.flag_key);
+  }
+
+  private normalizeWorldFlagKeys(flags: string[]): string[] {
+    const normalized = new Set<string>();
+
+    for (const value of flags) {
+      const entry = value.trim().toLowerCase();
+      if (!entry) {
+        continue;
+      }
+
+      if (!WORLD_FLAG_PATTERN.test(entry)) {
+        throw new BadRequestException(`Invalid world flag: ${value}`);
+      }
+
+      normalized.add(entry);
+    }
+
+    return [...normalized.values()];
   }
 
   private async deleteCombatStartOverrides(executor: TransactionClient, userId: string): Promise<number> {

@@ -8,6 +8,7 @@ import { DebugCompleteQuestsDto } from './dto/debug-complete-quests.dto';
 import { DebugGrantResourcesDto } from './dto/debug-grant-resources.dto';
 import { DebugSetCombatStartOverrideDto } from './dto/debug-set-combat-start-override.dto';
 import { DebugSetTowerFloorDto } from './dto/debug-set-tower-floor.dto';
+import { DebugSetWorldFlagsDto } from './dto/debug-set-world-flags.dto';
 import { DebugAdminService } from './debug-admin.service';
 
 @Controller('debug/admin')
@@ -113,6 +114,19 @@ export class DebugAdminController {
       status: 'ok',
       environment: this.configService.get<string>('NODE_ENV', 'development'),
       loadout,
+    };
+  }
+
+  @Post('set-world-flags')
+  async setWorldFlags(@Req() req: AuthenticatedRequest, @Body() body: DebugSetWorldFlagsDto) {
+    this.assertDebugEnabled();
+
+    const worldFlags = await this.debugAdminService.setWorldFlags(req.authUser!.id, body);
+
+    return {
+      status: 'ok',
+      environment: this.configService.get<string>('NODE_ENV', 'development'),
+      worldFlags,
     };
   }
 

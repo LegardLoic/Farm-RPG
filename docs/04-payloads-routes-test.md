@@ -37,6 +37,7 @@ Ce document regroupe les payloads utilises pendant nos tests manuels (front + AP
 | `/debug/admin/set-combat-start-override` | `POST` | oui (dev only) | `{ "enemyKey": "cinder_warden", "isScriptedBossEncounter": true }` | Forcer le prochain `combat/start` sur un ennemi/script precise |
 | `/debug/admin/clear-combat-start-override` | `POST` | oui (dev only) | `{}` | Annuler un override de prochain `combat/start` |
 | `/debug/admin/apply-loadout-preset` | `POST` | oui (dev only) | `{ "presetKey": "boss_trial" }` | Appliquer un preset complet d'equipement+ressources pour playtest |
+| `/debug/admin/set-world-flags` | `POST` | oui (dev only) | `{ "flags": ["blacksmith_shop_tier_1_unlocked"], "removeFlags": ["blacksmith_curse_lifted"], "replace": false }` | Forcer des flags monde cibles (village/shop/story) |
 
 ## Exemples prets a copier (debug)
 
@@ -119,3 +120,30 @@ Presets disponibles:
 - `starter`
 - `tower_mid`
 - `boss_trial`
+
+### 9) Set world flags (dev only)
+
+```json
+{
+  "flags": [
+    "blacksmith_shop_tier_1_unlocked",
+    "story_floor_5_cleared"
+  ],
+  "removeFlags": [
+    "blacksmith_curse_lifted"
+  ],
+  "replace": false
+}
+```
+
+Mode remplacement complet:
+
+```json
+{
+  "flags": [
+    "blacksmith_shop_tier_1_unlocked"
+  ],
+  "removeFlags": [],
+  "replace": true
+}
+```

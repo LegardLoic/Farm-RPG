@@ -9,6 +9,11 @@
   --accent: #e2b66d;
   --accent-2: #7fd1c7;
   --danger: #f26f6f;
+  --loot-common: #93a0b2;
+  --loot-uncommon: #87d69a;
+  --loot-rare: #73b7ff;
+  --loot-epic: #cc97ff;
+  --loot-legendary: #f0c36c;
   --shadow: rgba(0, 0, 0, 0.42);
 }
 
@@ -840,6 +845,96 @@ body::before {
   color: #d2dbe8;
 }
 
+.hud-loot-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: -2px;
+}
+
+.hud-loot-legend-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.hud-loot-legend-header span {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.hud-loot-legend-header strong {
+  font-size: 0.72rem;
+  color: var(--accent-2);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hud-loot-legend-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.loot-rarity-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(185, 195, 212, 0.28);
+  background: rgba(185, 195, 212, 0.1);
+  color: #d7dfeb;
+  font-size: 0.68rem;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.loot-rarity-pill::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.04);
+}
+
+.loot-rarity-pill[data-rarity="common"] {
+  border-color: rgba(147, 160, 178, 0.35);
+  background: rgba(147, 160, 178, 0.14);
+  color: #d5deea;
+}
+
+.loot-rarity-pill[data-rarity="uncommon"] {
+  border-color: rgba(135, 214, 154, 0.42);
+  background: rgba(135, 214, 154, 0.14);
+  color: #d7ffe0;
+}
+
+.loot-rarity-pill[data-rarity="rare"] {
+  border-color: rgba(115, 183, 255, 0.45);
+  background: rgba(115, 183, 255, 0.15);
+  color: #dcebff;
+}
+
+.loot-rarity-pill[data-rarity="epic"] {
+  border-color: rgba(204, 151, 255, 0.48);
+  background: rgba(204, 151, 255, 0.16);
+  color: #f0e1ff;
+}
+
+.loot-rarity-pill[data-rarity="legendary"] {
+  border-color: rgba(240, 195, 108, 0.5);
+  background: rgba(240, 195, 108, 0.18);
+  color: #fff0c8;
+}
+
 .combat-card {
   padding: 12px;
   display: flex;
@@ -1046,6 +1141,15 @@ body::before {
 
   .hud-intent-help-popover {
     width: min(240px, calc(100vw - 64px));
+  }
+
+  .hud-loot-legend-pills {
+    gap: 6px;
+  }
+
+  .loot-rarity-pill {
+    padding: 4px 8px;
+    font-size: 0.64rem;
   }
 
   .hud-auth-button,

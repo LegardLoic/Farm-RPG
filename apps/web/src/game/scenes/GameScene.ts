@@ -484,6 +484,19 @@ export class GameScene extends Phaser.Scene {
               <div class="hud-intent-help-line"><strong>ULT</strong><span>attaque ultime</span></div>
             </div>
           </div>
+          <div class="hud-loot-legend" aria-label="Legende des raretes de loot">
+            <div class="hud-loot-legend-header">
+              <span>Raretés loot</span>
+              <strong>Code couleur</strong>
+            </div>
+            <div class="hud-loot-legend-pills" role="list">
+              <span class="loot-rarity-pill" data-rarity="common" role="listitem">Common</span>
+              <span class="loot-rarity-pill" data-rarity="uncommon" role="listitem">Uncommon</span>
+              <span class="loot-rarity-pill" data-rarity="rare" role="listitem">Rare</span>
+              <span class="loot-rarity-pill" data-rarity="epic" role="listitem">Epic</span>
+              <span class="loot-rarity-pill" data-rarity="legendary" role="listitem">Legendary</span>
+            </div>
+          </div>
           <div class="hud-combat-actions">
             <button class="hud-combat-button primary" data-combat-action="start">Demarrer combat</button>
             <button class="hud-combat-button" data-combat-action="attack">Attack</button>
