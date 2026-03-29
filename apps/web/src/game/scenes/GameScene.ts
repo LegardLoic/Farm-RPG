@@ -23,7 +23,15 @@ type HudState = {
 type CombatStatus = 'active' | 'won' | 'lost' | 'fled';
 type CombatTurn = 'player' | 'enemy';
 type CombatUiStatus = CombatStatus | 'idle' | 'loading' | 'error';
-type CombatActionName = 'attack' | 'defend' | 'fireball' | 'rally' | 'sunder' | 'mend';
+type CombatActionName =
+  | 'attack'
+  | 'defend'
+  | 'fireball'
+  | 'rally'
+  | 'sunder'
+  | 'mend'
+  | 'cleanse'
+  | 'interrupt';
 type QuestStatus = 'active' | 'completed' | 'claimed';
 type DebugQaActionName =
   | 'grant-resources'
@@ -38,6 +46,8 @@ const FIREBALL_MANA_COST = 5;
 const RALLY_MANA_COST = 3;
 const SUNDER_MANA_COST = 4;
 const MEND_MANA_COST = 4;
+const CLEANSE_MANA_COST = 3;
+const INTERRUPT_MANA_COST = 5;
 
 type CombatUnitState = {
   hp: number;
@@ -170,6 +180,8 @@ export class GameScene extends Phaser.Scene {
   private combatRallyButton: HTMLButtonElement | null = null;
   private combatSunderButton: HTMLButtonElement | null = null;
   private combatMendButton: HTMLButtonElement | null = null;
+  private combatCleanseButton: HTMLButtonElement | null = null;
+  private combatInterruptButton: HTMLButtonElement | null = null;
   private combatForfeitButton: HTMLButtonElement | null = null;
   private combatLogsList: HTMLElement | null = null;
   private combatStatusBadge: HTMLElement | null = null;
@@ -290,6 +302,8 @@ export class GameScene extends Phaser.Scene {
       combatAction === 'attack' ||
       combatAction === 'defend' ||
       combatAction === 'fireball' ||
+      combatAction === 'cleanse' ||
+      combatAction === 'interrupt' ||
       combatAction === 'rally' ||
       combatAction === 'sunder' ||
       combatAction === 'mend'
@@ -561,6 +575,8 @@ export class GameScene extends Phaser.Scene {
             <button class="hud-combat-button secondary" data-combat-action="defend">Defend</button>
             <button class="hud-combat-button" data-combat-action="fireball">Fireball</button>
             <button class="hud-combat-button secondary" data-combat-action="mend">Mend (+HP)</button>
+            <button class="hud-combat-button secondary" data-combat-action="cleanse">Cleanse</button>
+            <button class="hud-combat-button" data-combat-action="interrupt">Interrupt</button>
             <button class="hud-combat-button secondary" data-combat-action="rally">Rally (+Atk)</button>
             <button class="hud-combat-button" data-combat-action="sunder">Sunder (-Def)</button>
             <button class="hud-combat-button danger" data-combat-action="forfeit">Fuir</button>
@@ -676,6 +692,8 @@ export class GameScene extends Phaser.Scene {
     this.combatDefendButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="defend"]');
     this.combatFireballButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="fireball"]');
     this.combatMendButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="mend"]');
+    this.combatCleanseButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="cleanse"]');
+    this.combatInterruptButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="interrupt"]');
     this.combatRallyButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="rally"]');
     this.combatSunderButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="sunder"]');
     this.combatForfeitButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="forfeit"]');
@@ -728,6 +746,8 @@ export class GameScene extends Phaser.Scene {
     this.combatDefendButton = null;
     this.combatFireballButton = null;
     this.combatMendButton = null;
+    this.combatCleanseButton = null;
+    this.combatInterruptButton = null;
     this.combatRallyButton = null;
     this.combatSunderButton = null;
     this.combatForfeitButton = null;
@@ -1513,10 +1533,19 @@ export class GameScene extends Phaser.Scene {
     const mana = this.combatState?.player.mp ?? 0;
     const hp = this.combatState?.player.hp ?? 0;
     const maxHp = this.combatState?.player.maxHp ?? 0;
-    const fireballReady = Boolean(playerTurn && mana >= FIREBALL_MANA_COST);
+    const silenced = this.getCombatScriptTurns('playerSilencedTurns') > 0;
+    const fireballReady = Boolean(playerTurn && mana >= FIREBALL_MANA_COST && !silenced);
     const mendReady = Boolean(playerTurn && mana >= MEND_MANA_COST && hp < maxHp);
-    const rallyReady = Boolean(playerTurn && mana >= RALLY_MANA_COST);
-    const sunderReady = Boolean(playerTurn && mana >= SUNDER_MANA_COST);
+    const cleanseReady = Boolean(playerTurn && mana >= CLEANSE_MANA_COST && this.hasCleanseableDebuffs());
+    const interruptReady = Boolean(
+      playerTurn &&
+      mana >= INTERRUPT_MANA_COST &&
+      !silenced &&
+      this.hasInterruptibleEnemyIntent(),
+    );
+    const rallyReady = Boolean(playerTurn && mana >= RALLY_MANA_COST && !silenced);
+    const sunderReady = Boolean(playerTurn && mana >= SUNDER_MANA_COST && !silenced);
+    const effectiveMendReady = Boolean(mendReady && !silenced);
 
     if (this.combatStartButton) {
       this.combatStartButton.disabled = !this.isAuthenticated || this.combatBusy;
@@ -1535,7 +1564,15 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.combatMendButton) {
-      this.combatMendButton.disabled = !mendReady || this.combatBusy;
+      this.combatMendButton.disabled = !effectiveMendReady || this.combatBusy;
+    }
+
+    if (this.combatCleanseButton) {
+      this.combatCleanseButton.disabled = !cleanseReady || this.combatBusy;
+    }
+
+    if (this.combatInterruptButton) {
+      this.combatInterruptButton.disabled = !interruptReady || this.combatBusy;
     }
 
     if (this.combatRallyButton) {
@@ -1918,6 +1955,43 @@ export class GameScene extends Phaser.Scene {
 
     if (action === 'mend' && this.combatState.player.hp >= this.combatState.player.maxHp) {
       this.setCombatError('Tes PV sont deja au maximum.');
+      this.updateHud();
+      return;
+    }
+
+    if (action === 'cleanse' && this.combatState.player.mp < CLEANSE_MANA_COST) {
+      this.setCombatError('Pas assez de MP pour Cleanse.');
+      this.updateHud();
+      return;
+    }
+
+    if (action === 'cleanse' && !this.hasCleanseableDebuffs()) {
+      this.setCombatError('Aucun debuff a retirer.');
+      this.updateHud();
+      return;
+    }
+
+    if (action === 'interrupt' && this.combatState.player.mp < INTERRUPT_MANA_COST) {
+      this.setCombatError('Pas assez de MP pour Interrupt.');
+      this.updateHud();
+      return;
+    }
+
+    const silenced = this.getCombatScriptTurns('playerSilencedTurns') > 0;
+    const blockedBySilence =
+      action === 'fireball' ||
+      action === 'rally' ||
+      action === 'sunder' ||
+      action === 'mend' ||
+      action === 'interrupt';
+    if (silenced && blockedBySilence) {
+      this.setCombatError('Tu es sous Silence et ne peux pas lancer ce skill.');
+      this.updateHud();
+      return;
+    }
+
+    if (action === 'interrupt' && !this.hasInterruptibleEnemyIntent()) {
+      this.setCombatError('Aucune intention ennemie interruptible.');
       this.updateHud();
       return;
     }
@@ -2476,12 +2550,24 @@ export class GameScene extends Phaser.Scene {
       return '-';
     }
 
+    const effects: string[] = [];
+
     const rallyTurns = this.getCombatScriptTurns('playerRallyTurns');
-    if (rallyTurns <= 0) {
-      return 'None';
+    if (rallyTurns > 0) {
+      effects.push(`Rally ${rallyTurns}t`);
     }
 
-    return `Rally ${rallyTurns}t`;
+    const burningTurns = this.getCombatScriptTurns('playerBurningTurns');
+    if (burningTurns > 0) {
+      effects.push(`Burning ${burningTurns}t`);
+    }
+
+    const silencedTurns = this.getCombatScriptTurns('playerSilencedTurns');
+    if (silencedTurns > 0) {
+      effects.push(`Silenced ${silencedTurns}t`);
+    }
+
+    return effects.length > 0 ? effects.join(' | ') : 'None';
   }
 
   private getCombatEnemyEffectsLabel(): string {
@@ -2710,6 +2796,34 @@ export class GameScene extends Phaser.Scene {
 
   private getCombatScriptFlag(key: string): boolean {
     return this.combatState?.scriptState?.[key] === true;
+  }
+
+  private hasCleanseableDebuffs(): boolean {
+    return this.getCombatScriptTurns('playerBurningTurns') > 0 || this.getCombatScriptTurns('playerSilencedTurns') > 0;
+  }
+
+  private hasInterruptibleEnemyIntent(): boolean {
+    if (!this.combatState || this.combatState.status !== 'active' || this.combatState.turn !== 'player') {
+      return false;
+    }
+
+    const raw = this.combatState.scriptState?.enemyTelegraphIntent;
+    if (typeof raw !== 'string' || raw.length === 0) {
+      return false;
+    }
+
+    return this.isInterruptibleEnemyIntent(raw);
+  }
+
+  private isInterruptibleEnemyIntent(intent: string): boolean {
+    return (
+      intent === 'cinder_burst' ||
+      intent === 'molten_shell' ||
+      intent === 'iron_recenter' ||
+      intent === 'null_sigil' ||
+      intent === 'cataclysm_ray' ||
+      intent === 'root_smash'
+    );
   }
 
   private clearCombatError(): void {

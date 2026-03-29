@@ -2,6 +2,7 @@ import type { BlacksmithOffer } from './shops.types';
 
 export const BLACKSMITH_SHOP_UNLOCK_FLAG = 'blacksmith_shop_tier_1_unlocked';
 export const BLACKSMITH_TIER_2_UNLOCK_FLAGS = ['story_floor_5_cleared'] as const;
+export const BLACKSMITH_TIER_3_UNLOCK_FLAGS = ['story_floor_8_cleared'] as const;
 
 export const BLACKSMITH_OFFERS: BlacksmithOffer[] = [
   {
@@ -57,5 +58,32 @@ export const BLACKSMITH_OFFERS: BlacksmithOffer[] = [
     goldPrice: 54,
     tier: 2,
     requiredFlags: [...BLACKSMITH_TIER_2_UNLOCK_FLAGS],
+  },
+  {
+    offerKey: 'mithril_sword_masterwork',
+    itemKey: 'mithril_sword',
+    name: 'Mithril Sword',
+    description: 'A masterwork blade reserved for the deepest tower layers.',
+    goldPrice: 132,
+    tier: 3,
+    requiredFlags: [...BLACKSMITH_TIER_3_UNLOCK_FLAGS],
+  },
+  {
+    offerKey: 'dragon_scale_armor',
+    itemKey: 'dragon_scale_armor',
+    name: 'Dragon Scale Armor',
+    description: 'Heavy armor tempered to withstand elite tower threats.',
+    goldPrice: 156,
+    tier: 3,
+    requiredFlags: [...BLACKSMITH_TIER_3_UNLOCK_FLAGS],
+  },
+  {
+    offerKey: 'elixir_of_vigor',
+    itemKey: 'elixir_of_vigor',
+    name: 'Elixir of Vigor',
+    description: 'A potent restorative for long expeditions and boss fights.',
+    goldPrice: 96,
+    tier: 3,
+    requiredFlags: [...BLACKSMITH_TIER_3_UNLOCK_FLAGS],
   },
 ];

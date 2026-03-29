@@ -548,6 +548,39 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - PV deja pleins
   - message d'erreur UI dedie en cas d'usage invalide (`MP insuffisant` ou `PV max`).
 
+### Lot 37 - Skills combat `Cleanse` + `Interrupt` et debuffs ennemis
+- Backend combat:
+  - nouvelles actions joueur:
+    - `cleanse` (retire `Burning` et `Silence`)
+    - `interrupt` (interrompt certaines intentions ennemies telegraphiees)
+  - nouveaux couts MP:
+    - `CLEANSE_MANA_COST = 3`
+    - `INTERRUPT_MANA_COST = 5`
+  - nouvelles mecaniques de debuff:
+    - `Cinder Burst` applique `Burning` (degats periodiques)
+    - `Null Sigil` applique `Silence` (bloque certains skills)
+  - validations metier serveur:
+    - `cleanse` refusee si aucun debuff a retirer
+    - `interrupt` refusee si aucune intention interruptible n'est prete
+    - skills magiques bloques pendant `Silence` (sauf `cleanse`).
+- Frontend HUD combat:
+  - boutons `Cleanse` et `Interrupt`
+  - activation conditionnelle selon MP, debuffs, silence et intention ennemie telegraphiee
+  - affichage enrichi des effets joueur (`Rally`, `Burning`, `Silenced`)
+  - messages d'erreur UI dedies en cas d'action invalide.
+
+### Lot 38 - Shop blacksmith tier 3
+- Backend shop:
+  - extension des offres forgeron avec un nouveau palier `tier: 3`
+  - ajout de 3 offres tier 3:
+    - `mithril_sword_masterwork`
+    - `dragon_scale_armor`
+    - `elixir_of_vigor`
+  - prerequis tier 3 relies au flag `story_floor_8_cleared`.
+- Validation metier:
+  - le filtrage existant par `requiredFlags` continue de masquer les offres non debloquees
+  - la validation transactionnelle a l'achat reste appliquee cote serveur.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -568,7 +601,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - claim explicite des recompenses
 - Shops:
   - boutique forgeron protegee
-  - offres par tiers avec prerequis flags
+  - offres par tiers (1/2/3) avec prerequis flags
   - achat serveur autoritaire
   - deduction or + ajout item en transaction
 - Tour:
@@ -664,13 +697,14 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Structure modulaire NestJS maintenue (auth/combat/gameplay/inventory/equipment/saves/quests/shops/tower/debug-admin).
 - Build web decoupe en chunks (`index`, `bootstrap`, `phaser-vendor`) pour de meilleurs temps de chargement initiaux.
 - Rewards combat enrichies avec metadonnees de loot (`rarity`, `source`) pour faciliter l'UI future.
+- Skills combat serveur avec validations metier strictes (couts MP, debuffs actifs, interruption conditionnelle sur telegraphes).
 - Flux PR continue (`develop` -> `main`) deja utilise et valide.
 
 ## 9) Prochaines priorites recommandees
 1. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
-2. Etendre le shop tier 2 vers un tier 3 avec nouveaux paliers de prerequis (quetes/story) et meilleure progression d'equipement.
-3. Etendre l'arbre de skills joueur avec `interrupt` et `cleanse` pour completer `Rally/Sunder/Mend`.
-4. Ajouter des tests end-to-end cibles (auth + combat + debug QA) pour securiser les regressions en CI.
-5. Ajouter des presets debug QA pre-remplis (ex: `village_open`, `mid_tower`, `act1_done`) pour accelerer les playtests.
+2. Ajouter des tests end-to-end cibles (auth + combat + debug QA) pour securiser les regressions en CI.
+3. Ajouter des presets debug QA pre-remplis (ex: `village_open`, `mid_tower`, `act1_done`) pour accelerer les playtests.
+4. Equilibrer les couts/valeurs des skills (`Mend`, `Cleanse`, `Interrupt`) avec une passe de tuning gameplay.
+5. Etendre les scripts boss pour mieux punir/recompenser l'usage de `Interrupt` et `Cleanse`.
 
 

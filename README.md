@@ -95,7 +95,7 @@ Use `.env.example` templates and repository secrets for CI.
 - Manual save-slot capture/load/delete from the in-game HUD.
 - Save-slot preview in HUD before load (stats, inventory, equipped items).
 - Confirmation step before loading a slot from the HUD.
-- Player combat skills: `Rally` (buff), `Sunder` (debuff), and `Mend` (heal).
+- Player combat skills: `Rally`, `Sunder`, `Mend`, `Cleanse`, and `Interrupt`.
 - Scripted boss AI reactions to player status effects (`Rally` dispel / `Sunder` cleanse patterns).
 - Combat HUD enemy telegraph for upcoming scripted boss intent.
 - Combat HUD telegraph rendered as a visual intent chip (tone + pulse for dangerous skills).
