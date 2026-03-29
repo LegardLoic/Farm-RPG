@@ -581,6 +581,29 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - le filtrage existant par `requiredFlags` continue de masquer les offres non debloquees
   - la validation transactionnelle a l'achat reste appliquee cote serveur.
 
+### Lot 39 - Presets QA pre-remplis (backend + HUD)
+- Backend debug-admin:
+  - nouvel endpoint protege:
+    - `POST /debug/admin/apply-state-preset`
+  - payload:
+    - `presetKey` (`village_open`, `mid_tower`, `act1_done`)
+  - application transactionnelle du preset:
+    - floor de tour cible
+    - set de world flags associe au scenario
+  - reponse enrichie:
+    - recap preset applique
+    - `tower` before/after
+    - `worldFlags` before/after + `added/removed`.
+- Frontend HUD `Debug QA`:
+  - ajout select `State preset` + bouton `Apply state preset`
+  - branchement sur `POST /debug/admin/apply-state-preset`
+  - etats `loading/success/error` alignes avec les autres actions debug.
+
+### Hotfix Lot 39.1 - Duree `Silence` ajustee
+- Backend combat:
+  - `PLAYER_SILENCED_DURATION_TURNS` passe de `1` a `2` pour que l'effet bloque bien le prochain tour joueur
+  - correction de comportement sans impact schema.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -619,6 +642,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - completer rapidement une quete (ou toutes les quetes) pour QA des flux de claim/rewards
   - forcer le prochain `combat/start` sur un ennemi/script cible, puis auto-consommation one-shot
   - appliquer un preset complet de loadout (equipement+inventaire+ressources) pour QA rapide
+  - appliquer un preset de scenario global (`village_open`, `mid_tower`, `act1_done`) pour QA rapide
   - forcer des flags monde cibles (ajout/retrait/remplacement) pour tester village/shop/story
   - forcer l'etat d'une quete cible (`active/completed/claimed`) pour QA rapide.
 
@@ -636,7 +660,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - progression tour (etage et boss 10)
   - mini tooltip d'aide des tags d'intention (`ATK/MAG/CLN/DSP/ULT`)
   - glossaire visuel des raretes de loot (`common`, `uncommon`, `rare`, `epic`, `legendary`)
-  - panneau `Debug QA` pour piloter les endpoints debug sans quitter le jeu (DEV/staging), incluant la gestion directe des world flags
+  - panneau `Debug QA` pour piloter les endpoints debug sans quitter le jeu (DEV/staging), incluant la gestion des world flags et des presets de scenario
 - Chargement web optimise:
   - entree legere
   - bootstrap asynchrone
@@ -648,6 +672,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `POST /debug/admin/reset-progression` (dev only)
 - `POST /debug/admin/grant-resources` (dev only)
 - `POST /debug/admin/set-tower-floor` (dev only)
+- `POST /debug/admin/apply-state-preset` (dev only)
 - `POST /debug/admin/complete-quests` (dev only)
 - `POST /debug/admin/set-combat-start-override` (dev only)
 - `POST /debug/admin/clear-combat-start-override` (dev only)
@@ -703,8 +728,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 1. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
 2. Ajouter des tests end-to-end cibles (auth + combat + debug QA) pour securiser les regressions en CI.
-3. Ajouter des presets debug QA pre-remplis (ex: `village_open`, `mid_tower`, `act1_done`) pour accelerer les playtests.
-4. Equilibrer les couts/valeurs des skills (`Mend`, `Cleanse`, `Interrupt`) avec une passe de tuning gameplay.
-5. Etendre les scripts boss pour mieux punir/recompenser l'usage de `Interrupt` et `Cleanse`.
+3. Equilibrer les couts/valeurs des skills (`Mend`, `Cleanse`, `Interrupt`) avec une passe de tuning gameplay.
+4. Etendre les scripts boss pour mieux punir/recompenser l'usage de `Interrupt` et `Cleanse`.
+5. Ajouter un mini recap visuel dans le HUD apres `apply-state-preset` (flags/tour modifies).
 
 

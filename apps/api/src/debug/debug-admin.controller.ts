@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/auth.types';
+import { DebugApplyStatePresetDto } from './dto/debug-apply-state-preset.dto';
 import { DebugApplyLoadoutPresetDto } from './dto/debug-apply-loadout-preset.dto';
 import { DebugCompleteQuestsDto } from './dto/debug-complete-quests.dto';
 import { DebugGrantResourcesDto } from './dto/debug-grant-resources.dto';
@@ -115,6 +116,19 @@ export class DebugAdminController {
       status: 'ok',
       environment: this.configService.get<string>('NODE_ENV', 'development'),
       loadout,
+    };
+  }
+
+  @Post('apply-state-preset')
+  async applyStatePreset(@Req() req: AuthenticatedRequest, @Body() body: DebugApplyStatePresetDto) {
+    this.assertDebugEnabled();
+
+    const statePreset = await this.debugAdminService.applyStatePreset(req.authUser!.id, body.presetKey);
+
+    return {
+      status: 'ok',
+      environment: this.configService.get<string>('NODE_ENV', 'development'),
+      statePreset,
     };
   }
 

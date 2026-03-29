@@ -42,6 +42,7 @@ Create local env files before starting:
 - `POST /debug/admin/reset-progression` (dev only)
 - `POST /debug/admin/grant-resources` (dev only)
 - `POST /debug/admin/set-tower-floor` (dev only)
+- `POST /debug/admin/apply-state-preset` (dev only)
 - `POST /debug/admin/complete-quests` (dev only)
 - `POST /debug/admin/set-combat-start-override` (dev only)
 - `POST /debug/admin/clear-combat-start-override` (dev only)
@@ -105,3 +106,4 @@ Use `.env.example` templates and repository secrets for CI.
 - Web build split: lightweight entry/bootstrap chunks + dedicated `phaser-vendor` chunk.
 - Combat loot now includes floor-based loot tables with rarity tags and boss-specific bonus drops.
 - Blacksmith shop now supports tiered offers with per-offer flag prerequisites.
+- Debug QA supports one-click state presets (`village_open`, `mid_tower`, `act1_done`).

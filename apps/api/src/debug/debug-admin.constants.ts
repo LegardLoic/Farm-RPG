@@ -1,5 +1,48 @@
 export const DEBUG_FORCE_COMBAT_ENEMY_FLAG_PREFIX = 'debug_force_combat_enemy';
 
+export const DEBUG_STATE_PRESETS = [
+  {
+    key: 'village_open',
+    towerFloor: 3,
+    worldFlags: ['blacksmith_curse_lifted', 'blacksmith_shop_tier_1_unlocked', 'floor_3_cleared'],
+  },
+  {
+    key: 'mid_tower',
+    towerFloor: 8,
+    worldFlags: [
+      'blacksmith_curse_lifted',
+      'blacksmith_shop_tier_1_unlocked',
+      'story_floor_5_cleared',
+      'story_floor_8_cleared',
+      'floor_3_cleared',
+      'floor_5_cleared',
+      'floor_8_cleared',
+    ],
+  },
+  {
+    key: 'act1_done',
+    towerFloor: 10,
+    worldFlags: [
+      'blacksmith_curse_lifted',
+      'blacksmith_shop_tier_1_unlocked',
+      'story_floor_3_cleared',
+      'story_floor_5_cleared',
+      'story_floor_8_cleared',
+      'story_floor_10_cleared',
+      'floor_3_cleared',
+      'floor_5_cleared',
+      'floor_8_cleared',
+      'boss_floor_10_defeated',
+      'tower_mvp_complete',
+    ],
+  },
+] as const;
+
+export const DEBUG_STATE_PRESET_KEYS = DEBUG_STATE_PRESETS.map((preset) => preset.key);
+export const DEBUG_STATE_PRESET_WORLD_FLAG_KEYS = [
+  ...new Set(DEBUG_STATE_PRESETS.flatMap((preset) => preset.worldFlags)),
+];
+
 export type DebugForcedCombatStartConfig = {
   enemyKey: string;
   isScriptedBossEncounter: boolean;
