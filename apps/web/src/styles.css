@@ -775,6 +775,70 @@ body::before {
   gap: 10px;
 }
 
+.combat-card-line .combat-intent-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(185, 195, 212, 0.35);
+  background: rgba(185, 195, 212, 0.12);
+  color: #d2dbe8;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.combat-card-line .combat-intent-chip[data-intent-tone="neutral"] {
+  border-color: rgba(185, 195, 212, 0.35);
+  background: rgba(185, 195, 212, 0.12);
+  color: #d2dbe8;
+}
+
+.combat-card-line .combat-intent-chip[data-intent-tone="calm"] {
+  border-color: rgba(127, 209, 199, 0.45);
+  background: rgba(127, 209, 199, 0.14);
+  color: #b8f7f0;
+}
+
+.combat-card-line .combat-intent-chip[data-intent-tone="warning"] {
+  border-color: rgba(226, 182, 109, 0.45);
+  background: rgba(226, 182, 109, 0.16);
+  color: #ffdfb0;
+}
+
+.combat-card-line .combat-intent-chip[data-intent-tone="danger"] {
+  border-color: rgba(242, 111, 111, 0.5);
+  background: rgba(242, 111, 111, 0.18);
+  color: #ffd0d0;
+}
+
+.combat-card-line .combat-intent-chip[data-intent-tone="utility"] {
+  border-color: rgba(152, 177, 255, 0.45);
+  background: rgba(152, 177, 255, 0.14);
+  color: #d8e4ff;
+}
+
+.combat-card-line .combat-intent-chip[data-intent-pulse="1"] {
+  animation: combat-intent-pulse 1s ease-in-out infinite;
+}
+
+@keyframes combat-intent-pulse {
+  0% {
+    box-shadow: 0 0 0 rgba(242, 111, 111, 0);
+    transform: translateY(0);
+  }
+  50% {
+    box-shadow: 0 0 8px rgba(242, 111, 111, 0.35);
+    transform: translateY(-1px);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(242, 111, 111, 0);
+    transform: translateY(0);
+  }
+}
+
 .hud-combat-error {
   border-color: rgba(242, 111, 111, 0.4);
   background: rgba(242, 111, 111, 0.12);

@@ -89,4 +89,5 @@ Use `.env.example` templates and repository secrets for CI.
 - Player combat skills: `Rally` (buff) and `Sunder` (debuff).
 - Scripted boss AI reactions to player status effects (`Rally` dispel / `Sunder` cleanse patterns).
 - Combat HUD enemy telegraph for upcoming scripted boss intent.
+- Combat HUD telegraph rendered as a visual intent chip (tone + pulse for dangerous skills).
 - Blacksmith shop unlocked by progression flags.

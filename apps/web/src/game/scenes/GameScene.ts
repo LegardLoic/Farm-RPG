@@ -636,7 +636,7 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('combatEnemyHp', this.getCombatEnemyValue('hp'));
     this.setHudText('combatEnemyMp', this.getCombatEnemyValue('mp'));
     this.setHudText('combatEnemyEffects', this.getCombatEnemyEffectsLabel());
-    this.setHudText('combatEnemyIntent', this.getCombatEnemyIntentLabel());
+    this.renderCombatEnemyIntent();
 
     if (this.combatStatusBadge) {
       this.combatStatusBadge.dataset.status = this.combatStatus;
@@ -2234,39 +2234,52 @@ export class GameScene extends Phaser.Scene {
     return effects.length > 0 ? effects.join(' | ') : 'None';
   }
 
-  private getCombatEnemyIntentLabel(): string {
+  private renderCombatEnemyIntent(): void {
+    const element = this.hudRoot?.querySelector<HTMLElement>('[data-hud="combatEnemyIntent"]');
+    if (!element) {
+      return;
+    }
+
+    const intentUi = this.getCombatEnemyIntentUi();
+    element.classList.add('combat-intent-chip');
+    element.textContent = intentUi.label;
+    element.dataset.intentTone = intentUi.tone;
+    element.dataset.intentPulse = intentUi.pulse ? '1' : '0';
+  }
+
+  private getCombatEnemyIntentUi(): { label: string; tone: 'neutral' | 'calm' | 'warning' | 'danger' | 'utility'; pulse: boolean } {
     if (!this.combatState || this.combatState.status !== 'active' || this.combatState.turn !== 'player') {
-      return '-';
+      return { label: '-', tone: 'neutral', pulse: false };
     }
 
     const intent = this.combatState.scriptState?.enemyTelegraphIntent;
     if (typeof intent !== 'string' || intent.length === 0) {
-      return 'Unclear';
+      return { label: 'UNCLEAR', tone: 'warning', pulse: false };
     }
 
     switch (intent) {
       case 'basic_strike':
-        return 'Basic Strike';
+        return { label: 'ATK: STRIKE', tone: 'calm', pulse: false };
       case 'root_smash':
-        return 'Root Smash';
+        return { label: 'SKILL: ROOT SMASH', tone: 'danger', pulse: true };
       case 'opening_punish':
-        return 'Punish Opening';
+        return { label: 'SKILL: PUNISH', tone: 'warning', pulse: false };
       case 'cinder_burst':
-        return 'Cinder Burst';
+        return { label: 'SKILL: CINDER BURST', tone: 'danger', pulse: true };
       case 'molten_shell':
-        return 'Molten Shell (Cleanse)';
+        return { label: 'UTILITY: CLEANSE', tone: 'utility', pulse: false };
       case 'twin_slash':
-        return 'Twin Slash';
+        return { label: 'SKILL: TWIN SLASH', tone: 'danger', pulse: true };
       case 'iron_recenter':
-        return 'Iron Recenter (Cleanse)';
+        return { label: 'UTILITY: CLEANSE', tone: 'utility', pulse: false };
       case 'cataclysm_ray':
-        return 'Cataclysm Ray';
+        return { label: 'ULT: CATACLYSM RAY', tone: 'danger', pulse: true };
       case 'cursed_claw':
-        return 'Cursed Claw';
+        return { label: 'ATK: CURSED CLAW', tone: 'warning', pulse: false };
       case 'null_sigil':
-        return 'Null Sigil (Dispel)';
+        return { label: 'UTILITY: DISPEL', tone: 'utility', pulse: false };
       default:
-        return 'Unclear';
+        return { label: 'UNCLEAR', tone: 'warning', pulse: false };
     }
   }
 

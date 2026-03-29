@@ -238,6 +238,16 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - `Root Smash`, `Cinder Burst`, `Molten Shell (Cleanse)`, `Twin Slash`, `Iron Recenter (Cleanse)`, `Null Sigil (Dispel)`, `Cataclysm Ray`, etc.
   - fallback `Unclear` si l'intention n'est pas disponible.
 
+### Lot 18 - Telegraphes combat en mode visuel (badge + animation)
+- Frontend HUD combat:
+  - l'indicateur `Intent` passe en badge visuel (chip) avec categories:
+    - `calm`, `warning`, `danger`, `utility`, `neutral`
+  - ajout d'un pulse leger pour les attaques les plus dangereuses (ex: `Root Smash`, `Cataclysm Ray`).
+  - labels normalises (`ATK`, `SKILL`, `ULT`, `UTILITY`) pour une lecture plus rapide.
+- Technique:
+  - rendu UI via attributs `data-intent-tone` et `data-intent-pulse`
+  - styles CSS dedies + animation `@keyframes combat-intent-pulse`.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -332,6 +342,6 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Ajouter une route d'admin debug pour reset progression (dev only).
 4. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
-5. Passer du telegraphe texte a un telegraphe visuel (icones/couleurs/animation legere) pour les boss.
+5. Ajouter un systeme de preview multi-tour (prochaine attaque + pattern suivant) pour les boss scripts.
 
 
