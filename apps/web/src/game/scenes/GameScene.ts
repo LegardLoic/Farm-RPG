@@ -194,6 +194,7 @@ export class GameScene extends Phaser.Scene {
   private saveSlots: SaveSlotState[] = [];
   private saveSlotsBusy = false;
   private saveSlotsActionBusyKey: string | null = null;
+  private saveSlotsLoadConfirmSlot: number | null = null;
   private saveSlotsError: string | null = null;
   private saveSlotsRenderSignature = '';
 
@@ -269,7 +270,17 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (saveAction === 'load') {
+        this.toggleLoadSaveSlotConfirmation(slot);
+        return;
+      }
+
+      if (saveAction === 'confirm-load') {
         void this.loadSaveSlot(slot);
+        return;
+      }
+
+      if (saveAction === 'cancel-load') {
+        this.clearLoadSaveSlotConfirmation(slot);
         return;
       }
 
@@ -773,21 +784,27 @@ export class GameScene extends Phaser.Scene {
       const loadBusy = this.saveSlotsActionBusyKey === `load:${slotState.slot}`;
       const deleteBusy = this.saveSlotsActionBusyKey === `delete:${slotState.slot}`;
       const hasBusyAction = this.saveSlotsActionBusyKey !== null;
+      const isLoadConfirmOpen = this.saveSlotsLoadConfirmSlot === slotState.slot;
+      const hasLoadConfirmOpen = this.saveSlotsLoadConfirmSlot !== null;
 
       const captureButton = document.createElement('button');
       captureButton.classList.add('hud-save-action', 'capture');
       captureButton.dataset.saveAction = 'capture';
       captureButton.dataset.slot = `${slotState.slot}`;
       captureButton.textContent = captureBusy ? 'Saving...' : 'Capture';
-      captureButton.disabled = this.saveSlotsBusy || hasBusyAction;
+      captureButton.disabled = this.saveSlotsBusy || hasBusyAction || hasLoadConfirmOpen;
       actions.appendChild(captureButton);
 
       const loadButton = document.createElement('button');
       loadButton.classList.add('hud-save-action');
       loadButton.dataset.saveAction = 'load';
       loadButton.dataset.slot = `${slotState.slot}`;
-      loadButton.textContent = loadBusy ? 'Loading...' : 'Load';
-      loadButton.disabled = this.saveSlotsBusy || hasBusyAction || !slotState.exists;
+      loadButton.textContent = loadBusy ? 'Loading...' : (isLoadConfirmOpen ? 'Selected' : 'Load');
+      loadButton.disabled =
+        this.saveSlotsBusy ||
+        hasBusyAction ||
+        !slotState.exists ||
+        (hasLoadConfirmOpen && !isLoadConfirmOpen);
       actions.appendChild(loadButton);
 
       const deleteButton = document.createElement('button');
@@ -795,10 +812,43 @@ export class GameScene extends Phaser.Scene {
       deleteButton.dataset.saveAction = 'delete';
       deleteButton.dataset.slot = `${slotState.slot}`;
       deleteButton.textContent = deleteBusy ? 'Deleting...' : 'Delete';
-      deleteButton.disabled = this.saveSlotsBusy || hasBusyAction || !slotState.exists;
+      deleteButton.disabled = this.saveSlotsBusy || hasBusyAction || !slotState.exists || hasLoadConfirmOpen;
       actions.appendChild(deleteButton);
 
       item.appendChild(actions);
+
+      if (isLoadConfirmOpen) {
+        const confirmPanel = document.createElement('div');
+        confirmPanel.classList.add('save-slot-load-confirm');
+
+        const confirmMessage = document.createElement('p');
+        confirmMessage.classList.add('save-slot-load-confirm-message');
+        confirmMessage.textContent = `Load Slot ${slotState.slot}? This will replace your current progression.`;
+        confirmPanel.appendChild(confirmMessage);
+
+        const confirmActions = document.createElement('div');
+        confirmActions.classList.add('save-slot-load-confirm-actions');
+
+        const confirmButton = document.createElement('button');
+        confirmButton.classList.add('hud-save-action', 'confirm');
+        confirmButton.dataset.saveAction = 'confirm-load';
+        confirmButton.dataset.slot = `${slotState.slot}`;
+        confirmButton.textContent = loadBusy ? 'Loading...' : 'Confirm Load';
+        confirmButton.disabled = this.saveSlotsBusy || hasBusyAction;
+        confirmActions.appendChild(confirmButton);
+
+        const cancelButton = document.createElement('button');
+        cancelButton.classList.add('hud-save-action', 'cancel');
+        cancelButton.dataset.saveAction = 'cancel-load';
+        cancelButton.dataset.slot = `${slotState.slot}`;
+        cancelButton.textContent = 'Cancel';
+        cancelButton.disabled = this.saveSlotsBusy || hasBusyAction;
+        confirmActions.appendChild(cancelButton);
+
+        confirmPanel.appendChild(confirmActions);
+        item.appendChild(confirmPanel);
+      }
+
       this.saveSlotsListRoot.appendChild(item);
     }
   }
@@ -1049,6 +1099,11 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  private hasExistingSaveSlot(slot: number): boolean {
+    const slotState = this.getSafeSlotStates().find((entry) => entry.slot === slot);
+    return Boolean(slotState?.exists);
+  }
+
   private getSaveSlotMetaLabel(slotState: SaveSlotState): string {
     if (!slotState.exists) {
       return 'Empty slot.';
@@ -1160,6 +1215,7 @@ export class GameScene extends Phaser.Scene {
       this.isAuthenticated ? '1' : '0',
       this.saveSlotsBusy ? '1' : '0',
       this.saveSlotsActionBusyKey ?? '-',
+      this.saveSlotsLoadConfirmSlot ?? '-',
       this.saveSlotsError ?? '',
       slots,
     ].join('|');
@@ -1402,6 +1458,13 @@ export class GameScene extends Phaser.Scene {
         ...slot,
         preview: slot.exists ? (previewsBySlot.get(slot.slot) ?? null) : null,
       }));
+
+      if (
+        this.saveSlotsLoadConfirmSlot !== null &&
+        !this.saveSlots.some((slot) => slot.slot === this.saveSlotsLoadConfirmSlot && slot.exists)
+      ) {
+        this.saveSlotsLoadConfirmSlot = null;
+      }
     } catch (error) {
       this.saveSlotsError = this.getErrorMessage(error, 'Unable to load save slots.');
       if (this.saveSlots.length === 0) {
@@ -1720,6 +1783,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.saveSlotsLoadConfirmSlot = null;
     this.autosaveRestoreSlotBusy = slot;
     this.autosaveError = null;
     this.updateHud();
@@ -1738,6 +1802,35 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private toggleLoadSaveSlotConfirmation(slot: number): void {
+    if (!this.isAuthenticated) {
+      this.saveSlotsError = 'Login required to load saves.';
+      this.updateHud();
+      return;
+    }
+
+    if (!this.hasExistingSaveSlot(slot)) {
+      this.saveSlotsError = `Slot ${slot} is empty.`;
+      this.updateHud();
+      return;
+    }
+
+    if (this.saveSlotsActionBusyKey) {
+      return;
+    }
+
+    this.saveSlotsError = null;
+    this.saveSlotsLoadConfirmSlot = this.saveSlotsLoadConfirmSlot === slot ? null : slot;
+    this.updateHud();
+  }
+
+  private clearLoadSaveSlotConfirmation(slot: number): void {
+    if (this.saveSlotsLoadConfirmSlot === slot) {
+      this.saveSlotsLoadConfirmSlot = null;
+      this.updateHud();
+    }
+  }
+
   private async captureSaveSlot(slot: number): Promise<void> {
     if (!this.isAuthenticated) {
       this.saveSlotsError = 'Login required to capture saves.';
@@ -1745,6 +1838,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.saveSlotsLoadConfirmSlot = null;
     this.saveSlotsActionBusyKey = `capture:${slot}`;
     this.saveSlotsError = null;
     this.updateHud();
@@ -1769,6 +1863,21 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    if (!this.hasExistingSaveSlot(slot)) {
+      this.saveSlotsError = `Slot ${slot} is empty.`;
+      this.saveSlotsLoadConfirmSlot = null;
+      this.updateHud();
+      return;
+    }
+
+    if (this.saveSlotsLoadConfirmSlot !== slot) {
+      this.saveSlotsError = `Confirm load for slot ${slot} first.`;
+      this.saveSlotsLoadConfirmSlot = slot;
+      this.updateHud();
+      return;
+    }
+
+    this.saveSlotsLoadConfirmSlot = null;
     this.saveSlotsActionBusyKey = `load:${slot}`;
     this.saveSlotsError = null;
     this.updateHud();
@@ -1798,6 +1907,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.saveSlotsLoadConfirmSlot = null;
     this.saveSlotsActionBusyKey = `delete:${slot}`;
     this.saveSlotsError = null;
     this.updateHud();
@@ -1913,6 +2023,7 @@ export class GameScene extends Phaser.Scene {
     this.saveSlots = [];
     this.saveSlotsBusy = false;
     this.saveSlotsActionBusyKey = null;
+    this.saveSlotsLoadConfirmSlot = null;
     this.saveSlotsError = null;
     this.saveSlotsRenderSignature = '';
   }

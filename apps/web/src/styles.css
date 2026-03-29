@@ -531,6 +531,29 @@ body::before {
   flex-wrap: wrap;
 }
 
+.save-slot-load-confirm {
+  border: 1px solid rgba(242, 111, 111, 0.35);
+  background: rgba(242, 111, 111, 0.1);
+  border-radius: 10px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.save-slot-load-confirm-message {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: #ffd8d8;
+}
+
+.save-slot-load-confirm-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .quest-status {
   font-size: 0.7rem;
   letter-spacing: 0.07em;
@@ -633,6 +656,16 @@ body::before {
 .hud-save-action.danger {
   border-color: rgba(242, 111, 111, 0.45);
   background: rgba(242, 111, 111, 0.16);
+}
+
+.hud-save-action.confirm {
+  border-color: rgba(242, 111, 111, 0.45);
+  background: rgba(242, 111, 111, 0.2);
+}
+
+.hud-save-action.cancel {
+  border-color: rgba(185, 195, 212, 0.45);
+  background: rgba(185, 195, 212, 0.14);
 }
 
 .hud-shop-buy:disabled {

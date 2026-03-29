@@ -190,6 +190,16 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - parsing tolerant des snapshots pour supporter les formats manuels et autosave restaure
   - rendu avec fallback `preview unavailable` si un snapshot est incomplet/invalide.
 
+### Lot 14 - Confirmation UI avant chargement d'un slot
+- Frontend HUD `Save Slots`:
+  - ajout d'une confirmation inline de type modale avant `Load`
+  - message explicite "replace current progression"
+  - actions `Confirm Load` et `Cancel`.
+- Comportement:
+  - tant que la confirmation est ouverte, les actions destructives concurrentes sont bloquees sur les autres slots
+  - le chargement n'est execute que si le slot est explicitement confirme
+  - reset automatique de la confirmation apres `Capture`, `Delete`, `Restore autosave`, ou si le slot n'existe plus.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -284,6 +294,6 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Ajouter une route d'admin debug pour reset progression (dev only).
 4. Ajouter des skills ennemis cote joueur (interrupt/buff/debuff) pour enrichir les combats boss.
-5. Ajouter une confirmation UI avant `Load` (modale "etes-vous sur ?") pour eviter les erreurs de manipulation.
+5. Ajouter un mode "compare slot vs etat courant" avant `Load` (diff rapide niveau/or/etage/items).
 
 

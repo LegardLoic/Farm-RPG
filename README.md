@@ -85,4 +85,5 @@ Use `.env.example` templates and repository secrets for CI.
 - Restore latest autosave to manual slots from the in-game HUD.
 - Manual save-slot capture/load/delete from the in-game HUD.
 - Save-slot preview in HUD before load (stats, inventory, equipped items).
+- Confirmation step before loading a slot from the HUD.
 - Blacksmith shop unlocked by progression flags.
