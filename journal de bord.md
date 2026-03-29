@@ -368,6 +368,26 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - suppression du crash `RangeError: Maximum call stack size exceeded`
   - `POST /combat/start` redevient stable en production.
 
+### Lot 25 - Endpoint debug grant XP/or/items (dev only)
+- Backend debug-admin:
+  - nouvel endpoint protege:
+    - `POST /debug/admin/grant-resources`
+  - payload supporte:
+    - `experience` (int)
+    - `gold` (int)
+    - `items[]` (`itemKey`, `quantity`)
+  - operation transactionnelle:
+    - progression verrouillee `FOR UPDATE`
+    - application de l'XP avec calcul de level-up
+    - ajout d'or
+    - upsert inventaire pour les items accordes
+  - reponse retour:
+    - demande appliquee
+    - progression avant/apres
+    - liste des items injectes.
+- Securite:
+  - endpoint disponible uniquement en mode debug (non expose en production via garde existante).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -399,7 +419,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - persistence PostgreSQL
   - autosave serveur versionne sur paliers majeurs/boss
 - Debug (dev only):
-  - reset progression joueur via endpoint admin protege.
+  - reset progression joueur via endpoint admin protege
+  - injection rapide de XP/or/items pour test local.
 
 ## 5) Frontend en place (resume)
 - Scene Phaser jouable avec deplacement.
@@ -423,6 +444,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 6) API actuellement disponible
 - `GET /health`
 - `POST /debug/admin/reset-progression` (dev only)
+- `POST /debug/admin/grant-resources` (dev only)
 - `GET /auth/google`
 - `GET /auth/google/callback`
 - `GET /auth/me`
@@ -472,7 +494,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 1. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
-4. Ajouter un endpoint debug (dev only) pour injecter XP/or/items de test rapidement.
-5. Exposer un glossaire de rarete en UI (couleurs/legende) pour les nouveaux drops.
+4. Exposer un glossaire de rarete en UI (couleurs/legende) pour les nouveaux drops.
+5. Ajouter un endpoint debug (dev only) pour fixer rapidement l'etage de tour (set floor) en test.
 
 
