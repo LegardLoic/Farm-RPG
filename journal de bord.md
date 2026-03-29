@@ -295,6 +295,26 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - chunk bootstrap (~62 KB) separe du moteur Phaser
   - moteur Phaser reste lourd mais isole dans son propre chunk cacheable.
 
+### Lot 23 - Route admin debug reset progression (dev only)
+- Backend API:
+  - nouveau module `debug-admin` avec endpoint protege:
+    - `POST /debug/admin/reset-progression`
+  - reset transactionnel complet de l'etat joueur:
+    - progression (`player_progression`) reinitialisee (level/xp/gold de base)
+    - tour (`tower_progression`) reinitialisee et boss floor 10 repasse a `false`
+    - suppression des donnees runtime/metier:
+      - `inventory_items`
+      - `equipment_items`
+      - `world_flags`
+      - `quest_states`
+      - `combat_encounters`
+      - `save_slots`
+      - `autosaves`
+  - reponse API inclut un resume des lignes supprimees par table.
+- Securite:
+  - module non charge en `production` (import conditionnel dans `AppModule`)
+  - garde defensive supplementaire: endpoint renvoie `404` si `NODE_ENV=production`.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -324,6 +344,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - endpoints proteges
   - persistence PostgreSQL
   - autosave serveur versionne sur paliers majeurs/boss
+- Debug (dev only):
+  - reset progression joueur via endpoint admin protege.
 
 ## 5) Frontend en place (resume)
 - Scene Phaser jouable avec deplacement.
@@ -346,6 +368,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 
 ## 6) API actuellement disponible
 - `GET /health`
+- `POST /debug/admin/reset-progression` (dev only)
 - `GET /auth/google`
 - `GET /auth/google/callback`
 - `GET /auth/me`
@@ -386,15 +409,15 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 8) Points techniques importants
 - Source de verite gameplay cote serveur (anti-triche de base respectee).
 - Mutations sensibles en transactions SQL.
-- Structure modulaire NestJS maintenue (auth/combat/gameplay/inventory/equipment/saves/quests/shops/tower).
+- Structure modulaire NestJS maintenue (auth/combat/gameplay/inventory/equipment/saves/quests/shops/tower/debug-admin).
 - Build web decoupe en chunks (`index`, `bootstrap`, `phaser-vendor`) pour de meilleurs temps de chargement initiaux.
 - Flux PR continue (`develop` -> `main`) deja utilise et valide.
 
 ## 9) Prochaines priorites recommandees
 1. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
-3. Ajouter une route d'admin debug pour reset progression (dev only).
-4. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
-5. Ajouter des tables de loot par palier d'etage (rarete + drops specifiques mini-boss/boss).
+3. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
+4. Ajouter des tables de loot par palier d'etage (rarete + drops specifiques mini-boss/boss).
+5. Ajouter un endpoint debug (dev only) pour injecter XP/or/items de test rapidement.
 
 

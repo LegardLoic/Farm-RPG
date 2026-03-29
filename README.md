@@ -39,6 +39,7 @@ Create local env files before starting:
 ## Current API routes
 
 - `GET /health`
+- `POST /debug/admin/reset-progression` (dev only)
 - `GET /auth/google`
 - `GET /auth/google/callback`
 - `GET /auth/me`
