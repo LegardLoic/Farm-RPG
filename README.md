@@ -95,4 +95,5 @@ Use `.env.example` templates and repository secrets for CI.
 - Intent chips include category icons (`ATK`, `MAG`, `CLN`, `DSP`, `ULT`) for faster reading.
 - Combat HUD includes a mini tooltip legend to explain intent icon tags (`ATK`, `MAG`, `CLN`, `DSP`, `ULT`).
 - Web build split: lightweight entry/bootstrap chunks + dedicated `phaser-vendor` chunk.
+- Combat loot now includes floor-based loot tables with rarity tags and boss-specific bonus drops.
 - Blacksmith shop unlocked by progression flags.

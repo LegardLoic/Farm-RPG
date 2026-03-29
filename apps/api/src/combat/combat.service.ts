@@ -15,12 +15,14 @@ import { SavesService } from '../saves/saves.service';
 import { TowerService } from '../tower/tower.service';
 import type { TowerState } from '../tower/tower.types';
 import {
+  BOSS_SPECIFIC_BONUS_LOOT,
   COMBAT_ENCOUNTERS_TABLE,
   COMBAT_ENEMY_DEFINITIONS,
   COMBAT_LOG_LIMIT,
   CURSE_AVATAR_DISPEL_MANA_COST,
   DEFAULT_COMBAT_ENEMY_KEY,
   DEFAULT_PLAYER_COMBAT_STATE,
+  FLOOR_LOOT_TABLES,
   FIREBALL_MANA_COST,
   RALLY_DURATION_TURNS,
   RALLY_MANA_COST,
@@ -37,6 +39,7 @@ import type {
   CombatEncounterState,
   CombatEncounterSummary,
   CombatLootDropDefinition,
+  CombatLootSource,
   CombatRewardItem,
   CombatStatus,
   CombatUnitState,
@@ -74,6 +77,10 @@ type EnemyIntent =
   | 'cataclysm_ray'
   | 'cursed_claw'
   | 'null_sigil';
+
+type ResolvedLootDrop = CombatLootDropDefinition & {
+  source: CombatLootSource;
+};
 
 @Injectable()
 export class CombatService {
@@ -357,7 +364,7 @@ export class CombatService {
 
     await this.persistProgression(executor, progressionAfter);
 
-    const items = this.rollLootItems(rewardProfile.loot);
+    const items = this.rollLootItems(this.resolveLootTableForEncounter(next));
     for (const item of items) {
       await executor.query(
         `
@@ -388,6 +395,11 @@ export class CombatService {
       this.pushLog(next, `Loot: ${this.formatLootForLog(items)}.`);
     } else {
       this.pushLog(next, 'Loot: none.');
+    }
+
+    const bossDrops = items.filter((item) => item.source === 'boss');
+    if (bossDrops.length > 0) {
+      this.pushLog(next, `Boss loot: ${this.formatLootForLog(bossDrops)}.`);
     }
 
     if (progressionAfter.level > progressionBefore.level) {
@@ -477,7 +489,31 @@ export class CombatService {
     };
   }
 
-  private rollLootItems(lootTable: CombatLootDropDefinition[]): CombatRewardItem[] {
+  private resolveLootTableForEncounter(encounter: CombatEncounterState): ResolvedLootDrop[] {
+    const enemyLoot: ResolvedLootDrop[] = encounter.enemy.rewards.loot.map((drop) => ({
+      ...drop,
+      source: 'enemy',
+    }));
+
+    const floorLootDefinition = FLOOR_LOOT_TABLES.find(
+      (table) => encounter.towerFloor >= table.minFloor && encounter.towerFloor <= table.maxFloor,
+    );
+    const floorLoot: ResolvedLootDrop[] = (floorLootDefinition?.drops ?? []).map((drop) => ({
+      ...drop,
+      source: 'floor',
+    }));
+
+    const bossBonusDrops: ResolvedLootDrop[] = encounter.isScriptedBossEncounter
+      ? (BOSS_SPECIFIC_BONUS_LOOT[encounter.enemyKey] ?? []).map((drop) => ({
+        ...drop,
+        source: 'boss',
+      }))
+      : [];
+
+    return [...enemyLoot, ...floorLoot, ...bossBonusDrops];
+  }
+
+  private rollLootItems(lootTable: ResolvedLootDrop[]): CombatRewardItem[] {
     const rewards: CombatRewardItem[] = [];
 
     for (const candidate of lootTable) {
@@ -493,6 +529,8 @@ export class CombatService {
       rewards.push({
         itemKey: candidate.itemKey,
         quantity,
+        rarity: candidate.rarity ?? 'common',
+        source: candidate.source,
       });
     }
 
@@ -506,7 +544,13 @@ export class CombatService {
   }
 
   private formatLootForLog(items: CombatRewardItem[]): string {
-    return items.map((item) => `${item.itemKey} x${item.quantity}`).join(', ');
+    return items
+      .map((item) => `[${this.formatRarityLabel(item.rarity)}] ${item.itemKey} x${item.quantity}`)
+      .join(', ');
+  }
+
+  private formatRarityLabel(rarity: CombatRewardItem['rarity']): string {
+    return rarity.toUpperCase();
   }
 
   private resolveEnemyTurn(encounter: CombatEncounterState): void {

@@ -315,6 +315,28 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - module non charge en `production` (import conditionnel dans `AppModule`)
   - garde defensive supplementaire: endpoint renvoie `404` si `NODE_ENV=production`.
 
+### Lot 24 - Loot tables par palier + rarete + drops boss
+- Backend combat:
+  - ajout de loot tables par plage d'etages:
+    - floors `1-2`, `3-4`, `5-7`, `8-10`
+  - chaque drop definit une `rarete` (`common`, `uncommon`, `rare`, `epic`, `legendary`)
+  - ajout de drops bonus specifiques mini-boss/boss:
+    - `thorn_beast_alpha`
+    - `cinder_warden`
+    - `ash_vanguard_captain`
+    - `curse_heart_avatar`
+- Distribution des rewards:
+  - le loot final combine:
+    - loot de base de l'ennemi
+    - loot du palier d'etage courant
+    - loot bonus boss si encounter scripté
+  - les items renvoyes dans `rewards.items` incluent des meta:
+    - `rarity`
+    - `source` (`enemy` | `floor` | `boss`)
+- Logs combat:
+  - affichage des drops avec tag de rarete (`[RARE]`, `[EPIC]`, etc.)
+  - ligne complementaire `Boss loot` quand un drop bonus boss est obtenu.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -327,6 +349,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - persistence encounter
   - attribution rewards serveur autoritaire
   - bosses scriptes sur paliers 3/5/8/10
+  - loot multi-sources (ennemi + floor table + boss bonus) avec rarete
 - Quetes:
   - definitions cote serveur
   - progression automatique sur victoires
@@ -411,13 +434,14 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Mutations sensibles en transactions SQL.
 - Structure modulaire NestJS maintenue (auth/combat/gameplay/inventory/equipment/saves/quests/shops/tower/debug-admin).
 - Build web decoupe en chunks (`index`, `bootstrap`, `phaser-vendor`) pour de meilleurs temps de chargement initiaux.
+- Rewards combat enrichies avec metadonnees de loot (`rarity`, `source`) pour faciliter l'UI future.
 - Flux PR continue (`develop` -> `main`) deja utilise et valide.
 
 ## 9) Prochaines priorites recommandees
 1. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
-4. Ajouter des tables de loot par palier d'etage (rarete + drops specifiques mini-boss/boss).
-5. Ajouter un endpoint debug (dev only) pour injecter XP/or/items de test rapidement.
+4. Ajouter un endpoint debug (dev only) pour injecter XP/or/items de test rapidement.
+5. Exposer un glossaire de rarete en UI (couleurs/legende) pour les nouveaux drops.
 
 

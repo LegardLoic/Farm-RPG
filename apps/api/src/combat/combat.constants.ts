@@ -1,4 +1,4 @@
-import type { CombatEnemyDefinition } from './combat.types';
+import type { CombatEnemyDefinition, CombatLootDropDefinition } from './combat.types';
 
 export const COMBAT_ENCOUNTERS_TABLE = 'combat_encounters';
 
@@ -20,6 +20,158 @@ export const TOWER_FLOOR_SCRIPTED_ENEMIES: Record<number, string> = {
   5: 'cinder_warden',
   8: 'ash_vanguard_captain',
   10: 'curse_heart_avatar',
+};
+
+export const FLOOR_LOOT_TABLES: Array<{
+  key: string;
+  minFloor: number;
+  maxFloor: number;
+  drops: CombatLootDropDefinition[];
+}> = [
+  {
+    key: 'floor_1_2',
+    minFloor: 1,
+    maxFloor: 2,
+    drops: [
+      {
+        itemKey: 'healing_herb',
+        minQuantity: 1,
+        maxQuantity: 1,
+        chance: 0.4,
+        rarity: 'common',
+      },
+      {
+        itemKey: 'wood_scrap',
+        minQuantity: 1,
+        maxQuantity: 2,
+        chance: 0.55,
+        rarity: 'common',
+      },
+    ],
+  },
+  {
+    key: 'floor_3_4',
+    minFloor: 3,
+    maxFloor: 4,
+    drops: [
+      {
+        itemKey: 'thorn_shard',
+        minQuantity: 1,
+        maxQuantity: 2,
+        chance: 0.45,
+        rarity: 'uncommon',
+      },
+      {
+        itemKey: 'healing_herb',
+        minQuantity: 1,
+        maxQuantity: 2,
+        chance: 0.35,
+        rarity: 'common',
+      },
+    ],
+  },
+  {
+    key: 'floor_5_7',
+    minFloor: 5,
+    maxFloor: 7,
+    drops: [
+      {
+        itemKey: 'ember_dust',
+        minQuantity: 1,
+        maxQuantity: 2,
+        chance: 0.5,
+        rarity: 'uncommon',
+      },
+      {
+        itemKey: 'mana_tonic',
+        minQuantity: 1,
+        maxQuantity: 1,
+        chance: 0.25,
+        rarity: 'rare',
+      },
+    ],
+  },
+  {
+    key: 'floor_8_10',
+    minFloor: 8,
+    maxFloor: 10,
+    drops: [
+      {
+        itemKey: 'iron_ore',
+        minQuantity: 1,
+        maxQuantity: 3,
+        chance: 0.55,
+        rarity: 'uncommon',
+      },
+      {
+        itemKey: 'scout_badge',
+        minQuantity: 1,
+        maxQuantity: 1,
+        chance: 0.3,
+        rarity: 'rare',
+      },
+      {
+        itemKey: 'mana_tonic',
+        minQuantity: 1,
+        maxQuantity: 1,
+        chance: 0.2,
+        rarity: 'rare',
+      },
+    ],
+  },
+];
+
+export const BOSS_SPECIFIC_BONUS_LOOT: Record<string, CombatLootDropDefinition[]> = {
+  thorn_beast_alpha: [
+    {
+      itemKey: 'alpha_thorn_core',
+      minQuantity: 1,
+      maxQuantity: 1,
+      chance: 0.5,
+      rarity: 'rare',
+    },
+  ],
+  cinder_warden: [
+    {
+      itemKey: 'warden_ember_plate',
+      minQuantity: 1,
+      maxQuantity: 1,
+      chance: 0.45,
+      rarity: 'rare',
+    },
+  ],
+  ash_vanguard_captain: [
+    {
+      itemKey: 'vanguard_insignia',
+      minQuantity: 1,
+      maxQuantity: 1,
+      chance: 0.4,
+      rarity: 'rare',
+    },
+    {
+      itemKey: 'tempered_alloy',
+      minQuantity: 1,
+      maxQuantity: 1,
+      chance: 0.16,
+      rarity: 'epic',
+    },
+  ],
+  curse_heart_avatar: [
+    {
+      itemKey: 'curse_heart_shard',
+      minQuantity: 1,
+      maxQuantity: 1,
+      chance: 0.75,
+      rarity: 'epic',
+    },
+    {
+      itemKey: 'relic_of_unbinding',
+      minQuantity: 1,
+      maxQuantity: 1,
+      chance: 0.08,
+      rarity: 'legendary',
+    },
+  ],
 };
 
 export const DEFAULT_PLAYER_COMBAT_STATE = {
@@ -53,12 +205,14 @@ export const COMBAT_ENEMY_DEFINITIONS: Record<string, CombatEnemyDefinition> = {
           minQuantity: 1,
           maxQuantity: 2,
           chance: 0.85,
+          rarity: 'common',
         },
         {
           itemKey: 'healing_herb',
           minQuantity: 1,
           maxQuantity: 1,
           chance: 0.35,
+          rarity: 'common',
         },
       ],
     },
@@ -81,6 +235,7 @@ export const COMBAT_ENEMY_DEFINITIONS: Record<string, CombatEnemyDefinition> = {
           minQuantity: 1,
           maxQuantity: 1,
           chance: 0.75,
+          rarity: 'common',
         },
       ],
     },
@@ -103,12 +258,14 @@ export const COMBAT_ENEMY_DEFINITIONS: Record<string, CombatEnemyDefinition> = {
           minQuantity: 1,
           maxQuantity: 1,
           chance: 0.45,
+          rarity: 'uncommon',
         },
         {
           itemKey: 'ember_dust',
           minQuantity: 1,
           maxQuantity: 2,
           chance: 0.6,
+          rarity: 'uncommon',
         },
       ],
     },
@@ -131,12 +288,14 @@ export const COMBAT_ENEMY_DEFINITIONS: Record<string, CombatEnemyDefinition> = {
           minQuantity: 1,
           maxQuantity: 2,
           chance: 0.8,
+          rarity: 'uncommon',
         },
         {
           itemKey: 'healing_herb',
           minQuantity: 1,
           maxQuantity: 2,
           chance: 0.6,
+          rarity: 'common',
         },
       ],
     },
@@ -159,12 +318,14 @@ export const COMBAT_ENEMY_DEFINITIONS: Record<string, CombatEnemyDefinition> = {
           minQuantity: 2,
           maxQuantity: 3,
           chance: 0.9,
+          rarity: 'uncommon',
         },
         {
           itemKey: 'mana_tonic',
           minQuantity: 1,
           maxQuantity: 1,
           chance: 0.55,
+          rarity: 'rare',
         },
       ],
     },
@@ -187,12 +348,14 @@ export const COMBAT_ENEMY_DEFINITIONS: Record<string, CombatEnemyDefinition> = {
           minQuantity: 1,
           maxQuantity: 2,
           chance: 0.8,
+          rarity: 'uncommon',
         },
         {
           itemKey: 'iron_ore',
           minQuantity: 2,
           maxQuantity: 3,
           chance: 0.75,
+          rarity: 'rare',
         },
       ],
     },
@@ -215,12 +378,14 @@ export const COMBAT_ENEMY_DEFINITIONS: Record<string, CombatEnemyDefinition> = {
           minQuantity: 1,
           maxQuantity: 1,
           chance: 1,
+          rarity: 'epic',
         },
         {
           itemKey: 'mana_tonic',
           minQuantity: 1,
           maxQuantity: 2,
           chance: 0.8,
+          rarity: 'rare',
         },
       ],
     },

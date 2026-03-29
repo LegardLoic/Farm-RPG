@@ -1,6 +1,8 @@
 export type CombatStatus = 'active' | 'won' | 'lost' | 'fled';
 export type CombatActionName = 'attack' | 'defend' | 'fireball' | 'rally' | 'sunder';
 export type CombatTurn = 'player' | 'enemy';
+export type CombatLootRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+export type CombatLootSource = 'enemy' | 'floor' | 'boss';
 
 export interface CombatUnitState {
   hp: number;
@@ -19,6 +21,7 @@ export interface CombatLootDropDefinition {
   minQuantity: number;
   maxQuantity: number;
   chance: number;
+  rarity?: CombatLootRarity;
 }
 
 export interface CombatRewardProfile {
@@ -42,6 +45,8 @@ export interface CombatEnemyDefinition {
 export interface CombatRewardItem {
   itemKey: string;
   quantity: number;
+  rarity: CombatLootRarity;
+  source: CombatLootSource;
 }
 
 export interface CombatRewardSummary {
