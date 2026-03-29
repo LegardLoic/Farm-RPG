@@ -14,6 +14,19 @@ export interface CombatUnitState {
   defending: boolean;
 }
 
+export interface CombatLootDropDefinition {
+  itemKey: string;
+  minQuantity: number;
+  maxQuantity: number;
+  chance: number;
+}
+
+export interface CombatRewardProfile {
+  experience: number;
+  gold: number;
+  loot: CombatLootDropDefinition[];
+}
+
 export interface CombatEnemyDefinition {
   key: string;
   name: string;
@@ -23,6 +36,20 @@ export interface CombatEnemyDefinition {
   defense: number;
   magicAttack: number;
   speed: number;
+  rewards: CombatRewardProfile;
+}
+
+export interface CombatRewardItem {
+  itemKey: string;
+  quantity: number;
+}
+
+export interface CombatRewardSummary {
+  experience: number;
+  gold: number;
+  items: CombatRewardItem[];
+  levelBefore: number;
+  levelAfter: number;
 }
 
 export interface CombatEncounterState {
@@ -36,6 +63,8 @@ export interface CombatEncounterState {
   player: CombatUnitState;
   enemy: CombatEnemyDefinition & { currentHp: number; currentMp: number };
   lastAction: CombatActionName | null;
+  rewards: CombatRewardSummary | null;
+  rewardsGranted: boolean;
   createdAt: string;
   updatedAt: string;
   endedAt: string | null;
@@ -51,25 +80,7 @@ export interface CombatEncounterSummary {
   updatedAt: string;
 }
 
-export interface CombatEncounterRecord {
-  id: string;
-  user_id: string;
-  enemy_key: string;
-  status: CombatStatus;
-  state_json: CombatEncounterState;
-  created_at: Date | string;
-  updated_at: Date | string;
-  ended_at: Date | string | null;
-}
-
 export interface CombatActionResult {
   encounter: CombatEncounterState;
   summary: CombatEncounterSummary;
-}
-
-export interface CombatEncounterSnapshot {
-  id: string;
-  userId: string;
-  status: CombatStatus;
-  state: CombatEncounterState;
 }

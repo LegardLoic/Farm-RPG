@@ -155,6 +155,18 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     `);
 
     await this.query(`
+      CREATE TABLE IF NOT EXISTS player_progression (
+        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        level INTEGER NOT NULL DEFAULT 1 CHECK (level >= 1),
+        experience INTEGER NOT NULL DEFAULT 0 CHECK (experience >= 0),
+        experience_to_next INTEGER NOT NULL DEFAULT 100 CHECK (experience_to_next > 0),
+        gold INTEGER NOT NULL DEFAULT 120 CHECK (gold >= 0),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await this.query(`
       CREATE TABLE IF NOT EXISTS combat_encounters (
         id UUID PRIMARY KEY,
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

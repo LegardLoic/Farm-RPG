@@ -4,6 +4,9 @@ import { API_BASE_URL } from '../../config/env';
 type HudState = {
   day: number;
   gold: number;
+  level: number;
+  xp: number;
+  xpToNext: number;
   hp: number;
   maxHp: number;
   mp: number;
@@ -83,6 +86,9 @@ export class GameScene extends Phaser.Scene {
   private hudState: HudState = {
     day: 1,
     gold: 120,
+    level: 1,
+    xp: 0,
+    xpToNext: 100,
     hp: 32,
     maxHp: 32,
     mp: 15,
@@ -252,6 +258,8 @@ export class GameScene extends Phaser.Scene {
         <div class="hud-grid">
           <div class="hud-stat"><span>Jour</span><strong data-hud="day"></strong></div>
           <div class="hud-stat"><span>Or</span><strong data-hud="gold"></strong></div>
+          <div class="hud-stat"><span>Niveau</span><strong data-hud="level"></strong></div>
+          <div class="hud-stat"><span>XP</span><strong data-hud="xp"></strong></div>
           <div class="hud-stat"><span>PV</span><strong data-hud="hp"></strong></div>
           <div class="hud-stat"><span>PM</span><strong data-hud="mp"></strong></div>
           <div class="hud-stat"><span>Endurance</span><strong data-hud="stamina"></strong></div>
@@ -351,6 +359,8 @@ export class GameScene extends Phaser.Scene {
 
     this.setHudText('day', `Jour ${this.hudState.day}`);
     this.setHudText('gold', `${this.hudState.gold} po`);
+    this.setHudText('level', `${this.hudState.level}`);
+    this.setHudText('xp', `${this.hudState.xp} / ${this.hudState.xpToNext}`);
     this.setHudText('hp', `${this.formatValue(this.hudState.hp)} / ${this.formatValue(this.hudState.maxHp)}`);
     this.setHudText('mp', `${this.formatValue(this.hudState.mp)} / ${this.formatValue(this.hudState.maxMp)}`);
     this.setHudText('stamina', `${Math.max(0, Math.round(this.hudState.stamina))} / 8`);
@@ -459,10 +469,12 @@ export class GameScene extends Phaser.Scene {
   private async bootstrapSessionState(): Promise<void> {
     const authenticated = await this.refreshAuthState();
     if (authenticated) {
+      await this.refreshGameplayState();
       await this.refreshCombatState();
       return;
     }
 
+    this.resetGameplayHudState();
     this.resetCombatState();
     this.updateHud();
   }
@@ -484,6 +496,25 @@ export class GameScene extends Phaser.Scene {
     }
 
     return this.isAuthenticated;
+  }
+
+  private async refreshGameplayState(): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.resetGameplayHudState();
+      this.updateHud();
+      return;
+    }
+
+    try {
+      const payload = await this.fetchJson<unknown>('/gameplay/state', {
+        method: 'GET',
+      });
+      this.applyGameplaySnapshot(payload);
+    } catch {
+      // Keep previous HUD progression values if gameplay refresh fails.
+    } finally {
+      this.updateHud();
+    }
   }
 
   private async refreshCombatState(): Promise<void> {
@@ -551,6 +582,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       this.applyCombatSnapshot(encounter);
+      await this.refreshGameplayState();
     } catch (error) {
       this.setCombatError(this.getErrorMessage(error, 'Impossible de demarrer le combat.'));
       if (this.combatState) {
@@ -611,6 +643,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       this.applyCombatSnapshot(encounter);
+      await this.refreshGameplayState();
     } catch (error) {
       this.setCombatError(this.getErrorMessage(error, 'Impossible de jouer cette action.'));
       if (this.combatState) {
@@ -659,6 +692,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       this.applyCombatSnapshot(encounter);
+      await this.refreshGameplayState();
     } catch (error) {
       this.setCombatError(this.getErrorMessage(error, 'Impossible de fuir le combat.'));
       if (this.combatState) {
@@ -686,6 +720,62 @@ export class GameScene extends Phaser.Scene {
       await this.bootstrapSessionState();
     }
   }
+
+  private applyGameplaySnapshot(payload: unknown): void {
+    if (!this.isRecord(payload)) {
+      return;
+    }
+
+    const world = this.asRecord(payload.world);
+    if (world) {
+      const day = this.asNumber(world.day);
+      const zone = this.asString(world.zone);
+
+      if (day !== null) {
+        this.hudState.day = Math.max(1, Math.round(day));
+      }
+
+      if (zone) {
+        this.hudState.area = zone;
+      }
+    }
+
+    const progression = this.asRecord(payload.progression);
+    if (!progression) {
+      return;
+    }
+
+    const gold = this.asNumber(progression.gold);
+    const level = this.asNumber(progression.level);
+    const experience = this.asNumber(progression.experience);
+    const experienceToNextLevel = this.asNumber(progression.experienceToNextLevel);
+
+    if (gold !== null) {
+      this.hudState.gold = Math.max(0, Math.round(gold));
+    }
+
+    if (level !== null) {
+      this.hudState.level = Math.max(1, Math.round(level));
+    }
+
+    if (experience !== null) {
+      this.hudState.xp = Math.max(0, Math.round(experience));
+    }
+
+    if (experienceToNextLevel !== null) {
+      this.hudState.xpToNext = Math.max(1, Math.round(experienceToNextLevel));
+    }
+  }
+
+  private resetGameplayHudState(): void {
+    this.hudState.day = 1;
+    this.hudState.area = 'Ferme';
+    this.hudState.gold = 120;
+    this.hudState.level = 1;
+    this.hudState.xp = 0;
+    this.hudState.xpToNext = 100;
+  }
+
   private applyCombatSnapshot(snapshot: CombatEncounterState): void {
     this.combatEncounterId = snapshot.id;
     this.combatState = snapshot;
