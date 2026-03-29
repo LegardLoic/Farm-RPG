@@ -778,7 +778,8 @@ body::before {
 .combat-card-line .combat-intent-chip {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  gap: 6px;
   min-height: 22px;
   padding: 3px 8px;
   border-radius: 999px;
@@ -788,6 +789,57 @@ body::before {
   font-size: 0.7rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+.combat-card-line .combat-intent-chip .combat-intent-text {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.combat-card-line .combat-intent-chip .combat-intent-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.58rem;
+  letter-spacing: 0.07em;
+  color: #ecf1fa;
+}
+
+.combat-card-line .combat-intent-chip .combat-intent-icon[data-intent-icon="attack"] {
+  border-color: rgba(127, 209, 199, 0.5);
+  background: rgba(127, 209, 199, 0.22);
+  color: #d1fff8;
+}
+
+.combat-card-line .combat-intent-chip .combat-intent-icon[data-intent-icon="magic"] {
+  border-color: rgba(226, 182, 109, 0.5);
+  background: rgba(226, 182, 109, 0.24);
+  color: #ffe6b8;
+}
+
+.combat-card-line .combat-intent-chip .combat-intent-icon[data-intent-icon="cleanse"] {
+  border-color: rgba(152, 177, 255, 0.5);
+  background: rgba(152, 177, 255, 0.24);
+  color: #e0e9ff;
+}
+
+.combat-card-line .combat-intent-chip .combat-intent-icon[data-intent-icon="dispel"] {
+  border-color: rgba(196, 152, 255, 0.5);
+  background: rgba(196, 152, 255, 0.22);
+  color: #ecdfff;
+}
+
+.combat-card-line .combat-intent-chip .combat-intent-icon[data-intent-icon="ulti"] {
+  border-color: rgba(242, 111, 111, 0.55);
+  background: rgba(242, 111, 111, 0.24);
+  color: #ffe1e1;
 }
 
 .combat-card-line .combat-intent-chip[data-intent-tone="neutral"] {

@@ -91,4 +91,5 @@ Use `.env.example` templates and repository secrets for CI.
 - Combat HUD enemy telegraph for upcoming scripted boss intent.
 - Combat HUD telegraph rendered as a visual intent chip (tone + pulse for dangerous skills).
 - Combat HUD includes two-step intent preview (`Intent` + `Next`) for scripted enemies.
+- Intent chips include category icons (`ATK`, `MAG`, `CLN`, `DSP`, `ULT`) for faster reading.
 - Blacksmith shop unlocked by progression flags.

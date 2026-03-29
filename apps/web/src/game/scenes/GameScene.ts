@@ -2252,7 +2252,20 @@ export class GameScene extends Phaser.Scene {
 
     const intentUi = this.getCombatEnemyIntentUi(intentKey, isPreview);
     element.classList.add('combat-intent-chip');
-    element.textContent = intentUi.label;
+    element.replaceChildren();
+    if (intentUi.icon !== 'none') {
+      const icon = document.createElement('span');
+      icon.classList.add('combat-intent-icon');
+      icon.dataset.intentIcon = intentUi.icon;
+      icon.textContent = intentUi.iconLabel;
+      element.appendChild(icon);
+    }
+
+    const text = document.createElement('span');
+    text.classList.add('combat-intent-text');
+    text.textContent = intentUi.label;
+    element.appendChild(text);
+
     element.dataset.intentTone = intentUi.tone;
     element.dataset.intentPulse = intentUi.pulse ? '1' : '0';
     element.dataset.intentLayer = isPreview ? 'next' : 'current';
@@ -2261,54 +2274,139 @@ export class GameScene extends Phaser.Scene {
   private getCombatEnemyIntentUi(
     intentKey: 'enemyTelegraphIntent' | 'enemyTelegraphNextIntent',
     isPreview: boolean,
-  ): { label: string; tone: 'neutral' | 'calm' | 'warning' | 'danger' | 'utility'; pulse: boolean } {
+  ): {
+    label: string;
+    tone: 'neutral' | 'calm' | 'warning' | 'danger' | 'utility';
+    pulse: boolean;
+    icon: 'none' | 'attack' | 'magic' | 'cleanse' | 'dispel' | 'ulti';
+    iconLabel: string;
+  } {
     if (!this.combatState || this.combatState.status !== 'active' || this.combatState.turn !== 'player') {
-      return { label: '-', tone: 'neutral', pulse: false };
+      return { label: '-', tone: 'neutral', pulse: false, icon: 'none', iconLabel: '-' };
     }
 
     const intent = this.combatState.scriptState?.[intentKey];
     if (typeof intent !== 'string' || intent.length === 0) {
       return isPreview
-        ? { label: 'NO PREVIEW', tone: 'neutral', pulse: false }
-        : { label: 'UNCLEAR', tone: 'warning', pulse: false };
+        ? { label: 'NO PREVIEW', tone: 'neutral', pulse: false, icon: 'none', iconLabel: '-' }
+        : { label: 'UNCLEAR', tone: 'warning', pulse: false, icon: 'none', iconLabel: '?' };
     }
 
     const mapped = this.mapEnemyIntentUi(intent);
     if (!mapped) {
-      return { label: 'UNCLEAR', tone: 'warning', pulse: false };
+      return { label: 'UNCLEAR', tone: 'warning', pulse: false, icon: 'none', iconLabel: '?' };
     }
 
     return {
       label: isPreview ? `NEXT: ${mapped.preview}` : mapped.current,
       tone: mapped.tone,
       pulse: isPreview ? false : mapped.pulse,
+      icon: mapped.icon,
+      iconLabel: mapped.iconLabel,
     };
   }
 
   private mapEnemyIntentUi(intent: string):
-    | { current: string; preview: string; tone: 'calm' | 'warning' | 'danger' | 'utility'; pulse: boolean }
+    | {
+      current: string;
+      preview: string;
+      tone: 'calm' | 'warning' | 'danger' | 'utility';
+      pulse: boolean;
+      icon: 'attack' | 'magic' | 'cleanse' | 'dispel' | 'ulti';
+      iconLabel: string;
+    }
     | null {
     switch (intent) {
       case 'basic_strike':
-        return { current: 'ATK: STRIKE', preview: 'STRIKE', tone: 'calm', pulse: false };
+        return {
+          current: 'ATK: STRIKE',
+          preview: 'STRIKE',
+          tone: 'calm',
+          pulse: false,
+          icon: 'attack',
+          iconLabel: 'ATK',
+        };
       case 'root_smash':
-        return { current: 'SKILL: ROOT SMASH', preview: 'ROOT SMASH', tone: 'danger', pulse: true };
+        return {
+          current: 'SKILL: ROOT SMASH',
+          preview: 'ROOT SMASH',
+          tone: 'danger',
+          pulse: true,
+          icon: 'attack',
+          iconLabel: 'ATK',
+        };
       case 'opening_punish':
-        return { current: 'SKILL: PUNISH', preview: 'PUNISH', tone: 'warning', pulse: false };
+        return {
+          current: 'SKILL: PUNISH',
+          preview: 'PUNISH',
+          tone: 'warning',
+          pulse: false,
+          icon: 'attack',
+          iconLabel: 'ATK',
+        };
       case 'cinder_burst':
-        return { current: 'SKILL: CINDER BURST', preview: 'CINDER BURST', tone: 'danger', pulse: true };
+        return {
+          current: 'SKILL: CINDER BURST',
+          preview: 'CINDER BURST',
+          tone: 'danger',
+          pulse: true,
+          icon: 'magic',
+          iconLabel: 'MAG',
+        };
       case 'molten_shell':
-        return { current: 'UTILITY: CLEANSE', preview: 'CLEANSE', tone: 'utility', pulse: false };
+        return {
+          current: 'UTILITY: CLEANSE',
+          preview: 'CLEANSE',
+          tone: 'utility',
+          pulse: false,
+          icon: 'cleanse',
+          iconLabel: 'CLN',
+        };
       case 'twin_slash':
-        return { current: 'SKILL: TWIN SLASH', preview: 'TWIN SLASH', tone: 'danger', pulse: true };
+        return {
+          current: 'SKILL: TWIN SLASH',
+          preview: 'TWIN SLASH',
+          tone: 'danger',
+          pulse: true,
+          icon: 'attack',
+          iconLabel: 'ATK',
+        };
       case 'iron_recenter':
-        return { current: 'UTILITY: CLEANSE', preview: 'CLEANSE', tone: 'utility', pulse: false };
+        return {
+          current: 'UTILITY: CLEANSE',
+          preview: 'CLEANSE',
+          tone: 'utility',
+          pulse: false,
+          icon: 'cleanse',
+          iconLabel: 'CLN',
+        };
       case 'cataclysm_ray':
-        return { current: 'ULT: CATACLYSM RAY', preview: 'CATACLYSM RAY', tone: 'danger', pulse: true };
+        return {
+          current: 'ULT: CATACLYSM RAY',
+          preview: 'CATACLYSM RAY',
+          tone: 'danger',
+          pulse: true,
+          icon: 'ulti',
+          iconLabel: 'ULT',
+        };
       case 'cursed_claw':
-        return { current: 'ATK: CURSED CLAW', preview: 'CURSED CLAW', tone: 'warning', pulse: false };
+        return {
+          current: 'ATK: CURSED CLAW',
+          preview: 'CURSED CLAW',
+          tone: 'warning',
+          pulse: false,
+          icon: 'attack',
+          iconLabel: 'ATK',
+        };
       case 'null_sigil':
-        return { current: 'UTILITY: DISPEL', preview: 'DISPEL', tone: 'utility', pulse: false };
+        return {
+          current: 'UTILITY: DISPEL',
+          preview: 'DISPEL',
+          tone: 'utility',
+          pulse: false,
+          icon: 'dispel',
+          iconLabel: 'DSP',
+        };
       default:
         return null;
     }

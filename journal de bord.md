@@ -260,6 +260,19 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - rendu visuel du `Next` en chip dedie (`NEXT: ...`) avec style distinct (bordure dashed, sans pulse).
   - fallback explicite `NO PREVIEW` quand aucune prevision n'est disponible.
 
+### Lot 20 - Icones d'intention pour lecture rapide
+- Frontend HUD combat:
+  - ajout d'une vignette d'icone dans chaque chip d'intention:
+    - `ATK` (attaque physique)
+    - `MAG` (attaque magique)
+    - `CLN` (cleanse)
+    - `DSP` (dispel)
+    - `ULT` (attaque ultime)
+  - chips `Intent` et `Next` gardent les tons/couleurs existants, avec une lecture mobile plus rapide.
+- Technique:
+  - rendu DOM structure (`combat-intent-icon` + `combat-intent-text`) au lieu d'une simple chaine texte.
+  - styles CSS dedies par type d'icone (`data-intent-icon`).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -354,6 +367,6 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Ajouter une route d'admin debug pour reset progression (dev only).
 4. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
-5. Ajouter des icones d'intention (attaque, magie, cleanse, dispel, ulti) pour renforcer la lisibilite mobile.
+5. Ajouter un mini tooltip d'aide dans le HUD pour expliquer les tags d'icone (`ATK/MAG/CLN/DSP/ULT`).
 
 
