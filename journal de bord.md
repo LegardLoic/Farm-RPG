@@ -65,6 +65,22 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - bloc quetes (progression + claim)
   - statut forgeron (cursed/recovering/unlocked)
 
+### Lot 6 - Shop forgeron (API + UI)
+- Nouveau module backend `shops`.
+- Endpoints proteges:
+  - `GET /shops/blacksmith`
+  - `POST /shops/blacksmith/buy`
+- Verrouillage par flag `blacksmith_shop_tier_1_unlocked`.
+- Achat transactionnel serveur:
+  - deduction d'or
+  - ajout inventaire
+  - validation des erreurs metier (shop lock, or insuffisant, offre inconnue).
+- HUD web enrichi:
+  - panneau boutique forgeron
+  - liste d'offres
+  - bouton d'achat
+  - etats lock/loading/error.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -80,6 +96,10 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - definitions cote serveur
   - progression automatique sur victoires
   - claim explicite des recompenses
+- Shops:
+  - boutique forgeron protegee
+  - achat serveur autoritaire
+  - deduction or + ajout item en transaction
 - Inventaire / equipement / saves:
   - endpoints proteges
   - persistence PostgreSQL
@@ -93,6 +113,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - progression (niveau/xp/or)
   - quetes + claim
   - statut village (forgeron)
+  - boutique forgeron (offres + achat)
 - Integration API avec gestion d'erreurs UI.
 
 ## 6) API actuellement disponible
@@ -116,6 +137,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `POST /combat/:id/forfeit`
 - `GET /quests`
 - `POST /quests/:questKey/claim`
+- `GET /shops/blacksmith`
+- `POST /shops/blacksmith/buy`
 - `GET /saves`
 - `GET /saves/:slot`
 - `PUT /saves/:slot`
@@ -130,13 +153,13 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 8) Points techniques importants
 - Source de verite gameplay cote serveur (anti-triche de base respectee).
 - Mutations sensibles en transactions SQL.
-- Structure modulaire NestJS maintenue (auth/combat/gameplay/inventory/equipment/saves/quests).
+- Structure modulaire NestJS maintenue (auth/combat/gameplay/inventory/equipment/saves/quests/shops).
 - Flux PR continue (`develop` -> `main`) deja utilise et valide.
 
 ## 9) Prochaines priorites recommandees
 1. Ajouter un systeme de quetes "histoire" et paliers etage 3/5/8/10.
 2. Introduire progression de tour (floor courant, mini-boss, boss etage 10).
-3. Debloquer shop forgeron concret (API + UI) avec flags existants.
-4. Ajouter autosave apres victoire boss/palier majeur.
-5. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
+3. Ajouter autosave apres victoire boss/palier majeur.
+4. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
+5. Etendre le shop (tiers, equipement reel, prerequis de quete).
 
