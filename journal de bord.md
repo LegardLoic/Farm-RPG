@@ -171,6 +171,15 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - feedback UI (loading/error/version/date) sur chaque action.
   - synchro HUD apres `load` (gameplay/combat/quetes/shop/autosave/slots).
 
+### Hotfix Lot 12.1 - Correction erreur 500 sur `POST /saves/:slot/load`
+- Durcissement backend du chargement de slot:
+  - dedup des `worldFlags`.
+  - dedup + upsert de l'inventaire (`item_key`) pour eviter les collisions de cle primaire.
+  - dedup + upsert de l'equipement (`slot`) pour eviter les collisions de cle primaire.
+- La fermeture des combats actifs pendant un `load` passe en mode resilient:
+  - en cas d'erreur SQL sur le nettoyage combat, le chargement de save continue,
+  - un warning serveur est loggue au lieu de renvoyer un 500.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth

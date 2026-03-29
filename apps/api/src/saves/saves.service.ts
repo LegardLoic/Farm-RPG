@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 
 import { DatabaseService, type TransactionClient } from '../database/database.service';
 import { EQUIPMENT_SLOTS, EQUIPMENT_SLOTS_TABLE, type EquipmentSlot } from '../equipment/equipment.constants';
@@ -81,6 +81,8 @@ type TowerRow = {
 
 @Injectable()
 export class SavesService {
+  private readonly logger = new Logger(SavesService.name);
+
   constructor(private readonly databaseService: DatabaseService) {}
 
   async listSlots(userId: string): Promise<SaveSlotSummary[]> {
@@ -525,6 +527,30 @@ export class SavesService {
     userId: string,
     snapshot: SaveSnapshotV1,
   ): Promise<void> {
+    const worldFlags = Array.from(new Set(snapshot.worldFlags.map((entry) => entry.trim()).filter((entry) => entry.length > 0)));
+    const inventoryByItemKey = new Map<string, number>();
+    for (const item of snapshot.inventory) {
+      const key = item.itemKey.trim();
+      if (!key || item.quantity <= 0) {
+        continue;
+      }
+      inventoryByItemKey.set(key, item.quantity);
+    }
+
+    const equipmentBySlot = new Map<EquipmentSlot, string>();
+    for (const equipped of snapshot.equipment) {
+      if (!equipped.itemKey) {
+        continue;
+      }
+
+      const itemKey = equipped.itemKey.trim();
+      if (!itemKey) {
+        continue;
+      }
+
+      equipmentBySlot.set(equipped.slot, itemKey);
+    }
+
     await executor.query(
       `
         INSERT INTO ${PLAYER_PROGRESSION_TABLE} (user_id, level, experience, experience_to_next, gold)
@@ -577,7 +603,7 @@ export class SavesService {
       `,
       [userId],
     );
-    for (const flag of snapshot.worldFlags) {
+    for (const flag of worldFlags) {
       await executor.query(
         `
           INSERT INTO ${WORLD_FLAGS_TABLE} (user_id, flag_key, unlocked_at)
@@ -596,13 +622,15 @@ export class SavesService {
       `,
       [userId],
     );
-    for (const item of snapshot.inventory) {
+    for (const [itemKey, quantity] of inventoryByItemKey.entries()) {
       await executor.query(
         `
           INSERT INTO ${INVENTORY_ITEMS_TABLE} (user_id, item_key, quantity)
           VALUES ($1, $2, $3)
+          ON CONFLICT (user_id, item_key)
+          DO UPDATE SET quantity = EXCLUDED.quantity, updated_at = NOW()
         `,
-        [userId, item.itemKey, item.quantity],
+        [userId, itemKey, quantity],
       );
     }
 
@@ -613,38 +641,41 @@ export class SavesService {
       `,
       [userId],
     );
-    for (const equipped of snapshot.equipment) {
-      if (!equipped.itemKey) {
-        continue;
-      }
-
+    for (const [slot, itemKey] of equipmentBySlot.entries()) {
       await executor.query(
         `
           INSERT INTO ${EQUIPMENT_SLOTS_TABLE} (user_id, slot, item_key)
           VALUES ($1, $2, $3)
+          ON CONFLICT (user_id, slot)
+          DO UPDATE SET item_key = EXCLUDED.item_key, updated_at = NOW()
         `,
-        [userId, equipped.slot, equipped.itemKey],
+        [userId, slot, itemKey],
       );
     }
 
     const nowIso = new Date().toISOString();
-    await executor.query(
-      `
-        UPDATE ${COMBAT_ENCOUNTERS_TABLE}
-        SET status = 'fled',
-            updated_at = NOW(),
-            ended_at = NOW(),
-            state_json = COALESCE(state_json, '{}'::jsonb) || jsonb_build_object(
-              'status', 'fled',
-              'turn', 'player',
-              'endedAt', $2,
-              'updatedAt', $2
-            )
-        WHERE user_id = $1
-          AND status = 'active'
-      `,
-      [userId, nowIso],
-    );
+    try {
+      await executor.query(
+        `
+          UPDATE ${COMBAT_ENCOUNTERS_TABLE}
+          SET status = 'fled',
+              updated_at = NOW(),
+              ended_at = NOW(),
+              state_json = COALESCE(state_json, '{}'::jsonb) || jsonb_build_object(
+                'status', 'fled',
+                'turn', 'player',
+                'endedAt', $2,
+                'updatedAt', $2
+              )
+          WHERE user_id = $1
+            AND status = 'active'
+        `,
+        [userId, nowIso],
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      this.logger.warn(`Save load succeeded but active combat cleanup failed for user ${userId}: ${message}`);
+    }
   }
 
   private async upsertSlotSnapshot(
