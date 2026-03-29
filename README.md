@@ -58,6 +58,8 @@ Create local env files before starting:
 - `POST /combat/:id/forfeit`
 - `GET /quests`
 - `POST /quests/:questKey/claim`
+- `GET /shops/blacksmith`
+- `POST /shops/blacksmith/buy`
 - `GET /saves`
 - `GET /saves/:slot`
 - `PUT /saves/:slot`

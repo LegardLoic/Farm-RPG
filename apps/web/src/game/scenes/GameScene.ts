@@ -79,6 +79,14 @@ type QuestState = {
   objectives: QuestObjectiveState[];
 };
 
+type BlacksmithOfferState = {
+  offerKey: string;
+  itemKey: string;
+  name: string;
+  description: string;
+  goldPrice: number;
+};
+
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -103,6 +111,9 @@ export class GameScene extends Phaser.Scene {
   private questsSummaryValue: HTMLElement | null = null;
   private questsListRoot: HTMLElement | null = null;
   private questsErrorValue: HTMLElement | null = null;
+  private blacksmithSummaryValue: HTMLElement | null = null;
+  private blacksmithOffersRoot: HTMLElement | null = null;
+  private blacksmithErrorValue: HTMLElement | null = null;
 
   private authStatus = 'Verification...';
   private isAuthenticated = false;
@@ -133,6 +144,10 @@ export class GameScene extends Phaser.Scene {
   private questBusy = false;
   private questError: string | null = null;
   private questsRenderSignature = '';
+  private blacksmithOffers: BlacksmithOfferState[] = [];
+  private blacksmithBusy = false;
+  private blacksmithError: string | null = null;
+  private blacksmithRenderSignature = '';
 
   private readonly onHudClick = (event: MouseEvent) => {
     const target = event.target as HTMLElement | null;
@@ -144,6 +159,7 @@ export class GameScene extends Phaser.Scene {
     const hudAction = button.dataset.hudAction;
     const combatAction = button.dataset.combatAction;
     const questAction = button.dataset.questAction;
+    const shopAction = button.dataset.shopAction;
 
     if (hudAction === 'login') {
       window.location.href = `${API_BASE_URL}/auth/google`;
@@ -174,6 +190,14 @@ export class GameScene extends Phaser.Scene {
       const questKey = button.dataset.questKey;
       if (questKey) {
         void this.claimQuest(questKey);
+      }
+      return;
+    }
+
+    if (shopAction === 'buy') {
+      const offerKey = button.dataset.offerKey;
+      if (offerKey) {
+        void this.buyBlacksmithOffer(offerKey);
       }
     }
   };
@@ -359,6 +383,14 @@ export class GameScene extends Phaser.Scene {
           <div class="hud-quests-error" data-hud="questsError" hidden></div>
           <ul class="hud-quests-list" data-hud="questsList"></ul>
         </div>
+        <div class="hud-blacksmith">
+          <div class="hud-blacksmith-header">
+            <span>Blacksmith Shop</span>
+            <strong data-hud="blacksmithSummary">Locked</strong>
+          </div>
+          <div class="hud-blacksmith-error" data-hud="blacksmithError" hidden></div>
+          <ul class="hud-blacksmith-list" data-hud="blacksmithOffers"></ul>
+        </div>
         <div class="hud-help">
           Deplacement: fleches ou ZQSD
           <br />
@@ -380,6 +412,9 @@ export class GameScene extends Phaser.Scene {
     this.questsSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="questsSummary"]');
     this.questsListRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="questsList"]');
     this.questsErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="questsError"]');
+    this.blacksmithSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="blacksmithSummary"]');
+    this.blacksmithOffersRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="blacksmithOffers"]');
+    this.blacksmithErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="blacksmithError"]');
     this.hudRoot.addEventListener('click', this.onHudClick);
     this.updateHud();
   }
@@ -404,7 +439,11 @@ export class GameScene extends Phaser.Scene {
     this.questsSummaryValue = null;
     this.questsListRoot = null;
     this.questsErrorValue = null;
+    this.blacksmithSummaryValue = null;
+    this.blacksmithOffersRoot = null;
+    this.blacksmithErrorValue = null;
     this.questsRenderSignature = '';
+    this.blacksmithRenderSignature = '';
   }
   private updateHud(): void {
     if (!this.hudRoot) {
@@ -423,6 +462,7 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('authStatus', this.authStatus);
     this.updateCombatHud();
     this.updateQuestHud();
+    this.updateBlacksmithHud();
 
     if (this.loginButton) {
       this.loginButton.hidden = this.isAuthenticated;
@@ -470,6 +510,93 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.renderQuestList();
+  }
+
+  private updateBlacksmithHud(): void {
+    if (this.blacksmithSummaryValue) {
+      this.blacksmithSummaryValue.textContent = this.getBlacksmithShopSummaryLabel();
+    }
+
+    if (this.blacksmithErrorValue) {
+      this.blacksmithErrorValue.hidden = !this.blacksmithError;
+      this.blacksmithErrorValue.textContent = this.blacksmithError ?? '';
+    }
+
+    this.renderBlacksmithOffers();
+  }
+
+  private renderBlacksmithOffers(): void {
+    if (!this.blacksmithOffersRoot) {
+      return;
+    }
+
+    const signature = this.computeBlacksmithRenderSignature();
+    if (signature === this.blacksmithRenderSignature) {
+      return;
+    }
+    this.blacksmithRenderSignature = signature;
+
+    this.blacksmithOffersRoot.replaceChildren();
+
+    if (!this.isAuthenticated) {
+      const item = document.createElement('li');
+      item.classList.add('shop-item', 'empty');
+      item.textContent = 'Connect to access the shop.';
+      this.blacksmithOffersRoot.appendChild(item);
+      return;
+    }
+
+    if (!this.hudState.blacksmithUnlocked) {
+      const item = document.createElement('li');
+      item.classList.add('shop-item', 'empty');
+      item.textContent = this.hudState.blacksmithCurseLifted
+        ? 'Blacksmith is recovering. Complete progression to unlock the shop.'
+        : 'Blacksmith is still cursed.';
+      this.blacksmithOffersRoot.appendChild(item);
+      return;
+    }
+
+    if (this.blacksmithOffers.length === 0) {
+      const item = document.createElement('li');
+      item.classList.add('shop-item', 'empty');
+      item.textContent = this.blacksmithBusy ? 'Loading offers...' : 'No offers available.';
+      this.blacksmithOffersRoot.appendChild(item);
+      return;
+    }
+
+    for (const offer of this.blacksmithOffers) {
+      const item = document.createElement('li');
+      item.classList.add('shop-item');
+
+      const header = document.createElement('div');
+      header.classList.add('shop-item-header');
+
+      const name = document.createElement('strong');
+      name.textContent = offer.name;
+      header.appendChild(name);
+
+      const price = document.createElement('span');
+      price.classList.add('shop-price');
+      price.textContent = `${offer.goldPrice}g`;
+      header.appendChild(price);
+
+      item.appendChild(header);
+
+      const description = document.createElement('p');
+      description.classList.add('shop-description');
+      description.textContent = offer.description;
+      item.appendChild(description);
+
+      const buyButton = document.createElement('button');
+      buyButton.classList.add('hud-shop-buy');
+      buyButton.textContent = `Buy (${offer.goldPrice}g)`;
+      buyButton.dataset.shopAction = 'buy';
+      buyButton.dataset.offerKey = offer.offerKey;
+      buyButton.disabled = this.blacksmithBusy || this.hudState.gold < offer.goldPrice;
+      item.appendChild(buyButton);
+
+      this.blacksmithOffersRoot.appendChild(item);
+    }
   }
 
   private renderQuestList(): void {
@@ -566,6 +693,20 @@ export class GameScene extends Phaser.Scene {
     return `Active ${active} | Ready ${completed} | Claimed ${claimed}`;
   }
 
+  private getBlacksmithShopSummaryLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Login required';
+    }
+
+    if (!this.hudState.blacksmithUnlocked) {
+      return this.hudState.blacksmithCurseLifted ? 'Recovering' : 'Locked';
+    }
+
+    return this.blacksmithBusy
+      ? 'Refreshing...'
+      : `${this.blacksmithOffers.length} offers | Gold ${this.hudState.gold}`;
+  }
+
   private computeQuestRenderSignature(): string {
     const questParts = this.quests.map((quest) => {
       const objectiveParts = quest.objectives.map((objective) => (
@@ -580,6 +721,22 @@ export class GameScene extends Phaser.Scene {
       this.questBusy ? '1' : '0',
       this.questError ?? '',
       questParts.join(';'),
+    ].join('|');
+  }
+
+  private computeBlacksmithRenderSignature(): string {
+    const offers = this.blacksmithOffers.map((offer) => (
+      `${offer.offerKey}:${offer.goldPrice}:${offer.name}:${offer.description}`
+    ));
+
+    return [
+      this.isAuthenticated ? '1' : '0',
+      this.blacksmithBusy ? '1' : '0',
+      this.hudState.blacksmithUnlocked ? '1' : '0',
+      this.hudState.blacksmithCurseLifted ? '1' : '0',
+      this.hudState.gold,
+      this.blacksmithError ?? '',
+      offers.join(';'),
     ].join('|');
   }
 
@@ -662,12 +819,14 @@ export class GameScene extends Phaser.Scene {
     const authenticated = await this.refreshAuthState();
     if (authenticated) {
       await this.refreshGameplayState();
+      await this.refreshBlacksmithState();
       await this.refreshQuestState();
       await this.refreshCombatState();
       return;
     }
 
     this.resetGameplayHudState();
+    this.resetBlacksmithState();
     this.resetQuestState();
     this.resetCombatState();
     this.updateHud();
@@ -738,6 +897,35 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private async refreshBlacksmithState(): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.resetBlacksmithState();
+      this.updateHud();
+      return;
+    }
+
+    this.blacksmithBusy = true;
+    this.blacksmithError = null;
+    this.updateHud();
+
+    try {
+      const payload = await this.fetchJson<unknown>('/shops/blacksmith', {
+        method: 'GET',
+      });
+
+      const parsed = this.normalizeBlacksmithPayload(payload);
+      this.blacksmithOffers = parsed.offers;
+    } catch (error) {
+      this.blacksmithError = this.getErrorMessage(error, 'Unable to load blacksmith shop.');
+      if (this.blacksmithOffers.length === 0) {
+        this.blacksmithOffers = [];
+      }
+    } finally {
+      this.blacksmithBusy = false;
+      this.updateHud();
+    }
+  }
+
   private async refreshCombatState(): Promise<void> {
     if (!this.isAuthenticated) {
       this.resetCombatState();
@@ -804,6 +992,7 @@ export class GameScene extends Phaser.Scene {
 
       this.applyCombatSnapshot(encounter);
       await this.refreshGameplayState();
+      await this.refreshBlacksmithState();
       await this.refreshQuestState();
     } catch (error) {
       this.setCombatError(this.getErrorMessage(error, 'Impossible de demarrer le combat.'));
@@ -866,6 +1055,7 @@ export class GameScene extends Phaser.Scene {
 
       this.applyCombatSnapshot(encounter);
       await this.refreshGameplayState();
+      await this.refreshBlacksmithState();
       await this.refreshQuestState();
     } catch (error) {
       this.setCombatError(this.getErrorMessage(error, 'Impossible de jouer cette action.'));
@@ -916,6 +1106,7 @@ export class GameScene extends Phaser.Scene {
 
       this.applyCombatSnapshot(encounter);
       await this.refreshGameplayState();
+      await this.refreshBlacksmithState();
       await this.refreshQuestState();
     } catch (error) {
       this.setCombatError(this.getErrorMessage(error, 'Impossible de fuir le combat.'));
@@ -961,11 +1152,47 @@ export class GameScene extends Phaser.Scene {
         method: 'POST',
       });
       await this.refreshGameplayState();
+      await this.refreshBlacksmithState();
       await this.refreshQuestState();
     } catch (error) {
       this.questError = this.getErrorMessage(error, 'Unable to claim this quest.');
     } finally {
       this.questBusy = false;
+      this.updateHud();
+    }
+  }
+
+  private async buyBlacksmithOffer(offerKey: string): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.blacksmithError = 'Login required to buy items.';
+      this.updateHud();
+      return;
+    }
+
+    if (!this.hudState.blacksmithUnlocked) {
+      this.blacksmithError = 'Blacksmith shop is locked.';
+      this.updateHud();
+      return;
+    }
+
+    this.blacksmithBusy = true;
+    this.blacksmithError = null;
+    this.updateHud();
+
+    try {
+      await this.fetchJson('/shops/blacksmith/buy', {
+        method: 'POST',
+        body: JSON.stringify({
+          offerKey,
+          quantity: 1,
+        }),
+      });
+      await this.refreshGameplayState();
+      await this.refreshBlacksmithState();
+    } catch (error) {
+      this.blacksmithError = this.getErrorMessage(error, 'Unable to buy this item.');
+    } finally {
+      this.blacksmithBusy = false;
       this.updateHud();
     }
   }
@@ -1034,6 +1261,13 @@ export class GameScene extends Phaser.Scene {
     this.hudState.xpToNext = 100;
     this.hudState.blacksmithUnlocked = false;
     this.hudState.blacksmithCurseLifted = false;
+  }
+
+  private resetBlacksmithState(): void {
+    this.blacksmithOffers = [];
+    this.blacksmithBusy = false;
+    this.blacksmithError = null;
+    this.blacksmithRenderSignature = '';
   }
 
   private resetQuestState(): void {
@@ -1265,6 +1499,52 @@ export class GameScene extends Phaser.Scene {
     return rawQuests
       .map((entry) => this.normalizeQuestState(entry))
       .filter((entry): entry is QuestState => entry !== null);
+  }
+
+  private normalizeBlacksmithPayload(payload: unknown): { offers: BlacksmithOfferState[] } {
+    if (!this.isRecord(payload)) {
+      return { offers: [] };
+    }
+
+    const shop = this.asRecord(payload.shop);
+    if (!shop) {
+      return { offers: [] };
+    }
+
+    const rawOffers = shop.offers;
+    if (!Array.isArray(rawOffers)) {
+      return { offers: [] };
+    }
+
+    const offers = rawOffers
+      .map((entry) => this.normalizeBlacksmithOffer(entry))
+      .filter((entry): entry is BlacksmithOfferState => entry !== null);
+
+    return { offers };
+  }
+
+  private normalizeBlacksmithOffer(value: unknown): BlacksmithOfferState | null {
+    if (!this.isRecord(value)) {
+      return null;
+    }
+
+    const offerKey = this.asString(value.offerKey);
+    const itemKey = this.asString(value.itemKey);
+    const name = this.asString(value.name);
+    const description = this.asString(value.description);
+    const goldPrice = this.asNumber(value.goldPrice);
+
+    if (!offerKey || !itemKey || !name || !description || goldPrice === null) {
+      return null;
+    }
+
+    return {
+      offerKey,
+      itemKey,
+      name,
+      description,
+      goldPrice: Math.max(0, Math.round(goldPrice)),
+    };
   }
 
   private normalizeQuestState(value: unknown): QuestState | null {
