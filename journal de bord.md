@@ -604,6 +604,17 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - `PLAYER_SILENCED_DURATION_TURNS` passe de `1` a `2` pour que l'effet bloque bien le prochain tour joueur
   - correction de comportement sans impact schema.
 
+### Lot 40 - Recap visuel apres `apply-state-preset`
+- Frontend HUD `Debug QA`:
+  - message de succes enrichi apres `Apply state preset`
+  - recap affiche:
+    - floor tour `before -> after`
+    - nombre de flags ajoutes/supprimes
+    - apercu des flags modifies.
+- UX:
+  - feedback plus actionnable pour verifier rapidement qu'un preset a bien ete applique
+  - pas besoin d'ouvrir des endpoints manuellement pour valider l'effet du preset.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -660,7 +671,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - progression tour (etage et boss 10)
   - mini tooltip d'aide des tags d'intention (`ATK/MAG/CLN/DSP/ULT`)
   - glossaire visuel des raretes de loot (`common`, `uncommon`, `rare`, `epic`, `legendary`)
-  - panneau `Debug QA` pour piloter les endpoints debug sans quitter le jeu (DEV/staging), incluant la gestion des world flags et des presets de scenario
+  - panneau `Debug QA` pour piloter les endpoints debug sans quitter le jeu (DEV/staging), incluant la gestion des world flags, des presets de scenario et leur recap d'application
 - Chargement web optimise:
   - entree legere
   - bootstrap asynchrone
@@ -730,6 +741,6 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 2. Ajouter des tests end-to-end cibles (auth + combat + debug QA) pour securiser les regressions en CI.
 3. Equilibrer les couts/valeurs des skills (`Mend`, `Cleanse`, `Interrupt`) avec une passe de tuning gameplay.
 4. Etendre les scripts boss pour mieux punir/recompenser l'usage de `Interrupt` et `Cleanse`.
-5. Ajouter un mini recap visuel dans le HUD apres `apply-state-preset` (flags/tour modifies).
+5. Etendre le meme niveau de recap detaille aux autres actions debug critiques (`set-world-flags`, `set-quest-status`).
 
 
