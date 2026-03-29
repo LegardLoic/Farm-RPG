@@ -628,6 +628,21 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - verification plus rapide des mutations debug sans devoir ouvrir la console reseau
   - reduction des erreurs de saisie via select de statut.
 
+### Lot 42 - Boss scripts reactifs a `Interrupt` / `Cleanse`
+- Backend combat:
+  - ajout de fenetres de reaction courtes dans `scriptState`:
+    - `playerCleanseReactionWindowTurns`
+    - `playerInterruptReactionWindowTurns`
+  - ajustement des scripts boss:
+    - `cinder_warden`: si le joueur vient de `Cleanse`, priorise `Cinder Burst` pour reappliquer la pression
+    - `ash_vanguard_captain`: apres un `Interrupt` joueur, contre plus agressivement avec `Twin Slash`
+    - `curse_heart_avatar`: peut lancer `Null Sigil` meme sans `Rally` si le joueur vient de `Cleanse`
+  - `Interrupt` devient plus rentable:
+    - applique aussi une fenetre courte `Exposed` (reuse de `enemyShatterTurns` pendant 1 tour)
+  - `Cleanse` devient plus rentable:
+    - rend 1 MP immediatement apres dispel reussi
+  - simulation telegraphe multi-tour alignee avec ces nouvelles reactions (consommation des fenetres cote forecast et runtime).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -752,8 +767,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 1. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
 2. Ajouter des tests end-to-end cibles (auth + combat + debug QA) pour securiser les regressions en CI.
-3. Equilibrer les couts/valeurs des skills (`Mend`, `Cleanse`, `Interrupt`) avec une passe de tuning gameplay.
-4. Etendre les scripts boss pour mieux punir/recompenser l'usage de `Interrupt` et `Cleanse`.
+3. Equilibrer les couts/valeurs des skills (`Mend`, `Cleanse`, `Interrupt`) apres les nouvelles reactions boss.
+4. Ajouter des indicateurs HUD pour les etats tactiques courts (`Exposed`, reactions script boss) afin d'ameliorer la lisibilite.
 5. Ajouter des presets de charge test CI (fixtures SQL) pour industrialiser les e2e debug/combat.
 
 
