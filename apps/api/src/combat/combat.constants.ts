@@ -3,12 +3,13 @@ import type { CombatEnemyDefinition, CombatLootDropDefinition } from './combat.t
 export const COMBAT_ENCOUNTERS_TABLE = 'combat_encounters';
 
 export const COMBAT_STATUSES = ['active', 'won', 'lost', 'fled'] as const;
-export const COMBAT_ACTIONS = ['attack', 'defend', 'fireball', 'rally', 'sunder'] as const;
+export const COMBAT_ACTIONS = ['attack', 'defend', 'fireball', 'rally', 'sunder', 'mend'] as const;
 
 export const COMBAT_LOG_LIMIT = 20;
 export const FIREBALL_MANA_COST = 5;
 export const RALLY_MANA_COST = 3;
 export const SUNDER_MANA_COST = 4;
+export const MEND_MANA_COST = 4;
 export const RALLY_DURATION_TURNS = 2;
 export const SUNDER_DURATION_TURNS = 2;
 export const CINDER_WARDEN_PURGE_MANA_COST = 4;

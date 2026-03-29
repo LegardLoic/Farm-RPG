@@ -511,6 +511,43 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - feedback `loading/success/error` en ligne
   - rendu compact et responsive pour desktop/mobile.
 
+### Lot 34 - Extension shop blacksmith par tiers et prerequis
+- Backend shop:
+  - enrichissement des offres avec metadonnees:
+    - `tier`
+    - `requiredFlags`
+  - ajout d'offres tier 2 (ex: `steel_sword_advanced`, `tower_guard_shield`, `greater_mana_tonic`)
+  - prerequis tier 2 relies au flag `story_floor_5_cleared`.
+- Validation metier:
+  - `GET /shops/blacksmith` ne renvoie que les offres effectivement debloquees pour le joueur.
+  - `POST /shops/blacksmith/buy` revalide les prerequis de l'offre en transaction avant achat.
+
+### Lot 35 - Debug QA HUD: gestion directe des world flags
+- Frontend HUD `Debug QA`:
+  - ajout de champs `World flags (add)` et `World flags (remove)` avec parsing multi-valeurs (`,` `;` ou nouvelle ligne)
+  - ajout du mode `Replace all flags` (checkbox)
+  - ajout bouton `Set world flags` branche sur `POST /debug/admin/set-world-flags`.
+- UX:
+  - etat loading/success/error coherent avec les autres actions debug
+  - champs desactives pendant l'execution pour eviter les doubles requetes.
+
+### Lot 36 - Nouveau skill combat joueur `Mend` (soin)
+- Backend combat:
+  - nouvelle action joueur `mend` disponible sur `POST /combat/:id/action`
+  - cout MP ajoute et valide serveur (`MEND_MANA_COST = 4`)
+  - soin base sur la magie du joueur (avec prise en compte du buff `Rally`) et plafonne a `maxHp`
+  - validation metier:
+    - refuse l'action si MP insuffisant
+    - refuse l'action si PV deja pleins
+  - logs combat enrichis (`You cast Mend and recover X HP.`).
+- Frontend HUD combat:
+  - nouveau bouton `Mend (+HP)`
+  - desactivation automatique si:
+    - ce n'est pas le tour joueur
+    - MP insuffisants
+    - PV deja pleins
+  - message d'erreur UI dedie en cas d'usage invalide (`MP insuffisant` ou `PV max`).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -531,6 +568,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - claim explicite des recompenses
 - Shops:
   - boutique forgeron protegee
+  - offres par tiers avec prerequis flags
   - achat serveur autoritaire
   - deduction or + ajout item en transaction
 - Tour:
@@ -565,7 +603,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - progression tour (etage et boss 10)
   - mini tooltip d'aide des tags d'intention (`ATK/MAG/CLN/DSP/ULT`)
   - glossaire visuel des raretes de loot (`common`, `uncommon`, `rare`, `epic`, `legendary`)
-  - panneau `Debug QA` pour piloter les endpoints debug sans quitter le jeu (DEV/staging)
+  - panneau `Debug QA` pour piloter les endpoints debug sans quitter le jeu (DEV/staging), incluant la gestion directe des world flags
 - Chargement web optimise:
   - entree legere
   - bootstrap asynchrone
@@ -630,9 +668,9 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 
 ## 9) Prochaines priorites recommandees
 1. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
-2. Etendre le shop (tiers, equipement reel, prerequis de quete).
-3. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
+2. Etendre le shop tier 2 vers un tier 3 avec nouveaux paliers de prerequis (quetes/story) et meilleure progression d'equipement.
+3. Etendre l'arbre de skills joueur avec `interrupt` et `cleanse` pour completer `Rally/Sunder/Mend`.
 4. Ajouter des tests end-to-end cibles (auth + combat + debug QA) pour securiser les regressions en CI.
-5. Etendre le panneau `Debug QA` avec gestion directe des world flags (add/remove/replace) cote frontend.
+5. Ajouter des presets debug QA pre-remplis (ex: `village_open`, `mid_tower`, `act1_done`) pour accelerer les playtests.
 
 

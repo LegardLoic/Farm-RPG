@@ -23,19 +23,21 @@ type HudState = {
 type CombatStatus = 'active' | 'won' | 'lost' | 'fled';
 type CombatTurn = 'player' | 'enemy';
 type CombatUiStatus = CombatStatus | 'idle' | 'loading' | 'error';
-type CombatActionName = 'attack' | 'defend' | 'fireball' | 'rally' | 'sunder';
+type CombatActionName = 'attack' | 'defend' | 'fireball' | 'rally' | 'sunder' | 'mend';
 type QuestStatus = 'active' | 'completed' | 'claimed';
 type DebugQaActionName =
   | 'grant-resources'
   | 'set-tower-floor'
   | 'apply-loadout-preset'
-  | 'complete-quests';
+  | 'complete-quests'
+  | 'set-world-flags';
 type DebugLoadoutPresetKey = 'starter' | 'tower_mid' | 'boss_trial';
 type DebugQaStatus = 'idle' | 'loading' | 'success' | 'error';
 
 const FIREBALL_MANA_COST = 5;
 const RALLY_MANA_COST = 3;
 const SUNDER_MANA_COST = 4;
+const MEND_MANA_COST = 4;
 
 type CombatUnitState = {
   hp: number;
@@ -143,7 +145,8 @@ function isDebugQaActionName(value: string): value is DebugQaActionName {
     value === 'grant-resources' ||
     value === 'set-tower-floor' ||
     value === 'apply-loadout-preset' ||
-    value === 'complete-quests'
+    value === 'complete-quests' ||
+    value === 'set-world-flags'
   );
 }
 
@@ -166,6 +169,7 @@ export class GameScene extends Phaser.Scene {
   private combatFireballButton: HTMLButtonElement | null = null;
   private combatRallyButton: HTMLButtonElement | null = null;
   private combatSunderButton: HTMLButtonElement | null = null;
+  private combatMendButton: HTMLButtonElement | null = null;
   private combatForfeitButton: HTMLButtonElement | null = null;
   private combatLogsList: HTMLElement | null = null;
   private combatStatusBadge: HTMLElement | null = null;
@@ -239,10 +243,14 @@ export class GameScene extends Phaser.Scene {
   private debugQaGrantGoldInput: HTMLInputElement | null = null;
   private debugQaTowerFloorInput: HTMLInputElement | null = null;
   private debugQaLoadoutPresetSelect: HTMLSelectElement | null = null;
+  private debugQaWorldFlagsInput: HTMLTextAreaElement | null = null;
+  private debugQaWorldFlagsRemoveInput: HTMLTextAreaElement | null = null;
+  private debugQaWorldFlagsReplaceInput: HTMLInputElement | null = null;
   private debugQaGrantButton: HTMLButtonElement | null = null;
   private debugQaTowerFloorButton: HTMLButtonElement | null = null;
   private debugQaLoadoutButton: HTMLButtonElement | null = null;
   private debugQaCompleteQuestsButton: HTMLButtonElement | null = null;
+  private debugQaSetWorldFlagsButton: HTMLButtonElement | null = null;
   private debugQaBusyAction: DebugQaActionName | null = null;
   private debugQaStatus: DebugQaStatus = 'idle';
   private debugQaMessage: string | null = null;
@@ -283,7 +291,8 @@ export class GameScene extends Phaser.Scene {
       combatAction === 'defend' ||
       combatAction === 'fireball' ||
       combatAction === 'rally' ||
-      combatAction === 'sunder'
+      combatAction === 'sunder' ||
+      combatAction === 'mend'
     ) {
       void this.performCombatAction(combatAction);
       return;
@@ -551,6 +560,7 @@ export class GameScene extends Phaser.Scene {
             <button class="hud-combat-button" data-combat-action="attack">Attack</button>
             <button class="hud-combat-button secondary" data-combat-action="defend">Defend</button>
             <button class="hud-combat-button" data-combat-action="fireball">Fireball</button>
+            <button class="hud-combat-button secondary" data-combat-action="mend">Mend (+HP)</button>
             <button class="hud-combat-button secondary" data-combat-action="rally">Rally (+Atk)</button>
             <button class="hud-combat-button" data-combat-action="sunder">Sunder (-Def)</button>
             <button class="hud-combat-button danger" data-combat-action="forfeit">Fuir</button>
@@ -619,12 +629,33 @@ export class GameScene extends Phaser.Scene {
                 ${DEBUG_QA_PRESET_OPTIONS.map((preset) => `<option value="${preset.key}">${preset.label}</option>`).join('')}
               </select>
             </label>
+            <label class="hud-debug-qa-field debug-qa-field-wide">
+              <span>World flags (add)</span>
+              <textarea
+                data-hud="debugQaWorldFlags"
+                rows="2"
+                placeholder="blacksmith_shop_tier_1_unlocked, story_floor_8_cleared"
+              ></textarea>
+            </label>
+            <label class="hud-debug-qa-field debug-qa-field-wide">
+              <span>World flags (remove)</span>
+              <textarea
+                data-hud="debugQaWorldFlagsRemove"
+                rows="2"
+                placeholder="blacksmith_curse_lifted"
+              ></textarea>
+            </label>
+            <label class="hud-debug-qa-field debug-qa-field-wide hud-debug-qa-toggle">
+              <span>Replace all flags</span>
+              <input data-hud="debugQaWorldFlagsReplace" type="checkbox" />
+            </label>
           </div>
           <div class="hud-debug-qa-actions">
             <button class="hud-debug-qa-button" data-debug-action="grant-resources">Grant resources</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="set-tower-floor">Set tower floor</button>
             <button class="hud-debug-qa-button" data-debug-action="apply-loadout-preset">Apply loadout</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="complete-quests">Complete quests</button>
+            <button class="hud-debug-qa-button secondary" data-debug-action="set-world-flags">Set world flags</button>
           </div>
         </div>
             `
@@ -644,6 +675,7 @@ export class GameScene extends Phaser.Scene {
     this.combatAttackButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="attack"]');
     this.combatDefendButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="defend"]');
     this.combatFireballButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="fireball"]');
+    this.combatMendButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="mend"]');
     this.combatRallyButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="rally"]');
     this.combatSunderButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="sunder"]');
     this.combatForfeitButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="forfeit"]');
@@ -670,10 +702,14 @@ export class GameScene extends Phaser.Scene {
     this.debugQaGrantGoldInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaGold"]');
     this.debugQaTowerFloorInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaFloor"]');
     this.debugQaLoadoutPresetSelect = this.hudRoot.querySelector<HTMLSelectElement>('[data-hud="debugQaLoadout"]');
+    this.debugQaWorldFlagsInput = this.hudRoot.querySelector<HTMLTextAreaElement>('[data-hud="debugQaWorldFlags"]');
+    this.debugQaWorldFlagsRemoveInput = this.hudRoot.querySelector<HTMLTextAreaElement>('[data-hud="debugQaWorldFlagsRemove"]');
+    this.debugQaWorldFlagsReplaceInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaWorldFlagsReplace"]');
     this.debugQaGrantButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="grant-resources"]');
     this.debugQaTowerFloorButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="set-tower-floor"]');
     this.debugQaLoadoutButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="apply-loadout-preset"]');
     this.debugQaCompleteQuestsButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="complete-quests"]');
+    this.debugQaSetWorldFlagsButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="set-world-flags"]');
     this.hudRoot.addEventListener('click', this.onHudClick);
     this.updateHud();
   }
@@ -691,6 +727,7 @@ export class GameScene extends Phaser.Scene {
     this.combatAttackButton = null;
     this.combatDefendButton = null;
     this.combatFireballButton = null;
+    this.combatMendButton = null;
     this.combatRallyButton = null;
     this.combatSunderButton = null;
     this.combatForfeitButton = null;
@@ -717,10 +754,14 @@ export class GameScene extends Phaser.Scene {
     this.debugQaGrantGoldInput = null;
     this.debugQaTowerFloorInput = null;
     this.debugQaLoadoutPresetSelect = null;
+    this.debugQaWorldFlagsInput = null;
+    this.debugQaWorldFlagsRemoveInput = null;
+    this.debugQaWorldFlagsReplaceInput = null;
     this.debugQaGrantButton = null;
     this.debugQaTowerFloorButton = null;
     this.debugQaLoadoutButton = null;
     this.debugQaCompleteQuestsButton = null;
+    this.debugQaSetWorldFlagsButton = null;
     this.questsRenderSignature = '';
     this.blacksmithRenderSignature = '';
     this.autosaveRenderSignature = '';
@@ -878,6 +919,15 @@ export class GameScene extends Phaser.Scene {
     if (this.debugQaLoadoutPresetSelect) {
       this.debugQaLoadoutPresetSelect.disabled = disabled;
     }
+    if (this.debugQaWorldFlagsInput) {
+      this.debugQaWorldFlagsInput.disabled = disabled;
+    }
+    if (this.debugQaWorldFlagsRemoveInput) {
+      this.debugQaWorldFlagsRemoveInput.disabled = disabled;
+    }
+    if (this.debugQaWorldFlagsReplaceInput) {
+      this.debugQaWorldFlagsReplaceInput.disabled = disabled;
+    }
 
     if (this.debugQaGrantButton) {
       this.debugQaGrantButton.disabled = disabled;
@@ -898,6 +948,11 @@ export class GameScene extends Phaser.Scene {
       this.debugQaCompleteQuestsButton.disabled = disabled;
       this.debugQaCompleteQuestsButton.textContent =
         this.debugQaBusyAction === 'complete-quests' ? 'Completing...' : 'Complete quests';
+    }
+    if (this.debugQaSetWorldFlagsButton) {
+      this.debugQaSetWorldFlagsButton.disabled = disabled;
+      this.debugQaSetWorldFlagsButton.textContent =
+        this.debugQaBusyAction === 'set-world-flags' ? 'Applying...' : 'Set world flags';
     }
   }
 
@@ -1456,7 +1511,10 @@ export class GameScene extends Phaser.Scene {
     const active = Boolean(this.isAuthenticated && this.combatState && this.combatState.status === 'active');
     const playerTurn = Boolean(active && this.combatState?.turn === 'player');
     const mana = this.combatState?.player.mp ?? 0;
+    const hp = this.combatState?.player.hp ?? 0;
+    const maxHp = this.combatState?.player.maxHp ?? 0;
     const fireballReady = Boolean(playerTurn && mana >= FIREBALL_MANA_COST);
+    const mendReady = Boolean(playerTurn && mana >= MEND_MANA_COST && hp < maxHp);
     const rallyReady = Boolean(playerTurn && mana >= RALLY_MANA_COST);
     const sunderReady = Boolean(playerTurn && mana >= SUNDER_MANA_COST);
 
@@ -1474,6 +1532,10 @@ export class GameScene extends Phaser.Scene {
 
     if (this.combatFireballButton) {
       this.combatFireballButton.disabled = !fireballReady || this.combatBusy;
+    }
+
+    if (this.combatMendButton) {
+      this.combatMendButton.disabled = !mendReady || this.combatBusy;
     }
 
     if (this.combatRallyButton) {
@@ -1844,6 +1906,18 @@ export class GameScene extends Phaser.Scene {
 
     if (action === 'sunder' && this.combatState.player.mp < SUNDER_MANA_COST) {
       this.setCombatError('Pas assez de MP pour Sunder.');
+      this.updateHud();
+      return;
+    }
+
+    if (action === 'mend' && this.combatState.player.mp < MEND_MANA_COST) {
+      this.setCombatError('Pas assez de MP pour Mend.');
+      this.updateHud();
+      return;
+    }
+
+    if (action === 'mend' && this.combatState.player.hp >= this.combatState.player.maxHp) {
+      this.setCombatError('Tes PV sont deja au maximum.');
       this.updateHud();
       return;
     }
@@ -2764,6 +2838,26 @@ export class GameScene extends Phaser.Scene {
           failureLabel: 'Unable to complete quests.',
         };
       }
+      case 'set-world-flags': {
+        const flags = this.readDebugQaFlagList(this.debugQaWorldFlagsInput);
+        const removeFlags = this.readDebugQaFlagList(this.debugQaWorldFlagsRemoveInput);
+        const replace = Boolean(this.debugQaWorldFlagsReplaceInput?.checked);
+        if (!replace && flags.length === 0 && removeFlags.length === 0) {
+          return null;
+        }
+
+        return {
+          path: '/debug/admin/set-world-flags',
+          body: {
+            flags,
+            removeFlags,
+            replace,
+          },
+          loadingLabel: replace ? 'Replacing world flags...' : 'Updating world flags...',
+          successLabel: replace ? 'World flags replaced.' : 'World flags updated.',
+          failureLabel: 'Unable to set world flags.',
+        };
+      }
       default:
         return null;
     }
@@ -2790,6 +2884,20 @@ export class GameScene extends Phaser.Scene {
     }
 
     return Math.max(0, rounded);
+  }
+
+  private readDebugQaFlagList(input: HTMLTextAreaElement | null): string[] {
+    const raw = input?.value ?? '';
+    if (!raw.trim()) {
+      return [];
+    }
+
+    const values = raw
+      .split(/[\n,;]+/g)
+      .map((entry) => entry.trim().toLowerCase())
+      .filter((entry) => entry.length > 0);
+
+    return [...new Set(values)];
   }
 
   private getBlacksmithStatusLabel(): string {

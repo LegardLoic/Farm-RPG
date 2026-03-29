@@ -1,5 +1,5 @@
 export type CombatStatus = 'active' | 'won' | 'lost' | 'fled';
-export type CombatActionName = 'attack' | 'defend' | 'fireball' | 'rally' | 'sunder';
+export type CombatActionName = 'attack' | 'defend' | 'fireball' | 'rally' | 'sunder' | 'mend';
 export type CombatTurn = 'player' | 'enemy';
 export type CombatLootRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export type CombatLootSource = 'enemy' | 'floor' | 'boss';

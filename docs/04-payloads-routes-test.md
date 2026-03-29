@@ -1,6 +1,6 @@
 ﻿# Payloads de test API (reference rapide)
 
-Derniere mise a jour: 29 mars 2026
+Derniere mise a jour: 30 mars 2026
 
 Ce document regroupe les payloads utilises pendant nos tests manuels (front + API).
 
@@ -18,13 +18,14 @@ Ce document regroupe les payloads utilises pendant nos tests manuels (front + AP
 | `/auth/logout` | `POST` | non (si cookie present) | `{}` | Forcer deconnexion et nettoyage cookies |
 | `/combat/start` | `POST` | oui | `{}` | Demarrer un combat normal selon la tour courante |
 | `/combat/start` | `POST` | oui | `{ "enemyKey": "forest_goblin" }` | Demarrer avec un ennemi cible (si non ecrase par un boss script) |
-| `/combat/:id/action` | `POST` | oui | `{ "action": "attack" }` | Action de tour joueur. Valeurs: `attack`, `defend`, `fireball`, `rally`, `sunder` |
+| `/combat/:id/action` | `POST` | oui | `{ "action": "attack" }` | Action de tour joueur. Valeurs: `attack`, `defend`, `fireball`, `rally`, `sunder`, `mend` |
 | `/combat/:id/forfeit` | `POST` | oui | `{ "reason": "debug reset" }` | Abandonner le combat actif |
 | `/inventory/add` | `POST` | oui | `{ "itemKey": "healing_herb", "quantity": 3 }` | Injecter item en inventaire via route metier |
 | `/inventory/use` | `POST` | oui | `{ "itemKey": "healing_herb", "quantity": 1 }` | Consommer un item |
-| `/equipment/equip` | `POST` | oui | `{ "slot": "main_hand", "itemKey": "bronze_sword" }` | Equiper un item dans un slot |
+| `/equipment/equip` | `POST` | oui | `{ "slot": "main_hand", "itemKey": "iron_sword" }` | Equiper un item dans un slot |
 | `/equipment/unequip` | `POST` | oui | `{ "slot": "main_hand" }` | Desequiper un slot |
-| `/shops/blacksmith/buy` | `POST` | oui | `{ "offerKey": "bronze_sword", "quantity": 1 }` | Acheter une offre du forgeron |
+| `/shops/blacksmith/buy` | `POST` | oui | `{ "offerKey": "iron_sword_basic", "quantity": 1 }` | Acheter une offre du forgeron (tier 1) |
+| `/shops/blacksmith/buy` | `POST` | oui | `{ "offerKey": "steel_sword_advanced", "quantity": 1 }` | Acheter une offre tier 2 (requiert flag `story_floor_5_cleared`) |
 | `/quests/:questKey/claim` | `POST` | oui | `{}` | Reclamer une quete completee |
 | `/saves/auto/restore/:slot` | `POST` | oui | `{}` | Restaurer le dernier autosave vers slot `1..3` |
 | `/saves/:slot/capture` | `POST` | oui | `{}` | Capturer l'etat live dans slot `1..3` |

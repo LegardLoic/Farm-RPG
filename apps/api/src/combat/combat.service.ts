@@ -31,6 +31,7 @@ import {
   DEFAULT_PLAYER_COMBAT_STATE,
   FLOOR_LOOT_TABLES,
   FIREBALL_MANA_COST,
+  MEND_MANA_COST,
   RALLY_DURATION_TURNS,
   RALLY_MANA_COST,
   CINDER_WARDEN_PURGE_MANA_COST,
@@ -406,6 +407,26 @@ export class CombatService {
           next,
           `You use Sunder for ${damage} damage and reduce ${next.enemy.name} defense for ${SUNDER_DURATION_TURNS} turns.`,
         );
+        break;
+      }
+      case 'mend': {
+        if (next.player.mp < MEND_MANA_COST) {
+          throw new BadRequestException('Not enough MP for Mend');
+        }
+        if (next.player.hp >= next.player.maxHp) {
+          throw new BadRequestException('HP is already full');
+        }
+
+        next.player.mp -= MEND_MANA_COST;
+        const recovered = Math.max(
+          1,
+          Math.min(
+            next.player.maxHp - next.player.hp,
+            this.calculatePlayerHeal(next.player, this.getPlayerMagicAttackBonus(next)),
+          ),
+        );
+        next.player.hp = Math.min(next.player.maxHp, next.player.hp + recovered);
+        this.pushLog(next, `You cast Mend and recover ${recovered} HP.`);
         break;
       }
       default: {
@@ -958,6 +979,10 @@ export class CombatService {
   ): number {
     const effectiveDefense = Math.max(0, enemy.defense - defensePenalty);
     return Math.max(1, player.magicAttack + magicAttackBonus + 4 - effectiveDefense);
+  }
+
+  private calculatePlayerHeal(player: CombatUnitState, magicAttackBonus = 0): number {
+    return Math.max(4, Math.floor((player.magicAttack + magicAttackBonus) * 0.9));
   }
 
   private calculateEnemyDamage(enemy: CombatEncounterState['enemy'], player: CombatUnitState): number {
