@@ -38,6 +38,7 @@ Ce document regroupe les payloads utilises pendant nos tests manuels (front + AP
 | `/debug/admin/clear-combat-start-override` | `POST` | oui (dev only) | `{}` | Annuler un override de prochain `combat/start` |
 | `/debug/admin/apply-loadout-preset` | `POST` | oui (dev only) | `{ "presetKey": "boss_trial" }` | Appliquer un preset complet d'equipement+ressources pour playtest |
 | `/debug/admin/set-world-flags` | `POST` | oui (dev only) | `{ "flags": ["blacksmith_shop_tier_1_unlocked"], "removeFlags": ["blacksmith_curse_lifted"], "replace": false }` | Forcer des flags monde cibles (village/shop/story) |
+| `/debug/admin/set-quest-status` | `POST` | oui (dev only) | `{ "questKey": "story_floor_8", "status": "claimed" }` | Forcer l'etat d'une quete cible (`active/completed/claimed`) |
 
 ## Exemples prets a copier (debug)
 
@@ -147,3 +148,17 @@ Mode remplacement complet:
   "replace": true
 }
 ```
+
+### 10) Set quest status (dev only)
+
+```json
+{
+  "questKey": "story_floor_10",
+  "status": "completed"
+}
+```
+
+Valeurs `status`:
+- `active`
+- `completed`
+- `claimed`

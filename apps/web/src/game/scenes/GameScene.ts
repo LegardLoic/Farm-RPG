@@ -25,6 +25,13 @@ type CombatTurn = 'player' | 'enemy';
 type CombatUiStatus = CombatStatus | 'idle' | 'loading' | 'error';
 type CombatActionName = 'attack' | 'defend' | 'fireball' | 'rally' | 'sunder';
 type QuestStatus = 'active' | 'completed' | 'claimed';
+type DebugQaActionName =
+  | 'grant-resources'
+  | 'set-tower-floor'
+  | 'apply-loadout-preset'
+  | 'complete-quests';
+type DebugLoadoutPresetKey = 'starter' | 'tower_mid' | 'boss_trial';
+type DebugQaStatus = 'idle' | 'loading' | 'success' | 'error';
 
 const FIREBALL_MANA_COST = 5;
 const RALLY_MANA_COST = 3;
@@ -120,6 +127,26 @@ type SaveSlotPreview = {
   equippedCount: number;
 };
 
+type DebugQaPresetOption = {
+  key: DebugLoadoutPresetKey;
+  label: string;
+};
+
+const DEBUG_QA_PRESET_OPTIONS: DebugQaPresetOption[] = [
+  { key: 'starter', label: 'Starter' },
+  { key: 'tower_mid', label: 'Tower mid' },
+  { key: 'boss_trial', label: 'Boss trial' },
+];
+
+function isDebugQaActionName(value: string): value is DebugQaActionName {
+  return (
+    value === 'grant-resources' ||
+    value === 'set-tower-floor' ||
+    value === 'apply-loadout-preset' ||
+    value === 'complete-quests'
+  );
+}
+
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -205,6 +232,23 @@ export class GameScene extends Phaser.Scene {
   private saveSlotsError: string | null = null;
   private saveSlotsRenderSignature = '';
 
+  private debugQaPanelRoot: HTMLElement | null = null;
+  private debugQaStatusValue: HTMLElement | null = null;
+  private debugQaMessageValue: HTMLElement | null = null;
+  private debugQaGrantXpInput: HTMLInputElement | null = null;
+  private debugQaGrantGoldInput: HTMLInputElement | null = null;
+  private debugQaTowerFloorInput: HTMLInputElement | null = null;
+  private debugQaLoadoutPresetSelect: HTMLSelectElement | null = null;
+  private debugQaGrantButton: HTMLButtonElement | null = null;
+  private debugQaTowerFloorButton: HTMLButtonElement | null = null;
+  private debugQaLoadoutButton: HTMLButtonElement | null = null;
+  private debugQaCompleteQuestsButton: HTMLButtonElement | null = null;
+  private debugQaBusyAction: DebugQaActionName | null = null;
+  private debugQaStatus: DebugQaStatus = 'idle';
+  private debugQaMessage: string | null = null;
+  private debugQaError: string | null = null;
+  private readonly debugQaEnabled = import.meta.env.DEV || import.meta.env.MODE === 'staging';
+
   private readonly onHudClick = (event: MouseEvent) => {
     const target = event.target as HTMLElement | null;
     const button = target?.closest('button') as HTMLButtonElement | null;
@@ -217,6 +261,7 @@ export class GameScene extends Phaser.Scene {
     const questAction = button.dataset.questAction;
     const shopAction = button.dataset.shopAction;
     const saveAction = button.dataset.saveAction;
+    const debugAction = button.dataset.debugAction;
 
     if (hudAction === 'login') {
       window.location.href = `${API_BASE_URL}/auth/google`;
@@ -300,6 +345,10 @@ export class GameScene extends Phaser.Scene {
       if (saveAction === 'delete') {
         void this.deleteSaveSlot(slot);
       }
+    }
+
+    if (debugAction && isDebugQaActionName(debugAction)) {
+      void this.handleDebugQaAction(debugAction);
     }
   };
 
@@ -542,6 +591,45 @@ export class GameScene extends Phaser.Scene {
           <div class="hud-saves-error" data-hud="savesError" hidden></div>
           <ul class="hud-saves-list" data-hud="savesList"></ul>
         </div>
+        ${
+          this.debugQaEnabled
+            ? `
+        <div class="hud-debug-qa">
+          <div class="hud-debug-qa-header">
+            <span>Debug QA</span>
+            <strong data-hud="debugQaStatus">Idle</strong>
+          </div>
+          <div class="hud-debug-qa-message" data-hud="debugQaMessage" hidden></div>
+          <div class="hud-debug-qa-grid">
+            <label class="hud-debug-qa-field">
+              <span>Grant XP</span>
+              <input data-hud="debugQaXp" type="number" min="0" step="10" value="250" />
+            </label>
+            <label class="hud-debug-qa-field">
+              <span>Grant Gold</span>
+              <input data-hud="debugQaGold" type="number" min="0" step="10" value="500" />
+            </label>
+            <label class="hud-debug-qa-field">
+              <span>Tower Floor</span>
+              <input data-hud="debugQaFloor" type="number" min="1" max="10" step="1" value="10" />
+            </label>
+            <label class="hud-debug-qa-field debug-qa-field-wide">
+              <span>Loadout preset</span>
+              <select data-hud="debugQaLoadout">
+                ${DEBUG_QA_PRESET_OPTIONS.map((preset) => `<option value="${preset.key}">${preset.label}</option>`).join('')}
+              </select>
+            </label>
+          </div>
+          <div class="hud-debug-qa-actions">
+            <button class="hud-debug-qa-button" data-debug-action="grant-resources">Grant resources</button>
+            <button class="hud-debug-qa-button secondary" data-debug-action="set-tower-floor">Set tower floor</button>
+            <button class="hud-debug-qa-button" data-debug-action="apply-loadout-preset">Apply loadout</button>
+            <button class="hud-debug-qa-button secondary" data-debug-action="complete-quests">Complete quests</button>
+          </div>
+        </div>
+            `
+            : ''
+        }
         <div class="hud-help">
           Deplacement: fleches ou ZQSD
           <br />
@@ -575,6 +663,17 @@ export class GameScene extends Phaser.Scene {
     this.saveSlotsSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="savesSummary"]');
     this.saveSlotsListRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="savesList"]');
     this.saveSlotsErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="savesError"]');
+    this.debugQaPanelRoot = this.hudRoot.querySelector<HTMLElement>('.hud-debug-qa');
+    this.debugQaStatusValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="debugQaStatus"]');
+    this.debugQaMessageValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="debugQaMessage"]');
+    this.debugQaGrantXpInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaXp"]');
+    this.debugQaGrantGoldInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaGold"]');
+    this.debugQaTowerFloorInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaFloor"]');
+    this.debugQaLoadoutPresetSelect = this.hudRoot.querySelector<HTMLSelectElement>('[data-hud="debugQaLoadout"]');
+    this.debugQaGrantButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="grant-resources"]');
+    this.debugQaTowerFloorButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="set-tower-floor"]');
+    this.debugQaLoadoutButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="apply-loadout-preset"]');
+    this.debugQaCompleteQuestsButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="complete-quests"]');
     this.hudRoot.addEventListener('click', this.onHudClick);
     this.updateHud();
   }
@@ -611,10 +710,25 @@ export class GameScene extends Phaser.Scene {
     this.saveSlotsSummaryValue = null;
     this.saveSlotsListRoot = null;
     this.saveSlotsErrorValue = null;
+    this.debugQaPanelRoot = null;
+    this.debugQaStatusValue = null;
+    this.debugQaMessageValue = null;
+    this.debugQaGrantXpInput = null;
+    this.debugQaGrantGoldInput = null;
+    this.debugQaTowerFloorInput = null;
+    this.debugQaLoadoutPresetSelect = null;
+    this.debugQaGrantButton = null;
+    this.debugQaTowerFloorButton = null;
+    this.debugQaLoadoutButton = null;
+    this.debugQaCompleteQuestsButton = null;
     this.questsRenderSignature = '';
     this.blacksmithRenderSignature = '';
     this.autosaveRenderSignature = '';
     this.saveSlotsRenderSignature = '';
+    this.debugQaBusyAction = null;
+    this.debugQaStatus = 'idle';
+    this.debugQaMessage = null;
+    this.debugQaError = null;
   }
   private updateHud(): void {
     if (!this.hudRoot) {
@@ -638,6 +752,7 @@ export class GameScene extends Phaser.Scene {
     this.updateBlacksmithHud();
     this.updateAutoSaveHud();
     this.updateSaveSlotsHud();
+    this.updateDebugQaHud();
 
     if (this.loginButton) {
       this.loginButton.hidden = this.isAuthenticated;
@@ -731,6 +846,59 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.renderSaveSlotsList();
+  }
+
+  private updateDebugQaHud(): void {
+    if (!this.debugQaEnabled || !this.debugQaPanelRoot) {
+      return;
+    }
+
+    if (this.debugQaStatusValue) {
+      this.debugQaStatusValue.textContent = this.getDebugQaStatusLabel();
+      this.debugQaStatusValue.dataset.status = this.debugQaStatus;
+    }
+
+    if (this.debugQaMessageValue) {
+      const message = this.debugQaError ?? this.debugQaMessage;
+      this.debugQaMessageValue.hidden = !message;
+      this.debugQaMessageValue.textContent = message ?? '';
+      this.debugQaMessageValue.dataset.variant = this.debugQaError ? 'error' : this.debugQaStatus === 'success' ? 'success' : 'info';
+    }
+
+    const disabled = !this.isAuthenticated || this.debugQaStatus === 'loading';
+    if (this.debugQaGrantXpInput) {
+      this.debugQaGrantXpInput.disabled = disabled;
+    }
+    if (this.debugQaGrantGoldInput) {
+      this.debugQaGrantGoldInput.disabled = disabled;
+    }
+    if (this.debugQaTowerFloorInput) {
+      this.debugQaTowerFloorInput.disabled = disabled;
+    }
+    if (this.debugQaLoadoutPresetSelect) {
+      this.debugQaLoadoutPresetSelect.disabled = disabled;
+    }
+
+    if (this.debugQaGrantButton) {
+      this.debugQaGrantButton.disabled = disabled;
+      this.debugQaGrantButton.textContent =
+        this.debugQaBusyAction === 'grant-resources' ? 'Granting...' : 'Grant resources';
+    }
+    if (this.debugQaTowerFloorButton) {
+      this.debugQaTowerFloorButton.disabled = disabled;
+      this.debugQaTowerFloorButton.textContent =
+        this.debugQaBusyAction === 'set-tower-floor' ? 'Applying...' : 'Set tower floor';
+    }
+    if (this.debugQaLoadoutButton) {
+      this.debugQaLoadoutButton.disabled = disabled;
+      this.debugQaLoadoutButton.textContent =
+        this.debugQaBusyAction === 'apply-loadout-preset' ? 'Applying...' : 'Apply loadout';
+    }
+    if (this.debugQaCompleteQuestsButton) {
+      this.debugQaCompleteQuestsButton.disabled = disabled;
+      this.debugQaCompleteQuestsButton.textContent =
+        this.debugQaBusyAction === 'complete-quests' ? 'Completing...' : 'Complete quests';
+    }
   }
 
   private renderAutoSaveActions(): void {
@@ -2476,6 +2644,152 @@ export class GameScene extends Phaser.Scene {
 
   private setCombatError(message: string): void {
     this.combatError = message;
+  }
+
+  private getDebugQaStatusLabel(): string {
+    if (this.debugQaStatus === 'loading') {
+      return 'Loading...';
+    }
+
+    if (this.debugQaStatus === 'error') {
+      return 'Error';
+    }
+
+    if (this.debugQaStatus === 'success') {
+      return 'Done';
+    }
+
+    return 'Idle';
+  }
+
+  private async handleDebugQaAction(action: DebugQaActionName): Promise<void> {
+    if (!this.debugQaEnabled) {
+      return;
+    }
+
+    if (!this.isAuthenticated) {
+      this.debugQaError = 'Connecte toi pour utiliser le debug QA.';
+      this.debugQaMessage = null;
+      this.debugQaStatus = 'error';
+      this.updateHud();
+      return;
+    }
+
+    const request = this.buildDebugQaRequest(action);
+    if (!request) {
+      this.debugQaError = 'Debug QA values are invalid.';
+      this.debugQaMessage = null;
+      this.debugQaStatus = 'error';
+      this.updateHud();
+      return;
+    }
+
+    this.debugQaBusyAction = action;
+    this.debugQaStatus = 'loading';
+    this.debugQaError = null;
+    this.debugQaMessage = request.loadingLabel;
+    this.updateHud();
+
+    try {
+      await this.fetchJson(request.path, {
+        method: 'POST',
+        body: JSON.stringify(request.body),
+      });
+      this.debugQaStatus = 'success';
+      this.debugQaMessage = request.successLabel;
+      await this.bootstrapSessionState();
+    } catch (error) {
+      this.debugQaStatus = 'error';
+      this.debugQaError = this.getErrorMessage(error, request.failureLabel);
+      this.debugQaMessage = null;
+    } finally {
+      this.debugQaBusyAction = null;
+      this.updateHud();
+    }
+  }
+
+  private buildDebugQaRequest(
+    action: DebugQaActionName,
+  ):
+    | {
+        path: string;
+        body: Record<string, unknown>;
+        loadingLabel: string;
+        successLabel: string;
+        failureLabel: string;
+      }
+    | null {
+    switch (action) {
+      case 'grant-resources': {
+        const xp = this.readDebugQaNumber(this.debugQaGrantXpInput, 250);
+        const gold = this.readDebugQaNumber(this.debugQaGrantGoldInput, 500);
+        return {
+          path: '/debug/admin/grant-resources',
+          body: {
+            experience: xp,
+            gold,
+            items: [],
+          },
+          loadingLabel: `Granting ${xp} XP / ${gold} gold...`,
+          successLabel: `Granted ${xp} XP / ${gold} gold.`,
+          failureLabel: 'Unable to grant debug resources.',
+        };
+      }
+      case 'set-tower-floor': {
+        const floor = this.readDebugQaNumber(this.debugQaTowerFloorInput, 10, 1, 10);
+        return {
+          path: '/debug/admin/set-tower-floor',
+          body: { floor },
+          loadingLabel: `Setting tower floor to ${floor}...`,
+          successLabel: `Tower floor set to ${floor}.`,
+          failureLabel: 'Unable to set tower floor.',
+        };
+      }
+      case 'apply-loadout-preset': {
+        const presetKey = this.debugQaLoadoutPresetSelect?.value.trim() || 'tower_mid';
+        return {
+          path: '/debug/admin/apply-loadout-preset',
+          body: { presetKey },
+          loadingLabel: `Applying ${presetKey} loadout...`,
+          successLabel: `Loadout preset ${presetKey} applied.`,
+          failureLabel: 'Unable to apply loadout preset.',
+        };
+      }
+      case 'complete-quests': {
+        return {
+          path: '/debug/admin/complete-quests',
+          body: {},
+          loadingLabel: 'Completing quests...',
+          successLabel: 'Quests marked as completed.',
+          failureLabel: 'Unable to complete quests.',
+        };
+      }
+      default:
+        return null;
+    }
+  }
+
+  private readDebugQaNumber(
+    input: HTMLInputElement | null,
+    fallback: number,
+    min?: number,
+    max?: number,
+  ): number {
+    const raw = input?.value?.trim();
+    const parsed = raw ? Number(raw) : fallback;
+    if (!Number.isFinite(parsed)) {
+      return fallback;
+    }
+
+    const rounded = Math.round(parsed);
+    if (typeof min === 'number' && rounded < min) {
+      return min;
+    }
+    if (typeof max === 'number' && rounded > max) {
+      return max;
+    }
+
+    return Math.max(0, rounded);
   }
 
   private getBlacksmithStatusLabel(): string {

@@ -171,6 +171,15 @@ type DebugSetWorldFlagsResult = {
   removed: string[];
 };
 
+type DebugSetQuestStatusResult = {
+  questKey: string;
+  requestedStatus: QuestStatus;
+  previousStatus: QuestStatus;
+  nextStatus: QuestStatus;
+  completedAt: string | null;
+  claimedAt: string | null;
+};
+
 const SAVE_SLOTS_TABLE = 'save_slots';
 const AUTOSAVES_TABLE = 'autosaves';
 const TOWER_MILESTONE_FLAGS = ['floor_3_cleared', 'floor_5_cleared', 'floor_8_cleared'] as const;
@@ -696,6 +705,72 @@ export class DebugAdminService {
         after,
         added,
         removed,
+      };
+    });
+  }
+
+  async setQuestStatus(
+    userId: string,
+    questKey: string,
+    requestedStatus: QuestStatus,
+  ): Promise<DebugSetQuestStatusResult> {
+    const normalizedQuestKey = questKey.trim();
+    const definition = this.getQuestDefinitionOrThrow(normalizedQuestKey);
+
+    return this.databaseService.withTransaction(async (tx) => {
+      await this.ensureQuestRows(tx, userId);
+
+      const rows = await this.getQuestRowsForUpdate(tx, userId, [definition.key]);
+      const row = rows[0];
+      if (!row) {
+        throw new NotFoundException(`Quest ${definition.key} was not found`);
+      }
+
+      const now = new Date().toISOString();
+      const nextProgress = this.normalizeQuestProgress(row.progress_json);
+      let nextStatus: QuestStatus = requestedStatus;
+
+      if (requestedStatus === 'active') {
+        nextProgress.completedAt = null;
+        nextProgress.claimedAt = null;
+      } else if (requestedStatus === 'completed') {
+        const completed = this.toCompletedQuestProgress(nextProgress, definition, now);
+        nextProgress.victoriesTotal = completed.victoriesTotal;
+        nextProgress.enemyVictories = completed.enemyVictories;
+        nextProgress.towerHighestFloor = completed.towerHighestFloor;
+        nextProgress.lastVictoryAt = completed.lastVictoryAt;
+        nextProgress.completedAt = completed.completedAt;
+        nextProgress.claimedAt = null;
+      } else {
+        const completed = this.toCompletedQuestProgress(nextProgress, definition, now);
+        nextProgress.victoriesTotal = completed.victoriesTotal;
+        nextProgress.enemyVictories = completed.enemyVictories;
+        nextProgress.towerHighestFloor = completed.towerHighestFloor;
+        nextProgress.lastVictoryAt = completed.lastVictoryAt;
+        nextProgress.completedAt = completed.completedAt;
+        nextProgress.claimedAt = now;
+        nextStatus = 'claimed';
+      }
+
+      await tx.query(
+        `
+          UPDATE ${QUEST_STATES_TABLE}
+          SET status = $3,
+              progress_json = $4::jsonb,
+              updated_at = NOW()
+          WHERE user_id = $1
+            AND quest_key = $2
+        `,
+        [userId, definition.key, nextStatus, JSON.stringify(nextProgress)],
+      );
+
+      return {
+        questKey: definition.key,
+        requestedStatus,
+        previousStatus: row.status,
+        nextStatus,
+        completedAt: nextProgress.completedAt,
+        claimedAt: nextProgress.claimedAt,
       };
     });
   }

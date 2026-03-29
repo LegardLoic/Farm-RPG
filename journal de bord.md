@@ -1,6 +1,6 @@
 ﻿# Journal de bord - Farm RPG
 
-Derniere mise a jour: 29 mars 2026
+Derniere mise a jour: 30 mars 2026
 
 ## 1) Objectif du journal
 Ce document garde une trace claire de ce qui a ete construit, valide et deploie jusqu'a present sur le prototype.
@@ -484,6 +484,33 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - code couleur lisible et coherent avec les tags de rarete du backend
   - styles responsive pour conserver la lisibilite sur mobile.
 
+### Lot 32 - Endpoint debug set quest status (dev only)
+- Backend debug-admin:
+  - nouvel endpoint protege:
+    - `POST /debug/admin/set-quest-status`
+  - payload:
+    - `questKey`
+    - `status` (`active` | `completed` | `claimed`)
+  - operation transactionnelle:
+    - initialise les lignes de quete si necessaire
+    - force l'etat cible de la quete demandee
+    - si `completed` ou `claimed`, force aussi la progression au seuil de completion de la quete
+    - renvoie l'etat `before/after` utile pour QA.
+- Securite:
+  - endpoint disponible uniquement en mode debug (non expose en production via garde existante).
+
+### Lot 33 - Panneau HUD `Debug QA` (frontend)
+- Frontend HUD:
+  - ajout d'un panneau `Debug QA` (visible en `DEV`/`staging`) pour lancer rapidement des actions debug sans outil externe
+  - actions supportees:
+    - `Grant resources` (XP + gold)
+    - `Set tower floor`
+    - `Apply loadout preset`
+    - `Complete quests`
+- UX:
+  - feedback `loading/success/error` en ligne
+  - rendu compact et responsive pour desktop/mobile.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -521,7 +548,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - completer rapidement une quete (ou toutes les quetes) pour QA des flux de claim/rewards
   - forcer le prochain `combat/start` sur un ennemi/script cible, puis auto-consommation one-shot
   - appliquer un preset complet de loadout (equipement+inventaire+ressources) pour QA rapide
-  - forcer des flags monde cibles (ajout/retrait/remplacement) pour tester village/shop/story.
+  - forcer des flags monde cibles (ajout/retrait/remplacement) pour tester village/shop/story
+  - forcer l'etat d'une quete cible (`active/completed/claimed`) pour QA rapide.
 
 ## 5) Frontend en place (resume)
 - Scene Phaser jouable avec deplacement.
@@ -537,6 +565,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - progression tour (etage et boss 10)
   - mini tooltip d'aide des tags d'intention (`ATK/MAG/CLN/DSP/ULT`)
   - glossaire visuel des raretes de loot (`common`, `uncommon`, `rare`, `epic`, `legendary`)
+  - panneau `Debug QA` pour piloter les endpoints debug sans quitter le jeu (DEV/staging)
 - Chargement web optimise:
   - entree legere
   - bootstrap asynchrone
@@ -553,6 +582,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `POST /debug/admin/clear-combat-start-override` (dev only)
 - `POST /debug/admin/apply-loadout-preset` (dev only)
 - `POST /debug/admin/set-world-flags` (dev only)
+- `POST /debug/admin/set-quest-status` (dev only)
 - `GET /auth/google`
 - `GET /auth/google/callback`
 - `GET /auth/me`
@@ -602,7 +632,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 1. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Etendre l'arbre de skills joueur (interrupt/heal/cleanse) pour les combats boss.
-4. Ajouter un panneau debug frontend pour declencher rapidement les endpoints QA (`grant/loadout/floor/flags`) sans outil externe.
-5. Ajouter un endpoint debug (dev only) pour forcer l'etat de quete (`active/completed/claimed`) sur une quete cible.
+4. Ajouter des tests end-to-end cibles (auth + combat + debug QA) pour securiser les regressions en CI.
+5. Etendre le panneau `Debug QA` avec gestion directe des world flags (add/remove/replace) cote frontend.
 
 

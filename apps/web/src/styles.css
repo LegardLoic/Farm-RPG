@@ -259,6 +259,152 @@ body::before {
   gap: 10px;
 }
 
+.hud-debug-qa {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(127, 209, 199, 0.12), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(127, 209, 199, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hud-debug-qa-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.hud-debug-qa-header span {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.hud-debug-qa-header strong {
+  font-size: 0.75rem;
+  color: var(--accent-2);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hud-debug-qa-header strong[data-status="loading"] {
+  color: var(--accent);
+}
+
+.hud-debug-qa-header strong[data-status="error"] {
+  color: #ffb3b3;
+}
+
+.hud-debug-qa-header strong[data-status="success"] {
+  color: #c7fff6;
+}
+
+.hud-debug-qa-message {
+  border: 1px solid rgba(185, 195, 212, 0.16);
+  background: rgba(185, 195, 212, 0.08);
+  color: #d8e2f2;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.hud-debug-qa-message[data-variant="success"] {
+  border-color: rgba(127, 209, 199, 0.34);
+  background: rgba(127, 209, 199, 0.12);
+  color: #d1fff8;
+}
+
+.hud-debug-qa-message[data-variant="error"] {
+  border-color: rgba(242, 111, 111, 0.42);
+  background: rgba(242, 111, 111, 0.14);
+  color: #ffd4d4;
+}
+
+.hud-debug-qa-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hud-debug-qa-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.hud-debug-qa-field span {
+  font-size: 0.71rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.hud-debug-qa-field input,
+.hud-debug-qa-field select {
+  width: 100%;
+  min-height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(185, 195, 212, 0.22);
+  background: rgba(6, 10, 16, 0.56);
+  color: var(--text);
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 0.84rem;
+}
+
+.hud-debug-qa-field input:focus,
+.hud-debug-qa-field select:focus {
+  outline: 2px solid rgba(127, 209, 199, 0.42);
+  outline-offset: 1px;
+}
+
+.hud-debug-qa-field input:disabled,
+.hud-debug-qa-field select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.hud-debug-qa-field.debug-qa-field-wide {
+  grid-column: 1 / -1;
+}
+
+.hud-debug-qa-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hud-debug-qa-button {
+  border: 1px solid rgba(127, 209, 199, 0.42);
+  background: rgba(127, 209, 199, 0.16);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.76rem;
+  cursor: pointer;
+  transition: filter 120ms ease, transform 120ms ease, opacity 120ms ease;
+}
+
+.hud-debug-qa-button.secondary {
+  border-color: rgba(226, 182, 109, 0.42);
+  background: rgba(226, 182, 109, 0.16);
+}
+
+.hud-debug-qa-button:hover:not(:disabled) {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.hud-debug-qa-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .hud-quests-header {
   display: flex;
   justify-content: space-between;
@@ -1141,6 +1287,10 @@ body::before {
 
   .hud-intent-help-popover {
     width: min(240px, calc(100vw - 64px));
+  }
+
+  .hud-debug-qa-grid {
+    grid-template-columns: 1fr;
   }
 
   .hud-loot-legend-pills {

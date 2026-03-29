@@ -7,6 +7,7 @@ import { DebugApplyLoadoutPresetDto } from './dto/debug-apply-loadout-preset.dto
 import { DebugCompleteQuestsDto } from './dto/debug-complete-quests.dto';
 import { DebugGrantResourcesDto } from './dto/debug-grant-resources.dto';
 import { DebugSetCombatStartOverrideDto } from './dto/debug-set-combat-start-override.dto';
+import { DebugSetQuestStatusDto } from './dto/debug-set-quest-status.dto';
 import { DebugSetTowerFloorDto } from './dto/debug-set-tower-floor.dto';
 import { DebugSetWorldFlagsDto } from './dto/debug-set-world-flags.dto';
 import { DebugAdminService } from './debug-admin.service';
@@ -127,6 +128,19 @@ export class DebugAdminController {
       status: 'ok',
       environment: this.configService.get<string>('NODE_ENV', 'development'),
       worldFlags,
+    };
+  }
+
+  @Post('set-quest-status')
+  async setQuestStatus(@Req() req: AuthenticatedRequest, @Body() body: DebugSetQuestStatusDto) {
+    this.assertDebugEnabled();
+
+    const quest = await this.debugAdminService.setQuestStatus(req.authUser!.id, body.questKey, body.status);
+
+    return {
+      status: 'ok',
+      environment: this.configService.get<string>('NODE_ENV', 'development'),
+      quest,
     };
   }
 
