@@ -465,7 +465,7 @@ export class CombatService {
         }
         this.pushLog(next, `You cast Cleanse and remove ${removed.join(' + ')}.`);
 
-        const recoveredMp = Math.min(1, next.player.maxMp - next.player.mp);
+        const recoveredMp = hadBurning && hadSilence ? Math.min(1, next.player.maxMp - next.player.mp) : 0;
         if (recoveredMp > 0) {
           next.player.mp += recoveredMp;
           this.pushLog(next, `Cleanse restores ${recoveredMp} MP through purified focus.`);
@@ -487,7 +487,7 @@ export class CombatService {
         this.setPlayerInterruptReactionWindow(next, INTERRUPT_REACTION_WINDOW_TURNS);
         const damage = Math.max(
           1,
-          this.calculateMagicDamage(next.player, next.enemy, this.getPlayerMagicAttackBonus(next), 0) - 2,
+          this.calculateMagicDamage(next.player, next.enemy, this.getPlayerMagicAttackBonus(next), 0) - 3,
         );
         next.enemy.currentHp = Math.max(0, next.enemy.currentHp - damage);
         this.pushLog(next, `You cast Interrupt for ${damage} damage and disrupt ${next.enemy.name}.`);
@@ -1262,7 +1262,7 @@ export class CombatService {
   }
 
   private calculatePlayerHeal(player: CombatUnitState, magicAttackBonus = 0): number {
-    return Math.max(4, Math.floor((player.magicAttack + magicAttackBonus) * 0.9));
+    return Math.max(5, Math.floor(player.magicAttack + magicAttackBonus));
   }
 
   private calculateEnemyDamage(enemy: CombatEncounterState['enemy'], player: CombatUnitState): number {
