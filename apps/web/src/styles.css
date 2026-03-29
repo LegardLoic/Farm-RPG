@@ -160,7 +160,8 @@ body::before {
 .hud-auth,
 .hud-combat,
 .hud-quests,
-.hud-blacksmith {
+.hud-blacksmith,
+.hud-autosave {
   margin-top: 10px;
   padding: 12px;
   border-radius: 14px;
@@ -240,6 +241,12 @@ body::before {
   gap: 10px;
 }
 
+.hud-autosave {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .hud-quests-header {
   display: flex;
   justify-content: space-between;
@@ -248,6 +255,13 @@ body::before {
 }
 
 .hud-blacksmith-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.hud-autosave-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -268,6 +282,13 @@ body::before {
   color: var(--muted);
 }
 
+.hud-autosave-header span {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
 .hud-quests-header strong {
   font-size: 0.75rem;
   color: var(--accent-2);
@@ -276,6 +297,11 @@ body::before {
 .hud-blacksmith-header strong {
   font-size: 0.75rem;
   color: var(--accent);
+}
+
+.hud-autosave-header strong {
+  font-size: 0.75rem;
+  color: var(--accent-2);
 }
 
 .hud-quests-error {
@@ -296,6 +322,29 @@ body::before {
   padding: 8px 10px;
   font-size: 0.78rem;
   line-height: 1.35;
+}
+
+.hud-autosave-error {
+  border: 1px solid rgba(242, 111, 111, 0.4);
+  background: rgba(242, 111, 111, 0.14);
+  color: #ffd1d1;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.hud-autosave-meta {
+  margin: 0;
+  font-size: 0.77rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.hud-autosave-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .hud-quests-list {
@@ -448,7 +497,22 @@ body::before {
   align-self: flex-start;
 }
 
+.hud-autosave-restore {
+  border: 1px solid rgba(226, 182, 109, 0.45);
+  background: rgba(226, 182, 109, 0.18);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 7px 10px;
+  font-size: 0.77rem;
+  cursor: pointer;
+}
+
 .hud-shop-buy:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.hud-autosave-restore:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }

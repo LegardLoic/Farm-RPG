@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Put, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/auth.types';
@@ -29,6 +29,17 @@ export class SavesController {
     return {
       status: 'ok',
       autosave,
+    };
+  }
+
+  @Post('auto/restore/:slot')
+  async restoreAutoSaveToSlot(@Req() req: AuthenticatedRequest, @Param('slot', ParseIntPipe) slot: number) {
+    const userId = this.getUserId(req);
+    const save = await this.savesService.restoreAutoSaveToSlot(userId, slot);
+
+    return {
+      status: 'ok',
+      save,
     };
   }
 

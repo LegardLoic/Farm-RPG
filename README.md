@@ -63,6 +63,7 @@ Create local env files before starting:
 - `POST /shops/blacksmith/buy`
 - `GET /saves`
 - `GET /saves/auto/latest`
+- `POST /saves/auto/restore/:slot`
 - `GET /saves/:slot`
 - `PUT /saves/:slot`
 - `DELETE /saves/:slot`
@@ -79,4 +80,5 @@ Use `.env.example` templates and repository secrets for CI.
 - Quest system with claim flow and story milestones tied to tower floors `3/5/8/10`.
 - Scripted mini-boss and boss encounters on floors `3/5/8/10`.
 - Automatic server-side autosave after major tower milestones and boss victory.
+- Restore latest autosave to manual slots from the in-game HUD.
 - Blacksmith shop unlocked by progression flags.

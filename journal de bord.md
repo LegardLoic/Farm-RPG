@@ -138,6 +138,17 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Nouveau endpoint protege:
   - `GET /saves/auto/latest`
 
+### Lot 11 - Restauration autosave vers slots manuels + UI HUD
+- Backend:
+  - nouveau endpoint protege `POST /saves/auto/restore/:slot`
+  - restauration du dernier autosave dans un slot manuel `1..3`
+  - label auto genere pour le slot restaure (`AUTO vX reason`).
+- Frontend:
+  - panneau HUD Autosave
+  - affichage version/raison/date de mise a jour
+  - boutons de restauration vers Slot 1/2/3
+  - etats loading/error sur l'operation.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -208,6 +219,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `POST /shops/blacksmith/buy`
 - `GET /saves`
 - `GET /saves/auto/latest`
+- `POST /saves/auto/restore/:slot`
 - `GET /saves/:slot`
 - `PUT /saves/:slot`
 - `DELETE /saves/:slot`
@@ -229,5 +241,5 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 2. Etendre le shop (tiers, equipement reel, prerequis de quete).
 3. Ajouter une route d'admin debug pour reset progression (dev only).
 4. Ajouter des skills ennemis cote joueur (interrupt/buff/debuff) pour enrichir les combats boss.
-5. Ajouter une UI web pour consulter/restaurer le dernier autosave.
+5. Ajouter une fonction "charger ce save" directe depuis le HUD (hors endpoint brut).
 

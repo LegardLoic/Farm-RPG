@@ -145,6 +145,47 @@ export class SavesService {
     return row ? this.toAutoSaveRecord(row) : null;
   }
 
+  async restoreAutoSaveToSlot(userId: string, slot: number): Promise<SaveSlotRecord> {
+    this.assertValidSlot(slot);
+
+    const autoSave = await this.getAutoSave(userId);
+    if (!autoSave) {
+      throw new NotFoundException('No autosave found for this user');
+    }
+
+    const label = this.toAutoSaveLabel(autoSave.version, autoSave.reason);
+
+    const result = await this.databaseService.query<SaveSlotRow>(
+      `
+        INSERT INTO ${SAVE_SLOTS_TABLE} (
+          user_id,
+          slot,
+          version,
+          label,
+          snapshot_json,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, 1, $3, $4::jsonb, NOW(), NOW())
+        ON CONFLICT (user_id, slot)
+        DO UPDATE
+          SET label = EXCLUDED.label,
+              snapshot_json = EXCLUDED.snapshot_json,
+              version = ${SAVE_SLOTS_TABLE}.version + 1,
+              updated_at = NOW()
+        RETURNING user_id, slot, version, label, snapshot_json, created_at, updated_at
+      `,
+      [userId, slot, label, JSON.stringify(autoSave.snapshot)],
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      throw new NotFoundException(`Restore failed for slot ${slot}`);
+    }
+
+    return this.toRecord(row);
+  }
+
   async upsertAutoSaveForMilestone(
     executor: TransactionClient,
     userId: string,
@@ -273,6 +314,11 @@ export class SavesService {
       updatedAt: this.toIsoDate(row.updated_at),
       snapshot: row.snapshot_json,
     };
+  }
+
+  private toAutoSaveLabel(version: number, reason: string): string {
+    const raw = `AUTO v${version} ${reason}`;
+    return raw.length <= 120 ? raw : raw.slice(0, 120);
   }
 
   private async getOrInitPlayerProgression(

@@ -90,6 +90,12 @@ type BlacksmithOfferState = {
   goldPrice: number;
 };
 
+type AutoSaveState = {
+  version: number;
+  reason: string;
+  updatedAt: string;
+};
+
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -117,6 +123,10 @@ export class GameScene extends Phaser.Scene {
   private blacksmithSummaryValue: HTMLElement | null = null;
   private blacksmithOffersRoot: HTMLElement | null = null;
   private blacksmithErrorValue: HTMLElement | null = null;
+  private autosaveSummaryValue: HTMLElement | null = null;
+  private autosaveMetaValue: HTMLElement | null = null;
+  private autosaveActionsRoot: HTMLElement | null = null;
+  private autosaveErrorValue: HTMLElement | null = null;
 
   private authStatus = 'Verification...';
   private isAuthenticated = false;
@@ -154,6 +164,11 @@ export class GameScene extends Phaser.Scene {
   private blacksmithBusy = false;
   private blacksmithError: string | null = null;
   private blacksmithRenderSignature = '';
+  private autosave: AutoSaveState | null = null;
+  private autosaveBusy = false;
+  private autosaveRestoreSlotBusy: number | null = null;
+  private autosaveError: string | null = null;
+  private autosaveRenderSignature = '';
 
   private readonly onHudClick = (event: MouseEvent) => {
     const target = event.target as HTMLElement | null;
@@ -166,6 +181,7 @@ export class GameScene extends Phaser.Scene {
     const combatAction = button.dataset.combatAction;
     const questAction = button.dataset.questAction;
     const shopAction = button.dataset.shopAction;
+    const saveAction = button.dataset.saveAction;
 
     if (hudAction === 'login') {
       window.location.href = `${API_BASE_URL}/auth/google`;
@@ -204,6 +220,15 @@ export class GameScene extends Phaser.Scene {
       const offerKey = button.dataset.offerKey;
       if (offerKey) {
         void this.buyBlacksmithOffer(offerKey);
+      }
+      return;
+    }
+
+    if (saveAction === 'restore') {
+      const rawSlot = button.dataset.slot;
+      const slot = rawSlot ? Number(rawSlot) : NaN;
+      if (Number.isInteger(slot) && slot >= 1 && slot <= 3) {
+        void this.restoreAutoSaveToSlot(slot);
       }
     }
   };
@@ -399,6 +424,15 @@ export class GameScene extends Phaser.Scene {
           <div class="hud-blacksmith-error" data-hud="blacksmithError" hidden></div>
           <ul class="hud-blacksmith-list" data-hud="blacksmithOffers"></ul>
         </div>
+        <div class="hud-autosave">
+          <div class="hud-autosave-header">
+            <span>Autosave</span>
+            <strong data-hud="autosaveSummary">No autosave</strong>
+          </div>
+          <div class="hud-autosave-meta" data-hud="autosaveMeta">-</div>
+          <div class="hud-autosave-error" data-hud="autosaveError" hidden></div>
+          <div class="hud-autosave-actions" data-hud="autosaveActions"></div>
+        </div>
         <div class="hud-help">
           Deplacement: fleches ou ZQSD
           <br />
@@ -423,6 +457,10 @@ export class GameScene extends Phaser.Scene {
     this.blacksmithSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="blacksmithSummary"]');
     this.blacksmithOffersRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="blacksmithOffers"]');
     this.blacksmithErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="blacksmithError"]');
+    this.autosaveSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="autosaveSummary"]');
+    this.autosaveMetaValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="autosaveMeta"]');
+    this.autosaveActionsRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="autosaveActions"]');
+    this.autosaveErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="autosaveError"]');
     this.hudRoot.addEventListener('click', this.onHudClick);
     this.updateHud();
   }
@@ -450,8 +488,13 @@ export class GameScene extends Phaser.Scene {
     this.blacksmithSummaryValue = null;
     this.blacksmithOffersRoot = null;
     this.blacksmithErrorValue = null;
+    this.autosaveSummaryValue = null;
+    this.autosaveMetaValue = null;
+    this.autosaveActionsRoot = null;
+    this.autosaveErrorValue = null;
     this.questsRenderSignature = '';
     this.blacksmithRenderSignature = '';
+    this.autosaveRenderSignature = '';
   }
   private updateHud(): void {
     if (!this.hudRoot) {
@@ -473,6 +516,7 @@ export class GameScene extends Phaser.Scene {
     this.updateCombatHud();
     this.updateQuestHud();
     this.updateBlacksmithHud();
+    this.updateAutoSaveHud();
 
     if (this.loginButton) {
       this.loginButton.hidden = this.isAuthenticated;
@@ -533,6 +577,51 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.renderBlacksmithOffers();
+  }
+
+  private updateAutoSaveHud(): void {
+    if (this.autosaveSummaryValue) {
+      this.autosaveSummaryValue.textContent = this.getAutoSaveSummaryLabel();
+    }
+
+    if (this.autosaveMetaValue) {
+      this.autosaveMetaValue.textContent = this.getAutoSaveMetaLabel();
+    }
+
+    if (this.autosaveErrorValue) {
+      this.autosaveErrorValue.hidden = !this.autosaveError;
+      this.autosaveErrorValue.textContent = this.autosaveError ?? '';
+    }
+
+    this.renderAutoSaveActions();
+  }
+
+  private renderAutoSaveActions(): void {
+    if (!this.autosaveActionsRoot) {
+      return;
+    }
+
+    const signature = this.computeAutoSaveRenderSignature();
+    if (signature === this.autosaveRenderSignature) {
+      return;
+    }
+    this.autosaveRenderSignature = signature;
+
+    this.autosaveActionsRoot.replaceChildren();
+
+    if (!this.isAuthenticated || !this.autosave) {
+      return;
+    }
+
+    for (const slot of [1, 2, 3]) {
+      const button = document.createElement('button');
+      button.classList.add('hud-autosave-restore');
+      button.dataset.saveAction = 'restore';
+      button.dataset.slot = `${slot}`;
+      button.textContent = this.autosaveRestoreSlotBusy === slot ? `Restoring S${slot}...` : `Restore to Slot ${slot}`;
+      button.disabled = this.autosaveBusy || this.autosaveRestoreSlotBusy !== null;
+      this.autosaveActionsRoot.appendChild(button);
+    }
   }
 
   private renderBlacksmithOffers(): void {
@@ -717,6 +806,34 @@ export class GameScene extends Phaser.Scene {
       : `${this.blacksmithOffers.length} offers | Gold ${this.hudState.gold}`;
   }
 
+  private getAutoSaveSummaryLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Login required';
+    }
+
+    if (this.autosaveBusy && !this.autosave) {
+      return 'Loading...';
+    }
+
+    if (!this.autosave) {
+      return 'No autosave';
+    }
+
+    return `v${this.autosave.version} | ${this.autosave.reason}`;
+  }
+
+  private getAutoSaveMetaLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Connect to view autosave.';
+    }
+
+    if (!this.autosave) {
+      return 'No milestone autosave available yet.';
+    }
+
+    return `Updated: ${this.formatIsoForHud(this.autosave.updatedAt)}`;
+  }
+
   private computeQuestRenderSignature(): string {
     const questParts = this.quests.map((quest) => {
       const objectiveParts = quest.objectives.map((objective) => (
@@ -747,6 +864,18 @@ export class GameScene extends Phaser.Scene {
       this.hudState.gold,
       this.blacksmithError ?? '',
       offers.join(';'),
+    ].join('|');
+  }
+
+  private computeAutoSaveRenderSignature(): string {
+    return [
+      this.isAuthenticated ? '1' : '0',
+      this.autosaveBusy ? '1' : '0',
+      this.autosaveRestoreSlotBusy ?? '-',
+      this.autosaveError ?? '',
+      this.autosave
+        ? `${this.autosave.version}:${this.autosave.reason}:${this.autosave.updatedAt}`
+        : 'none',
     ].join('|');
   }
 
@@ -829,6 +958,7 @@ export class GameScene extends Phaser.Scene {
     const authenticated = await this.refreshAuthState();
     if (authenticated) {
       await this.refreshGameplayState();
+      await this.refreshAutoSaveState();
       await this.refreshBlacksmithState();
       await this.refreshQuestState();
       await this.refreshCombatState();
@@ -836,6 +966,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.resetGameplayHudState();
+    this.resetAutoSaveState();
     this.resetBlacksmithState();
     this.resetQuestState();
     this.resetCombatState();
@@ -936,6 +1067,32 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private async refreshAutoSaveState(): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.resetAutoSaveState();
+      this.updateHud();
+      return;
+    }
+
+    this.autosaveBusy = true;
+    this.autosaveError = null;
+    this.updateHud();
+
+    try {
+      const payload = await this.fetchJson<unknown>('/saves/auto/latest', {
+        method: 'GET',
+      });
+
+      this.autosave = this.normalizeAutoSavePayload(payload);
+    } catch (error) {
+      this.autosaveError = this.getErrorMessage(error, 'Unable to load autosave.');
+      this.autosave = null;
+    } finally {
+      this.autosaveBusy = false;
+      this.updateHud();
+    }
+  }
+
   private async refreshCombatState(): Promise<void> {
     if (!this.isAuthenticated) {
       this.resetCombatState();
@@ -1002,6 +1159,7 @@ export class GameScene extends Phaser.Scene {
 
       this.applyCombatSnapshot(encounter);
       await this.refreshGameplayState();
+      await this.refreshAutoSaveState();
       await this.refreshBlacksmithState();
       await this.refreshQuestState();
     } catch (error) {
@@ -1065,6 +1223,7 @@ export class GameScene extends Phaser.Scene {
 
       this.applyCombatSnapshot(encounter);
       await this.refreshGameplayState();
+      await this.refreshAutoSaveState();
       await this.refreshBlacksmithState();
       await this.refreshQuestState();
     } catch (error) {
@@ -1116,6 +1275,7 @@ export class GameScene extends Phaser.Scene {
 
       this.applyCombatSnapshot(encounter);
       await this.refreshGameplayState();
+      await this.refreshAutoSaveState();
       await this.refreshBlacksmithState();
       await this.refreshQuestState();
     } catch (error) {
@@ -1207,6 +1367,36 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private async restoreAutoSaveToSlot(slot: number): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.autosaveError = 'Login required to restore autosave.';
+      this.updateHud();
+      return;
+    }
+
+    if (!this.autosave) {
+      this.autosaveError = 'No autosave available.';
+      this.updateHud();
+      return;
+    }
+
+    this.autosaveRestoreSlotBusy = slot;
+    this.autosaveError = null;
+    this.updateHud();
+
+    try {
+      await this.fetchJson(`/saves/auto/restore/${slot}`, {
+        method: 'POST',
+      });
+      await this.refreshAutoSaveState();
+    } catch (error) {
+      this.autosaveError = this.getErrorMessage(error, `Unable to restore autosave to slot ${slot}.`);
+    } finally {
+      this.autosaveRestoreSlotBusy = null;
+      this.updateHud();
+    }
+  }
+
   private applyGameplaySnapshot(payload: unknown): void {
     if (!this.isRecord(payload)) {
       return;
@@ -1291,6 +1481,14 @@ export class GameScene extends Phaser.Scene {
     this.hudState.towerBossFloor10Defeated = false;
     this.hudState.blacksmithUnlocked = false;
     this.hudState.blacksmithCurseLifted = false;
+  }
+
+  private resetAutoSaveState(): void {
+    this.autosave = null;
+    this.autosaveBusy = false;
+    this.autosaveRestoreSlotBusy = null;
+    this.autosaveError = null;
+    this.autosaveRenderSignature = '';
   }
 
   private resetBlacksmithState(): void {
@@ -1551,6 +1749,31 @@ export class GameScene extends Phaser.Scene {
       .filter((entry): entry is BlacksmithOfferState => entry !== null);
 
     return { offers };
+  }
+
+  private normalizeAutoSavePayload(payload: unknown): AutoSaveState | null {
+    if (!this.isRecord(payload)) {
+      return null;
+    }
+
+    const autosave = this.asRecord(payload.autosave);
+    if (!autosave) {
+      return null;
+    }
+
+    const version = this.asNumber(autosave.version);
+    const reason = this.asString(autosave.reason);
+    const updatedAt = this.asString(autosave.updatedAt);
+
+    if (version === null || !reason || !updatedAt) {
+      return null;
+    }
+
+    return {
+      version: Math.max(1, Math.round(version)),
+      reason,
+      updatedAt,
+    };
   }
 
   private normalizeBlacksmithOffer(value: unknown): BlacksmithOfferState | null {
@@ -1814,6 +2037,20 @@ export class GameScene extends Phaser.Scene {
     }
 
     return null;
+  }
+
+  private formatIsoForHud(value: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+
+    const dd = `${date.getDate()}`.padStart(2, '0');
+    const mm = `${date.getMonth() + 1}`.padStart(2, '0');
+    const yyyy = date.getFullYear();
+    const hh = `${date.getHours()}`.padStart(2, '0');
+    const min = `${date.getMinutes()}`.padStart(2, '0');
+    return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
   }
 
   private formatValue(value: number): string {
