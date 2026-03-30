@@ -50,6 +50,7 @@ function createEncounter(overrides = {}) {
     scriptState,
     lastAction: overrides.lastAction ?? null,
     rewards: overrides.rewards ?? null,
+    defeatPenalty: overrides.defeatPenalty ?? null,
     rewardsGranted: overrides.rewardsGranted ?? false,
     createdAt: overrides.createdAt ?? now,
     updatedAt: overrides.updatedAt ?? now,
@@ -96,10 +97,16 @@ test('curse heart avatar can dispel after a recent cleanse reaction', () => {
   assert.equal(service.resolveEnemyIntent(encounter), 'null_sigil');
 });
 
-test('tickStatusDurations consumes short reaction windows without going negative', () => {
+test('tickStatusDurations consumes debuffs and reaction windows without going negative', () => {
   const service = createCombatService();
   const encounter = createEncounter({
+    player: {
+      hp: 28,
+    },
     scriptState: {
+      playerPoisonedTurns: 1,
+      playerBlindedTurns: 1,
+      playerDarkenedTurns: 1,
       playerCleanseReactionWindowTurns: 1,
       playerInterruptReactionWindowTurns: 2,
       enemyInterruptedTurns: 1,
@@ -108,7 +115,67 @@ test('tickStatusDurations consumes short reaction windows without going negative
 
   service.tickStatusDurations(encounter);
 
+  assert.equal(encounter.player.hp, 26);
+  assert.equal(encounter.scriptState.playerPoisonedTurns, 0);
+  assert.equal(encounter.scriptState.playerBlindedTurns, 0);
+  assert.equal(encounter.scriptState.playerDarkenedTurns, 0);
   assert.equal(encounter.scriptState.playerCleanseReactionWindowTurns, 0);
   assert.equal(encounter.scriptState.playerInterruptReactionWindowTurns, 1);
   assert.equal(encounter.scriptState.enemyInterruptedTurns, 0);
+});
+
+test('darkness blocks magic-oriented skills', () => {
+  const service = createCombatService();
+  const encounter = createEncounter({
+    scriptState: {
+      playerDarkenedTurns: 2,
+    },
+  });
+
+  assert.throws(
+    () => service.resolvePlayerAction(encounter, 'fireball'),
+    /Darkness/i,
+  );
+});
+
+test('cecite can cause physical attacks to miss', () => {
+  const service = createCombatService();
+  const encounter = createEncounter({
+    enemyKey: 'forest_goblin',
+    scriptState: {
+      playerBlindedTurns: 1,
+    },
+  });
+
+  const previousRandom = Math.random;
+  Math.random = () => 0;
+  try {
+    const next = service.resolvePlayerAction(encounter, 'attack');
+    assert.equal(next.enemy.currentHp, encounter.enemy.currentHp);
+    assert.equal(
+      next.logs.some((entry) => entry.includes('Cecite')),
+      true,
+    );
+  } finally {
+    Math.random = previousRandom;
+  }
+});
+
+test('legacy burning/silenced keys are still interpreted for active encounters', () => {
+  const service = createCombatService();
+  const encounter = createEncounter({
+    player: {
+      hp: 20,
+    },
+    scriptState: {
+      playerBurningTurns: 1,
+      playerSilencedTurns: 1,
+    },
+  });
+
+  service.tickStatusDurations(encounter);
+
+  assert.equal(encounter.player.hp, 18);
+  assert.equal(encounter.scriptState.playerPoisonedTurns, 0);
+  assert.equal(encounter.scriptState.playerDarkenedTurns, 0);
 });
