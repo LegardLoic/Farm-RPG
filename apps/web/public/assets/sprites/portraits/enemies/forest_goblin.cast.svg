@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="18" fill="#14252a"/>
+  <circle cx="64" cy="58" r="30" fill="#7bb064"/>
+  <path d="M34 54c4-18 17-28 30-28s26 10 30 28c-8-4-19-6-30-6s-22 2-30 6z" fill="#426130"/>
+  <path d="M28 52l10-16 12 18z" fill="#405b2d"/>
+  <path d="M100 52l-10-16-12 18z" fill="#405b2d"/>
+  <rect x="42" y="56" width="44" height="24" rx="8" fill="#27331f"/>
+  <circle cx="52" cy="60" r="3.5" fill="#f2f1c4"/>
+  <circle cx="76" cy="60" r="3.5" fill="#f2f1c4"/>
+  <path d="M46 79c7 6 29 6 36 0" stroke="#10160f" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <path d="M28 100c10-10 24-14 36-14s26 4 36 14" stroke="#59763f" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <circle cx="96" cy="30" r="9" fill="#63f0ff" opacity="0.9"/>
+  <path d="M64 20c12 0 24 8 28 20-9 2-18 4-28 4s-19-2-28-4c4-12 16-20 28-20z" fill="#b0ffce" opacity="0.35"/>
+  <path d="M40 90c8-6 16-8 24-8s16 2 24 8" stroke="#8fffd1" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.7"/>
+  <path d="M92 18l8 8m-20 0l8-8" stroke="#b0ffce" stroke-width="3" stroke-linecap="round"/>
+</svg>

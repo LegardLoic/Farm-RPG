@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="18" fill="#2b1d14"/>
+  <ellipse cx="64" cy="102" rx="34" ry="12" fill="#140f0b"/>
+  <rect x="30" y="30" width="68" height="58" rx="12" fill="#c59b6d"/>
+  <rect x="38" y="38" width="52" height="18" rx="8" fill="#dabb98"/>
+  <path d="M28 50h72l8 34H20z" fill="#8f5b31"/>
+  <path d="M42 54h44l-6 22H48z" fill="#f0d7b8"/>
+  <rect x="20" y="54" width="12" height="10" rx="4" fill="#997047"/>
+  <rect x="96" y="54" width="12" height="10" rx="4" fill="#997047"/>
+  <rect x="44" y="88" width="10" height="18" rx="3" fill="#6d4526"/>
+  <rect x="74" y="88" width="10" height="18" rx="3" fill="#6d4526"/>
+  <path d="M40 40l6 6m36-6l-6 6" stroke="#6d4526" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="50" cy="54" r="2.5" fill="#6d4526"/>
+  <circle cx="78" cy="54" r="2.5" fill="#6d4526"/>
+  <path d="M34 28l18 18m44-18l-18 18" stroke="#ff8d55" stroke-width="5" stroke-linecap="round" opacity="0.85"/>
+  <path d="M28 80c8-6 20-10 36-10s28 4 36 10" stroke="#ffb47c" stroke-width="4" stroke-linecap="round" fill="none"/>
+  <path d="M30 62h68" stroke="#ffdfba" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+</svg>

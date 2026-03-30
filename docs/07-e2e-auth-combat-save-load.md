@@ -91,7 +91,9 @@ Le workflow nightly exécute aussi un smoke web pour couvrir le front:
   - le statut auth doit passer a `Connecte: ...`
   - le bouton `Start combat` doit devenir activable
   - un `POST /combat/start` doit etre emis et un encounter actif doit apparaitre dans le HUD
+  - le combat ouvert est ensuite cloture automatiquement via `POST /combat/:id/forfeit` pour eviter de laisser des encounters actifs en staging
 - si aucun token/cookie web specifique n'est fourni, le workflow CI derive automatiquement une fixture a partir de `E2E_ACCESS_TOKEN_SECRET` + `E2E_USER_ID`
+- le workflow nightly publie aussi un petit dashboard historique sur 7 jours avec les tendances `guest`, `auth` et `API E2E` dans `artifacts/nightly/dashboard.md`
 
 Variables utiles pour le smoke web:
 
