@@ -29,6 +29,7 @@ import {
   CURSE_AVATAR_DISPEL_MANA_COST,
   CLEANSE_MANA_COST,
   CLEANSE_REACTION_WINDOW_TURNS,
+  CURSE_HEART_AVATAR_CATACLYSM_INTERVAL,
   DEFAULT_COMBAT_ENEMY_KEY,
   DEFAULT_PLAYER_COMBAT_STATE,
   FLOOR_LOOT_TABLES,
@@ -41,10 +42,13 @@ import {
   PLAYER_SILENCED_DURATION_TURNS,
   RALLY_DURATION_TURNS,
   RALLY_MANA_COST,
+  THORN_BEAST_ALPHA_ROOT_SMASH_INTERVAL,
   CINDER_WARDEN_PURGE_MANA_COST,
+  CINDER_WARDEN_CINDER_BURST_INTERVAL,
   SUNDER_DURATION_TURNS,
   SUNDER_MANA_COST,
   ASH_CAPTAIN_PURGE_MANA_COST,
+  ASH_VANGUARD_CAPTAIN_TWIN_SLASH_INTERVAL,
   TOWER_FLOOR_SCRIPTED_ENEMIES,
 } from './combat.constants';
 import type {
@@ -455,6 +459,7 @@ export class CombatService {
         this.setPlayerBurningTurns(next, 0);
         this.setPlayerSilencedTurns(next, 0);
         this.setPlayerCleanseReactionWindow(next, CLEANSE_REACTION_WINDOW_TURNS);
+        this.incrementTelemetryCounter(next, 'telemetryCleanseUses');
 
         const removed: string[] = [];
         if (hadBurning) {
@@ -485,6 +490,7 @@ export class CombatService {
         next.player.mp -= INTERRUPT_MANA_COST;
         this.setEnemyInterruptedTurns(next, 1);
         this.setPlayerInterruptReactionWindow(next, INTERRUPT_REACTION_WINDOW_TURNS);
+        this.incrementTelemetryCounter(next, 'telemetryInterruptUses');
         const damage = Math.max(
           1,
           this.calculateMagicDamage(next.player, next.enemy, this.getPlayerMagicAttackBonus(next), 0) - 3,
@@ -842,6 +848,10 @@ export class CombatService {
 
     const mitigatedDamage = encounter.player.defending ? Math.max(1, Math.floor(damage / 2)) : damage;
 
+    if (intent !== 'basic_strike') {
+      this.recordBossSpecialCast(encounter, intent);
+    }
+
     encounter.player.hp = Math.max(0, encounter.player.hp - mitigatedDamage);
     encounter.player.defending = false;
     encounter.updatedAt = new Date().toISOString();
@@ -860,7 +870,7 @@ export class CombatService {
 
     switch (encounter.enemy.key) {
       case 'thorn_beast_alpha':
-        if (encounter.round % 3 === 0) {
+        if (encounter.round % THORN_BEAST_ALPHA_ROOT_SMASH_INTERVAL === 0) {
           return 'root_smash';
         }
         if (playerRallyTurns > 0 && encounter.round % 2 === 0) {
@@ -874,7 +884,10 @@ export class CombatService {
         if (enemyShatterTurns > 0 && encounter.enemy.currentMp >= CINDER_WARDEN_PURGE_MANA_COST) {
           return 'molten_shell';
         }
-        if (encounter.enemy.currentMp >= 3 && encounter.round % 2 === 0) {
+        if (
+          encounter.enemy.currentMp >= 3 &&
+          encounter.round % CINDER_WARDEN_CINDER_BURST_INTERVAL === 0
+        ) {
           return 'cinder_burst';
         }
         return 'basic_strike';
@@ -885,7 +898,7 @@ export class CombatService {
         if (usedInterruptRecently) {
           return 'twin_slash';
         }
-        if (encounter.round % 3 === 0) {
+        if (encounter.round % ASH_VANGUARD_CAPTAIN_TWIN_SLASH_INTERVAL === 0) {
           return 'twin_slash';
         }
         return 'basic_strike';
@@ -897,7 +910,11 @@ export class CombatService {
         ) {
           return 'null_sigil';
         }
-        if (enraged && encounter.enemy.currentMp >= 5 && encounter.round % 2 === 0) {
+        if (
+          enraged &&
+          encounter.enemy.currentMp >= 5 &&
+          encounter.round % CURSE_HEART_AVATAR_CATACLYSM_INTERVAL === 0
+        ) {
           return 'cataclysm_ray';
         }
         return 'cursed_claw';
@@ -1172,6 +1189,32 @@ export class CombatService {
       ...(encounter.scriptState ?? {}),
       enemyInterruptedTurns: Math.max(0, Math.floor(turns)),
     };
+  }
+
+  private getTelemetryCounter(encounter: CombatEncounterState, key: string): number {
+    const raw = Number(encounter.scriptState?.[key] ?? 0);
+    if (!Number.isFinite(raw) || raw < 0) {
+      return 0;
+    }
+
+    return Math.floor(raw);
+  }
+
+  private incrementTelemetryCounter(
+    encounter: CombatEncounterState,
+    key: string,
+    delta = 1,
+  ): void {
+    const current = this.getTelemetryCounter(encounter, key);
+    encounter.scriptState = {
+      ...(encounter.scriptState ?? {}),
+      [key]: current + Math.max(0, Math.floor(delta)),
+    };
+  }
+
+  private recordBossSpecialCast(encounter: CombatEncounterState, intent: EnemyIntent): void {
+    this.incrementTelemetryCounter(encounter, 'telemetryBossSpecialCasts');
+    this.incrementTelemetryCounter(encounter, `telemetryBossSpecialCast_${intent}`);
   }
 
   private getPlayerAttackBonus(encounter: CombatEncounterState): number {

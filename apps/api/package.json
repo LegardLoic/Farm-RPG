@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "node -e \"console.log('lint placeholder')\"",
     "pretest": "npm run build",
-    "test": "node --test ./test/combat-reaction.test.js"
+    "test": "node --test ./test/index.test.js"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",

@@ -683,6 +683,61 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - table de scenarios de validation manuelle (Cleanse/Interrupt/boss/telegraphes)
   - preconditions, action endpoint, resultat API attendu et rendu HUD attendu.
 
+### Lot 48 - Sprite pack initial + integration Phaser
+- Frontend web:
+  - ajout d'un premier pack SVG normalise dans `apps/web/public/assets/sprites/`
+  - manifest sprite `manifest.json` pour decrire:
+    - frame size
+    - origin
+    - scale
+    - collisions physiques
+  - `BootScene` charge maintenant les sprites du monde avant le passage sur `GameScene`
+  - `GameScene` utilise le sprite `player-hero` du manifest au lieu de la texture procedurale.
+
+### Lot 49 - Tests API transverses
+- Backend API:
+  - ajout d'un test runner agregeant:
+    - `combat-reaction.test.js`
+    - `api-crosscut.test.js`
+  - couverture transversale ajoutee pour:
+    - auth
+    - debug-admin
+    - shops
+    - saves
+
+### Lot 50 - Fixtures SQL d'integration
+- Donnees de test:
+  - ajout de fixtures SQL dans `apps/api/test/fixtures/`
+  - scenarios couverts:
+    - reset base
+    - utilisateur authentifie baseline
+    - progression mid-tower
+    - etat combat actif + save/autosave
+  - doc d'utilisation locale ajoutee:
+    - `docs/06-fixtures-integration-sql.md`
+
+### Lot 51 - Tuning combat avance + telemetry simple
+- Backend combat:
+  - ajustement leger des timings de boss via constantes nommees:
+    - `Thorn Beast Alpha` -> intervalle `Root Smash`
+    - `Cinder Warden` -> intervalle `Cinder Burst`
+    - `Ash Vanguard Captain` -> intervalle `Twin Slash`
+    - `Curse Heart Avatar` -> intervalle `Cataclysm Ray`
+  - telemetry simple dans `scriptState`:
+    - `telemetryCleanseUses`
+    - `telemetryInterruptUses`
+    - `telemetryBossSpecialCasts`
+    - compteurs par intent special (`telemetryBossSpecialCast_*`)
+  - les compteurs restent retrocompatibles, sans changement de schema.
+
+### Lot 52 - Non-regression UI combat + CI web
+- Frontend web:
+  - ajout d'un test Node de non-regression sur le HUD combat
+  - verification de la presence des boutons combat, telegraphes et styles d'effets
+  - script de test Web rendu compatible CommonJS sur Windows.
+- CI:
+  - workflow GitHub Actions enrichi avec l'etape `Web UI Regression Tests`.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -806,9 +861,9 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 
 ## 9) Prochaines priorites recommandees
 1. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
-2. Etendre les tests automatises vers des parcours API plus larges (`auth`, `debug-admin`, `shops`, `saves`).
-3. Ajouter des fixtures SQL de test pour industrialiser des scenarios d'integration complets en CI.
-4. Ajouter un lot de tuning avance des boss (timings/patterns) avec telemetrie simple des combats.
-5. Ajouter des validations de non-regression UI combat (snapshots/QA scriptes front).
+2. Brancher les sprites sur plus d'ennemis/animations pour sortir du pack statique initial.
+3. Ajouter une execution optionnelle des fixtures SQL dans un job CI d'integration dedie.
+4. Exposer la telemetry combat dans le HUD debug ou un rapport de run.
+5. Industrialiser des tests e2e auth -> combat -> save/load sur base de fixtures.
 
 

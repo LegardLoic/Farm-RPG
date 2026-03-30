@@ -1,0 +1,41 @@
+{
+  "frameSize": { "width": 64, "height": 64 },
+  "origin": { "x": 0.5, "y": 0.84 },
+  "sprites": {
+    "player-hero": {
+      "key": "player-hero",
+      "path": "characters/player-hero.svg",
+      "scale": { "x": 0.28125, "y": 0.40625 },
+      "origin": { "x": 0.5, "y": 0.84 },
+      "physics": { "width": 14, "height": 22, "offsetX": 2, "offsetY": 2 }
+    },
+    "enemy-forest-goblin": {
+      "key": "enemy-forest-goblin",
+      "path": "characters/enemy-forest-goblin.svg",
+      "scale": { "x": 0.3125, "y": 0.34375 },
+      "origin": { "x": 0.5, "y": 0.84 },
+      "physics": { "width": 16, "height": 20, "offsetX": 2, "offsetY": 2 }
+    },
+    "enemy-cinder-warden": {
+      "key": "enemy-cinder-warden",
+      "path": "characters/enemy-cinder-warden.svg",
+      "scale": { "x": 0.34375, "y": 0.375 },
+      "origin": { "x": 0.5, "y": 0.84 },
+      "physics": { "width": 18, "height": 20, "offsetX": 2, "offsetY": 2 }
+    },
+    "enemy-ash-vanguard-captain": {
+      "key": "enemy-ash-vanguard-captain",
+      "path": "characters/enemy-ash-vanguard-captain.svg",
+      "scale": { "x": 0.34375, "y": 0.375 },
+      "origin": { "x": 0.5, "y": 0.84 },
+      "physics": { "width": 18, "height": 20, "offsetX": 2, "offsetY": 2 }
+    },
+    "enemy-curse-heart-avatar": {
+      "key": "enemy-curse-heart-avatar",
+      "path": "characters/enemy-curse-heart-avatar.svg",
+      "scale": { "x": 0.375, "y": 0.375 },
+      "origin": { "x": 0.5, "y": 0.84 },
+      "physics": { "width": 20, "height": 20, "offsetX": 2, "offsetY": 2 }
+    }
+  }
+}

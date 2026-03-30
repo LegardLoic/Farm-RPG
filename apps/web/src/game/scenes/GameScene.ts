@@ -98,6 +98,21 @@ type CombatEffectChip = {
   tone: CombatEffectTone;
 };
 
+type SpriteManifest = {
+  frameSize: { width: number; height: number };
+  origin: { x: number; y: number };
+  sprites: Record<
+    string,
+    {
+      key: string;
+      path: string;
+      scale: { x: number; y: number };
+      origin: { x: number; y: number };
+      physics: { width: number; height: number; offsetX: number; offsetY: number };
+    }
+  >;
+};
+
 type QuestObjectiveState = {
   key: string;
   description: string;
@@ -470,21 +485,22 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setupPlayer(): void {
-    const textureKey = 'player-hero';
-    if (!this.textures.exists(textureKey)) {
-      const graphics = this.add.graphics();
-      graphics.fillStyle(0x9fd2ff, 1);
-      graphics.fillRoundedRect(0, 0, 18, 26, 5);
-      graphics.lineStyle(2, 0xf2d6a2, 1);
-      graphics.strokeRoundedRect(0, 0, 18, 26, 5);
-      graphics.generateTexture(textureKey, 18, 26);
-      graphics.destroy();
+    const manifest = this.getSpriteManifest();
+    const playerSprite = manifest.sprites['player-hero'];
+    if (!playerSprite) {
+      throw new Error('Player sprite manifest entry is missing');
     }
 
-    this.player = this.physics.add.sprite(240, 220, textureKey);
+    if (!this.textures.exists(playerSprite.key)) {
+      throw new Error(`Player sprite texture not loaded: ${playerSprite.key}`);
+    }
+
+    this.player = this.physics.add.sprite(240, 220, playerSprite.key);
+    this.player.setOrigin(playerSprite.origin.x, playerSprite.origin.y);
+    this.player.setScale(playerSprite.scale.x, playerSprite.scale.y);
     this.player.setCollideWorldBounds(true);
-    this.player.setSize(14, 22);
-    this.player.setOffset(2, 2);
+    this.player.setSize(playerSprite.physics.width, playerSprite.physics.height);
+    this.player.setOffset(playerSprite.physics.offsetX, playerSprite.physics.offsetY);
 
     const obstacles = [
       this.createObstacle(360, 220, 84, 28),
@@ -1724,6 +1740,27 @@ export class GameScene extends Phaser.Scene {
       chip.textContent = effect.label;
       element.appendChild(chip);
     }
+  }
+
+  private getSpriteManifest(): SpriteManifest {
+    const manifest = this.cache.json.get('sprite-manifest') as SpriteManifest | undefined;
+    if (manifest && manifest.sprites && manifest.sprites['player-hero']) {
+      return manifest;
+    }
+
+    return {
+      frameSize: { width: 64, height: 64 },
+      origin: { x: 0.5, y: 0.84 },
+      sprites: {
+        'player-hero': {
+          key: 'player-hero',
+          path: '/assets/sprites/characters/player-hero.svg',
+          scale: { x: 0.28125, y: 0.40625 },
+          origin: { x: 0.5, y: 0.84 },
+          physics: { width: 14, height: 22, offsetX: 2, offsetY: 2 },
+        },
+      },
+    };
   }
 
   private async bootstrapSessionState(): Promise<void> {
