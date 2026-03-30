@@ -13,8 +13,10 @@ import {
   BASE_WORLD_DAY,
   BASE_WORLD_ZONE,
   PLAYER_PROGRESSION_TABLE,
+  PLAYER_MAX_LEVEL,
   WORLD_STATE_TABLE,
   WORLD_FLAGS_TABLE,
+  clampPlayerLevel,
   xpRequiredForLevel,
 } from '../gameplay/gameplay.constants';
 import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
@@ -136,6 +138,70 @@ type DebugForcedCombatStart = {
   enemy: CombatEnemyDefinition;
   isScriptedBossEncounter: boolean;
 };
+
+type CombatCurveTier = {
+  key: 'floor_1_2' | 'floor_3_4' | 'floor_5_7' | 'floor_8_9' | 'floor_10_plus';
+  minFloor: number;
+  maxFloor: number | null;
+  label: string;
+  enemyHpMultiplier: number;
+  enemyStatMultiplier: number;
+  rewardXpMultiplier: number;
+  rewardGoldMultiplier: number;
+};
+
+const COMBAT_CURVE_TIERS: CombatCurveTier[] = [
+  {
+    key: 'floor_1_2',
+    minFloor: 1,
+    maxFloor: 2,
+    label: 'Tier I',
+    enemyHpMultiplier: 1,
+    enemyStatMultiplier: 1,
+    rewardXpMultiplier: 1,
+    rewardGoldMultiplier: 1,
+  },
+  {
+    key: 'floor_3_4',
+    minFloor: 3,
+    maxFloor: 4,
+    label: 'Tier II',
+    enemyHpMultiplier: 1.08,
+    enemyStatMultiplier: 1.06,
+    rewardXpMultiplier: 1.08,
+    rewardGoldMultiplier: 1.05,
+  },
+  {
+    key: 'floor_5_7',
+    minFloor: 5,
+    maxFloor: 7,
+    label: 'Tier III',
+    enemyHpMultiplier: 1.2,
+    enemyStatMultiplier: 1.14,
+    rewardXpMultiplier: 1.2,
+    rewardGoldMultiplier: 1.15,
+  },
+  {
+    key: 'floor_8_9',
+    minFloor: 8,
+    maxFloor: 9,
+    label: 'Tier IV',
+    enemyHpMultiplier: 1.32,
+    enemyStatMultiplier: 1.24,
+    rewardXpMultiplier: 1.34,
+    rewardGoldMultiplier: 1.26,
+  },
+  {
+    key: 'floor_10_plus',
+    minFloor: 10,
+    maxFloor: null,
+    label: 'Tier V',
+    enemyHpMultiplier: 1.45,
+    enemyStatMultiplier: 1.32,
+    rewardXpMultiplier: 1.5,
+    rewardGoldMultiplier: 1.35,
+  },
+];
 
 const COMBAT_DEBUG_PLAYER_SKILLS: Record<
   CombatActionName,
@@ -456,9 +522,12 @@ export class CombatService {
     isScriptedBossEncounter: boolean,
   ): CombatEncounterState {
     const now = new Date().toISOString();
+    const curveTier = this.resolveCombatCurveTier(towerFloor);
+    const tunedEnemy = this.scaleEnemyForCurveTier(enemy, curveTier, isScriptedBossEncounter);
     const firstLog = isScriptedBossEncounter
       ? `Boss encounter: floor ${towerFloor} - ${enemy.name}.`
       : `A wild ${enemy.name} appears.`;
+    const tierLog = `Difficulty ${curveTier.label} active (floor ${towerFloor}).`;
 
     const encounter: CombatEncounterState = {
       id: randomUUID(),
@@ -469,12 +538,12 @@ export class CombatService {
       turn: 'player',
       status: 'active',
       round: 1,
-      logs: [firstLog],
+      logs: [firstLog, tierLog],
       player: this.toPlayerCombatState(progression),
       enemy: {
-        ...enemy,
-        currentHp: enemy.hp,
-        currentMp: enemy.mp,
+        ...tunedEnemy,
+        currentHp: tunedEnemy.hp,
+        currentMp: tunedEnemy.mp,
       },
       scriptState: {},
       lastAction: null,
@@ -706,8 +775,8 @@ export class CombatService {
     }
 
     const next = this.cloneEncounter(encounter);
-    const rewardProfile = next.enemy.rewards;
     const progressionBefore = await this.getProgressionForUpdate(executor, userId);
+    const rewardProfile = this.resolveScaledVictoryReward(next, progressionBefore.level);
     const progressionAfter = this.computeProgressionAfterVictory(
       progressionBefore,
       rewardProfile.experience,
@@ -1062,13 +1131,22 @@ export class CombatService {
     gainedExperience: number,
     gainedGold: number,
   ): PlayerProgressionRow {
-    let level = progression.level;
-    let experience = progression.experience + gainedExperience;
-    let experienceToNext = xpRequiredForLevel(level);
+    let level = clampPlayerLevel(progression.level);
+    let experience = Math.max(0, Math.floor(progression.experience));
+    if (level < PLAYER_MAX_LEVEL) {
+      experience += Math.max(0, Math.floor(gainedExperience));
+    }
 
-    while (experience >= experienceToNext) {
+    let experienceToNext = xpRequiredForLevel(level);
+    while (level < PLAYER_MAX_LEVEL && experience >= experienceToNext) {
       experience -= experienceToNext;
       level += 1;
+      experienceToNext = xpRequiredForLevel(level);
+    }
+
+    if (level >= PLAYER_MAX_LEVEL) {
+      level = PLAYER_MAX_LEVEL;
+      experience = Math.max(0, Math.min(experience, experienceToNext - 1));
       experienceToNext = xpRequiredForLevel(level);
     }
 
@@ -1077,7 +1155,102 @@ export class CombatService {
       level,
       experience,
       experience_to_next: experienceToNext,
-      gold: progression.gold + gainedGold,
+      gold: Math.max(0, progression.gold + Math.max(0, Math.floor(gainedGold))),
+    };
+  }
+
+  private resolveCombatCurveTier(towerFloor: number): CombatCurveTier {
+    const safeFloor = Math.max(1, Math.floor(towerFloor));
+    return (
+      COMBAT_CURVE_TIERS.find((tier) => {
+        if (safeFloor < tier.minFloor) {
+          return false;
+        }
+        if (tier.maxFloor !== null && safeFloor > tier.maxFloor) {
+          return false;
+        }
+        return true;
+      }) ?? COMBAT_CURVE_TIERS[0]
+    );
+  }
+
+  private scaleEnemyForCurveTier(
+    enemy: CombatEnemyDefinition,
+    tier: CombatCurveTier,
+    isScriptedBossEncounter: boolean,
+  ): CombatEnemyDefinition {
+    if (isScriptedBossEncounter) {
+      return {
+        ...enemy,
+        rewards: {
+          ...enemy.rewards,
+          loot: enemy.rewards.loot.map((drop) => ({ ...drop })),
+        },
+      };
+    }
+
+    const hp = Math.max(1, Math.round(enemy.hp * tier.enemyHpMultiplier));
+    const attack = Math.max(1, Math.round(enemy.attack * tier.enemyStatMultiplier));
+    const defense = Math.max(0, Math.round(enemy.defense * tier.enemyStatMultiplier));
+    const magicAttack = Math.max(0, Math.round(enemy.magicAttack * tier.enemyStatMultiplier));
+    const speed = Math.max(1, Math.round(enemy.speed * tier.enemyStatMultiplier));
+    const scaledXp = Math.max(1, Math.round(enemy.rewards.experience * tier.rewardXpMultiplier));
+    const scaledGold = Math.max(1, Math.round(enemy.rewards.gold * tier.rewardGoldMultiplier));
+
+    return {
+      ...enemy,
+      hp,
+      attack,
+      defense,
+      magicAttack,
+      speed,
+      rewards: {
+        ...enemy.rewards,
+        experience: scaledXp,
+        gold: scaledGold,
+        loot: enemy.rewards.loot.map((drop) => ({ ...drop })),
+      },
+    };
+  }
+
+  private resolveScaledVictoryReward(
+    encounter: CombatEncounterState,
+    playerLevel: number,
+  ): { experience: number; gold: number } {
+    const levelDelta = clampPlayerLevel(playerLevel) - Math.max(1, Math.floor(encounter.towerFloor));
+
+    let levelXpMultiplier = 1;
+    let levelGoldMultiplier = 1;
+    if (levelDelta >= 4) {
+      levelXpMultiplier = 0.55;
+      levelGoldMultiplier = 0.75;
+    } else if (levelDelta >= 2) {
+      levelXpMultiplier = 0.75;
+      levelGoldMultiplier = 0.9;
+    } else if (levelDelta <= -3) {
+      levelXpMultiplier = 1.25;
+      levelGoldMultiplier = 1.1;
+    } else if (levelDelta <= -1) {
+      levelXpMultiplier = 1.12;
+      levelGoldMultiplier = 1.05;
+    }
+
+    if (playerLevel >= PLAYER_MAX_LEVEL) {
+      levelXpMultiplier = 0;
+    }
+
+    const scaledExperience = Math.max(
+      0,
+      Math.round(encounter.enemy.rewards.experience * levelXpMultiplier),
+    );
+    const scaledGold = Math.max(
+      1,
+      Math.round(encounter.enemy.rewards.gold * levelGoldMultiplier),
+    );
+
+    return {
+      experience: scaledExperience,
+      gold: scaledGold,
     };
   }
 
