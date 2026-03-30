@@ -738,6 +738,19 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - CI:
   - workflow GitHub Actions enrichi avec l'etape `Web UI Regression Tests`.
 
+### Lot 53 - Telemetry combat visible dans le HUD
+- Frontend combat:
+  - ajout d'une ligne `Telemetry` dans la carte ennemi du HUD combat.
+  - affichage des compteurs issus du `scriptState` serveur:
+    - `telemetryCleanseUses`
+    - `telemetryInterruptUses`
+    - `telemetryBossSpecialCasts`
+    - details par intent special `telemetryBossSpecialCast_*`.
+  - rendu compact pour QA live: `C:x | I:y | B:z | INTENT_A:n, INTENT_B:m`.
+  - fallback lisible: `No data` tant qu'aucun compteur n'a encore ete incremente.
+- Qualite:
+  - test web de non-regression etendu pour verifier la presence du champ HUD `combatTelemetry`.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -794,6 +807,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - progression tour (etage et boss 10)
   - mini tooltip d'aide des tags d'intention (`ATK/MAG/CLN/DSP/ULT`)
   - glossaire visuel des raretes de loot (`common`, `uncommon`, `rare`, `epic`, `legendary`)
+  - ligne telemetry combat (compteurs skills/boss scripts) pour lecture rapide en test
   - panneau `Debug QA` pour piloter les endpoints debug sans quitter le jeu (DEV/staging), incluant world flags, presets de scenario, set quest status et recaps detaillees
 - Chargement web optimise:
   - entree legere
@@ -863,7 +877,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 1. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
 2. Brancher les sprites sur plus d'ennemis/animations pour sortir du pack statique initial.
 3. Ajouter une execution optionnelle des fixtures SQL dans un job CI d'integration dedie.
-4. Exposer la telemetry combat dans le HUD debug ou un rapport de run.
-5. Industrialiser des tests e2e auth -> combat -> save/load sur base de fixtures.
+4. Industrialiser des tests e2e auth -> combat -> save/load sur base de fixtures.
+5. Ajouter un export JSON des traces QA (combat/debug HUD) pour partager les runs entre dev/prod.
 
 

@@ -584,6 +584,7 @@ export class GameScene extends Phaser.Scene {
               <div class="combat-card-line"><span>HP</span><strong data-hud="combatEnemyHp">-</strong></div>
               <div class="combat-card-line"><span>MP</span><strong data-hud="combatEnemyMp">-</strong></div>
               <div class="combat-card-line"><span>Effects</span><strong data-hud="combatEnemyEffects">-</strong></div>
+              <div class="combat-card-line"><span>Telemetry</span><strong data-hud="combatTelemetry">-</strong></div>
               <div class="combat-card-line"><span>Intent</span><strong data-hud="combatEnemyIntent">-</strong></div>
               <div class="combat-card-line"><span>Next</span><strong data-hud="combatEnemyIntentNext">-</strong></div>
             </div>
@@ -910,6 +911,7 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('combatEnemyHp', this.getCombatEnemyValue('hp'));
     this.setHudText('combatEnemyMp', this.getCombatEnemyValue('mp'));
     this.renderCombatEffectChips('combatEnemyEffects', this.getCombatEnemyEffectChips());
+    this.setHudText('combatTelemetry', this.getCombatTelemetryLabel());
     this.renderCombatEnemyTelegraphs();
 
     if (this.combatStatusBadge) {
@@ -2734,6 +2736,54 @@ export class GameScene extends Phaser.Scene {
     }
 
     return effects;
+  }
+
+  private getCombatTelemetryLabel(): string {
+    if (!this.combatState) {
+      return '-';
+    }
+
+    const cleanseUses = this.getCombatScriptTurns('telemetryCleanseUses');
+    const interruptUses = this.getCombatScriptTurns('telemetryInterruptUses');
+    const bossSpecialCasts = this.getCombatScriptTurns('telemetryBossSpecialCasts');
+    const specials = this.getCombatBossSpecialTelemetryParts();
+
+    const hasTelemetry =
+      cleanseUses > 0 || interruptUses > 0 || bossSpecialCasts > 0 || specials.length > 0;
+    if (!hasTelemetry) {
+      return 'No data';
+    }
+
+    const base = [`C:${cleanseUses}`, `I:${interruptUses}`, `B:${bossSpecialCasts}`];
+    if (specials.length === 0) {
+      return base.join(' | ');
+    }
+
+    return `${base.join(' | ')} | ${specials.join(', ')}`;
+  }
+
+  private getCombatBossSpecialTelemetryParts(): string[] {
+    if (!this.combatState?.scriptState) {
+      return [];
+    }
+
+    const prefix = 'telemetryBossSpecialCast_';
+    const parts: string[] = [];
+    for (const [key, value] of Object.entries(this.combatState.scriptState)) {
+      if (!key.startsWith(prefix) || typeof value !== 'number' || !Number.isFinite(value)) {
+        continue;
+      }
+
+      const count = Math.max(0, Math.floor(value));
+      if (count <= 0) {
+        continue;
+      }
+
+      const intent = key.slice(prefix.length).toUpperCase();
+      parts.push(`${intent}:${count}`);
+    }
+
+    return parts.sort();
   }
 
   private renderCombatEnemyTelegraphs(): void {

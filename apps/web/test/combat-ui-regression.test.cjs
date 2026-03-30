@@ -28,6 +28,12 @@ test('enemy telegraph keeps current and next intent fields', () => {
   assert.equal(gameSceneSource.includes('renderCombatEnemyTelegraphs()'), true);
 });
 
+test('combat HUD exposes telemetry field and renderer hook', () => {
+  assert.equal(gameSceneSource.includes('data-hud="combatTelemetry"'), true);
+  assert.equal(gameSceneSource.includes("setHudText('combatTelemetry', this.getCombatTelemetryLabel())"), true);
+  assert.equal(gameSceneSource.includes('private getCombatTelemetryLabel(): string'), true);
+});
+
 test('combat intent mapping still covers critical scripted intents', () => {
   const requiredIntents = ['root_smash', 'cinder_burst', 'molten_shell', 'iron_recenter', 'null_sigil', 'cataclysm_ray'];
   for (const intent of requiredIntents) {
