@@ -1402,6 +1402,15 @@ body::before {
   line-height: 1.45;
 }
 
+.hud-combat-recap {
+  border: 1px solid rgba(127, 164, 255, 0.26);
+  background: rgba(127, 164, 255, 0.08);
+  color: #d8e4ff;
+  padding: 9px 10px;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
 .hud-combat-log {
   margin: 0;
   padding: 0;

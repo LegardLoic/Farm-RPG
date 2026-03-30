@@ -32,7 +32,10 @@ test('enemy telegraph keeps current and next intent fields', () => {
 
 test('combat HUD exposes telemetry field and renderer hook', () => {
   assert.equal(gameSceneSource.includes('data-hud="combatTelemetry"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="combatRecap"'), true);
   assert.equal(gameSceneSource.includes("setHudText('combatTelemetry', this.getCombatTelemetryLabel())"), true);
+  assert.equal(gameSceneSource.includes("setHudText('combatRecap', this.getCombatRecapLabel())"), true);
+  assert.equal(gameSceneSource.includes('private getCombatRecapLabel(): string'), true);
   assert.equal(gameSceneSource.includes('private getCombatTelemetryLabel(): string'), true);
 });
 

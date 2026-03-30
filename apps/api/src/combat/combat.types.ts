@@ -79,6 +79,30 @@ export interface CombatDefeatPenaltySummary {
   playerHpAfterDefeat: number;
 }
 
+export interface CombatEncounterRecap {
+  outcome: CombatStatus;
+  rounds: number;
+  damageDealt: number;
+  damageTaken: number;
+  healingDone: number;
+  mpSpent: number;
+  mpRecovered: number;
+  poisonApplied: number;
+  ceciteApplied: number;
+  obscuriteApplied: number;
+  debuffsCleansed: number;
+  blindMisses: number;
+  rewards: {
+    experience: number;
+    gold: number;
+    lootItems: number;
+  };
+  penalties: {
+    goldLost: number;
+    itemsLost: number;
+  };
+}
+
 export interface CombatEncounterState {
   id: string;
   userId: string;
@@ -95,6 +119,7 @@ export interface CombatEncounterState {
   lastAction: CombatActionName | null;
   rewards: CombatRewardSummary | null;
   defeatPenalty: CombatDefeatPenaltySummary | null;
+  recap: CombatEncounterRecap | null;
   rewardsGranted: boolean;
   createdAt: string;
   updatedAt: string;
