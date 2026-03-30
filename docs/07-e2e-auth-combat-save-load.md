@@ -79,6 +79,28 @@ npm run test:e2e --workspace @farm-rpg/api
 - `POST /saves/auto/restore/2` retourne un slot manuel restaure avec une etiquette contenant `AUTO`.
 - `GET /combat/current` retourne `null` apres le chargement du slot.
 
+## Smoke web Playwright
+
+Le workflow nightly exécute aussi un smoke web pour couvrir le front:
+
+- mode `guest`:
+  - le bouton `Start combat` reste desactive tant qu'aucune session n'est injectee
+  - aucun `POST /combat/start` ne doit partir
+- mode `auth`:
+  - une fixture de cookie `farm_rpg_at` est injectee sur l'origine API
+  - le statut auth doit passer a `Connecte: ...`
+  - le bouton `Start combat` doit devenir activable
+  - un `POST /combat/start` doit etre emis et un encounter actif doit apparaitre dans le HUD
+- si aucun token/cookie web specifique n'est fourni, le workflow CI derive automatiquement une fixture a partir de `E2E_ACCESS_TOKEN_SECRET` + `E2E_USER_ID`
+
+Variables utiles pour le smoke web:
+
+- `E2E_WEB_BASE_URL`
+- `E2E_WEB_API_BASE_URL` optionnel, sinon `E2E_API_BASE_URL`
+- `E2E_WEB_AUTH_ACCESS_TOKEN` ou `E2E_WEB_AUTH_COOKIE_VALUE` pour forcer le mode auth
+- `E2E_WEB_AUTH_COOKIE_NAME` optionnel, valeur par defaut `farm_rpg_at`
+- `E2E_WEB_EXPECTED_AUTH_STATUS` optionnel, valeur par defaut adapte au mode
+
 ## Notes
 
 - Le test est isole du workflow CI standard.

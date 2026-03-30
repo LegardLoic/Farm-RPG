@@ -100,3 +100,51 @@ export interface CombatActionResult {
   encounter: CombatEncounterState;
   summary: CombatEncounterSummary;
 }
+
+export interface CombatDebugPlayerSkillSummary {
+  key: CombatActionName;
+  label: string;
+  manaCost: number;
+  blockedBySilence: boolean;
+  description: string;
+}
+
+export interface CombatDebugEnemySummary {
+  key: string;
+  name: string;
+  hp: number;
+  mp: number;
+  attack: number;
+  defense: number;
+  magicAttack: number;
+  speed: number;
+  scriptedFloor: number | null;
+  scriptedBossEncounter: boolean;
+}
+
+export interface CombatDebugEnemyIntentSummary {
+  key: string;
+  label: string;
+  interruptible: boolean;
+  trigger: string;
+}
+
+export interface CombatDebugEnemyScriptSummary {
+  enemyKey: string;
+  enemyName: string;
+  scriptedFloor: number | null;
+  scriptedBossEncounter: boolean;
+  intents: CombatDebugEnemyIntentSummary[];
+}
+
+export interface CombatDebugReference {
+  playerSkills: CombatDebugPlayerSkillSummary[];
+  enemies: CombatDebugEnemySummary[];
+  scriptedFloors: Array<{
+    floor: number;
+    enemyKey: string;
+    enemyName: string;
+    scriptedBossEncounter: boolean;
+  }>;
+  scriptedIntents: CombatDebugEnemyScriptSummary[];
+}

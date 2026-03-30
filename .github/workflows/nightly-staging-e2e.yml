@@ -12,8 +12,12 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL || vars.DATABASE_URL }}
       E2E_API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || vars.E2E_API_BASE_URL }}
       E2E_WEB_BASE_URL: ${{ secrets.E2E_WEB_BASE_URL || vars.E2E_WEB_BASE_URL }}
+      E2E_WEB_API_BASE_URL: ${{ secrets.E2E_WEB_API_BASE_URL || vars.E2E_WEB_API_BASE_URL || secrets.E2E_API_BASE_URL || vars.E2E_API_BASE_URL }}
       E2E_ACCESS_TOKEN_SECRET: ${{ secrets.E2E_ACCESS_TOKEN_SECRET || vars.E2E_ACCESS_TOKEN_SECRET }}
       E2E_USER_ID: ${{ secrets.E2E_USER_ID || vars.E2E_USER_ID }}
+      E2E_WEB_AUTH_ACCESS_TOKEN: ${{ secrets.E2E_WEB_AUTH_ACCESS_TOKEN || vars.E2E_WEB_AUTH_ACCESS_TOKEN }}
+      E2E_WEB_AUTH_COOKIE_VALUE: ${{ secrets.E2E_WEB_AUTH_COOKIE_VALUE || vars.E2E_WEB_AUTH_COOKIE_VALUE }}
+      E2E_WEB_AUTH_COOKIE_NAME: ${{ secrets.E2E_WEB_AUTH_COOKIE_NAME || vars.E2E_WEB_AUTH_COOKIE_NAME || 'farm_rpg_at' }}
       E2E_SAVE_SLOT: ${{ secrets.E2E_SAVE_SLOT || vars.E2E_SAVE_SLOT || 3 }}
       FIXTURE_SCENARIOS: all
       FIXTURE_RESET_FIRST: "true"
@@ -89,16 +93,87 @@ jobs:
         if: ${{ steps.seed_fixtures.outputs.exit_code == '0' && steps.run_e2e.outputs.exit_code == '0' && env.E2E_WEB_BASE_URL != '' }}
         run: npx playwright install --with-deps chromium
 
-      - name: Run Web Smoke
-        id: run_web_smoke
+      - name: Run Web Smoke Guest
+        id: run_web_smoke_guest
         if: ${{ steps.seed_fixtures.outputs.exit_code == '0' && steps.run_e2e.outputs.exit_code == '0' && env.E2E_WEB_BASE_URL != '' }}
         continue-on-error: true
         env:
           E2E_WEB_BASE_URL: ${{ env.E2E_WEB_BASE_URL }}
+          E2E_WEB_API_BASE_URL: ${{ env.E2E_WEB_API_BASE_URL }}
+          E2E_WEB_AUTH_ACCESS_TOKEN: ''
+          E2E_WEB_AUTH_COOKIE_VALUE: ''
         run: |
           set +e
           mkdir -p artifacts/nightly
-          npm run test:smoke --workspace @farm-rpg/web 2>&1 | tee artifacts/nightly/web-smoke.log
+          npm run test:smoke --workspace @farm-rpg/web 2>&1 | tee artifacts/nightly/web-smoke-guest.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+          if [ "${code}" -eq 0 ]; then
+            echo "result=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=failed" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Build Web Auth Fixture
+        id: build_web_auth_fixture
+        if: ${{ steps.seed_fixtures.outputs.exit_code == '0' && steps.run_e2e.outputs.exit_code == '0' && env.E2E_WEB_BASE_URL != '' }}
+        continue-on-error: true
+        run: |
+          set +e
+
+          if [ -n "${E2E_WEB_AUTH_ACCESS_TOKEN:-}" ] || [ -n "${E2E_WEB_AUTH_COOKIE_VALUE:-}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "mode=provided" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -z "${E2E_ACCESS_TOKEN_SECRET:-}" ] || [ -z "${E2E_USER_ID:-}" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "mode=skipped" >> "$GITHUB_OUTPUT"
+            echo "Web auth fixture not available; auth smoke will be skipped." >&2
+            exit 0
+          fi
+
+          node - <<'NODE' >> "$GITHUB_ENV"
+          const { sign } = require('jsonwebtoken');
+
+          const secret = process.env.E2E_ACCESS_TOKEN_SECRET?.trim();
+          const userId = process.env.E2E_USER_ID?.trim();
+          if (!secret || !userId) {
+            process.exit(0);
+          }
+
+          const token = sign(
+            {
+              sub: userId,
+              email: process.env.E2E_WEB_AUTH_EMAIL ?? 'nightly.web@farm-rpg.local',
+              displayName: process.env.E2E_WEB_AUTH_DISPLAY_NAME ?? 'Nightly Web Smoke',
+            },
+            secret,
+            {
+              expiresIn: process.env.E2E_WEB_AUTH_TTL ?? '15m',
+            },
+          );
+
+          console.log(`E2E_WEB_AUTH_ACCESS_TOKEN=${token}`);
+          NODE
+
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "mode=generated" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Run Web Smoke Auth
+        id: run_web_smoke_auth
+        if: ${{ steps.seed_fixtures.outputs.exit_code == '0' && steps.run_e2e.outputs.exit_code == '0' && steps.build_web_auth_fixture.outputs.ready == 'true' }}
+        continue-on-error: true
+        env:
+          E2E_WEB_BASE_URL: ${{ env.E2E_WEB_BASE_URL }}
+          E2E_WEB_API_BASE_URL: ${{ env.E2E_WEB_API_BASE_URL }}
+        run: |
+          set +e
+          mkdir -p artifacts/nightly
+          npm run test:smoke --workspace @farm-rpg/web 2>&1 | tee artifacts/nightly/web-smoke-auth.log
           code=${PIPESTATUS[0]}
           echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
           if [ "${code}" -eq 0 ]; then
@@ -115,8 +190,11 @@ jobs:
           SEED_EXIT_CODE: ${{ steps.seed_fixtures.outputs.exit_code }}
           E2E_RESULT: ${{ steps.run_e2e.outputs.result }}
           E2E_EXIT_CODE: ${{ steps.run_e2e.outputs.exit_code }}
-          WEB_SMOKE_RESULT: ${{ steps.run_web_smoke.outputs.result }}
-          WEB_SMOKE_EXIT_CODE: ${{ steps.run_web_smoke.outputs.exit_code }}
+          WEB_AUTH_FIXTURE_MODE: ${{ steps.build_web_auth_fixture.outputs.mode }}
+          WEB_SMOKE_GUEST_RESULT: ${{ steps.run_web_smoke_guest.outputs.result }}
+          WEB_SMOKE_GUEST_EXIT_CODE: ${{ steps.run_web_smoke_guest.outputs.exit_code }}
+          WEB_SMOKE_AUTH_RESULT: ${{ steps.run_web_smoke_auth.outputs.result }}
+          WEB_SMOKE_AUTH_EXIT_CODE: ${{ steps.run_web_smoke_auth.outputs.exit_code }}
           WEB_SMOKE_TARGET: ${{ env.E2E_WEB_BASE_URL }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           REPOSITORY: ${{ github.repository }}
@@ -131,11 +209,20 @@ jobs:
           if [ -z "${E2E_EXIT_CODE:-}" ]; then
             E2E_EXIT_CODE="-"
           fi
-          if [ -z "${WEB_SMOKE_RESULT:-}" ]; then
-            WEB_SMOKE_RESULT="skipped"
+          if [ -z "${WEB_AUTH_FIXTURE_MODE:-}" ]; then
+            WEB_AUTH_FIXTURE_MODE="skipped"
           fi
-          if [ -z "${WEB_SMOKE_EXIT_CODE:-}" ]; then
-            WEB_SMOKE_EXIT_CODE="-"
+          if [ -z "${WEB_SMOKE_GUEST_RESULT:-}" ]; then
+            WEB_SMOKE_GUEST_RESULT="skipped"
+          fi
+          if [ -z "${WEB_SMOKE_GUEST_EXIT_CODE:-}" ]; then
+            WEB_SMOKE_GUEST_EXIT_CODE="-"
+          fi
+          if [ -z "${WEB_SMOKE_AUTH_RESULT:-}" ]; then
+            WEB_SMOKE_AUTH_RESULT="skipped"
+          fi
+          if [ -z "${WEB_SMOKE_AUTH_EXIT_CODE:-}" ]; then
+            WEB_SMOKE_AUTH_EXIT_CODE="-"
           fi
           if [ -z "${WEB_SMOKE_TARGET:-}" ]; then
             WEB_SMOKE_TARGET="-"
@@ -156,10 +243,17 @@ jobs:
               "result": "${E2E_RESULT}",
               "exitCode": "${E2E_EXIT_CODE}"
             },
-            "webSmoke": {
+            "webAuthFixture": {
+              "mode": "${WEB_AUTH_FIXTURE_MODE}"
+            },
+            "webSmokeGuest": {
+              "result": "${WEB_SMOKE_GUEST_RESULT}",
+              "exitCode": "${WEB_SMOKE_GUEST_EXIT_CODE}"
+            },
+            "webSmokeAuth": {
               "target": "${WEB_SMOKE_TARGET}",
-              "result": "${WEB_SMOKE_RESULT}",
-              "exitCode": "${WEB_SMOKE_EXIT_CODE}"
+              "result": "${WEB_SMOKE_AUTH_RESULT}",
+              "exitCode": "${WEB_SMOKE_AUTH_EXIT_CODE}"
             }
           }
           EOF
@@ -171,7 +265,9 @@ jobs:
             echo "- Branch: \`${REF_NAME}\`"
             echo "- Seed fixtures: **${SEED_RESULT}** (exit: \`${SEED_EXIT_CODE}\`)"
             echo "- API E2E: **${E2E_RESULT}** (exit: \`${E2E_EXIT_CODE}\`)"
-            echo "- Web smoke: **${WEB_SMOKE_RESULT}** (exit: \`${WEB_SMOKE_EXIT_CODE}\`, target: \`${WEB_SMOKE_TARGET}\`)"
+            echo "- Web auth fixture: **${WEB_AUTH_FIXTURE_MODE}**"
+            echo "- Web smoke guest: **${WEB_SMOKE_GUEST_RESULT}** (exit: \`${WEB_SMOKE_GUEST_EXIT_CODE}\`)"
+            echo "- Web smoke auth: **${WEB_SMOKE_AUTH_RESULT}** (exit: \`${WEB_SMOKE_AUTH_EXIT_CODE}\`, target: \`${WEB_SMOKE_TARGET}\`)"
             echo "- Run URL: ${RUN_URL}"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -184,11 +280,12 @@ jobs:
             artifacts/nightly/summary.json
             artifacts/nightly/seed.log
             artifacts/nightly/e2e.log
-            artifacts/nightly/web-smoke.log
+            artifacts/nightly/web-smoke-guest.log
+            artifacts/nightly/web-smoke-auth.log
           if-no-files-found: warn
 
       - name: Fail workflow when checks fail
-        if: ${{ steps.seed_fixtures.outputs.exit_code != '0' || steps.run_e2e.outputs.exit_code != '0' || steps.run_web_smoke.outputs.result == 'failed' }}
+        if: ${{ steps.seed_fixtures.outputs.exit_code != '0' || steps.run_e2e.outputs.exit_code != '0' || steps.run_web_smoke_guest.outputs.result == 'failed' || steps.run_web_smoke_auth.outputs.result == 'failed' }}
         run: |
           echo "Nightly staging checks failed (see summary/artifacts)." >&2
           exit 1

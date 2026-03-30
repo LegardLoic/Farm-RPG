@@ -14,6 +14,7 @@ const {
   DEBUG_STATE_PRESET_WORLD_FLAG_KEYS,
   parseDebugForceCombatEnemyFlag,
 } = require('../dist/debug/debug-admin.constants.js');
+const { CombatService } = require('../dist/combat/combat.service.js');
 const { SavesService } = require('../dist/saves/saves.service.js');
 const { BLACKSMITH_SHOP_UNLOCK_FLAG } = require('../dist/shops/shops.constants.js');
 const { ShopsService } = require('../dist/shops/shops.service.js');
@@ -139,6 +140,10 @@ function createSavesService() {
   });
 }
 
+function createCombatService() {
+  return new CombatService({}, {}, {}, {});
+}
+
 test('auth service issues JWTs and persists hashed refresh tokens', async () => {
   const db = createAuthDatabaseStub();
   const service = new AuthService(db, createConfigService({
@@ -247,6 +252,56 @@ test('debug state presets expose unique world flags for QA setup', () => {
   assert.ok(DEBUG_STATE_PRESET_KEYS.includes('village_open'));
   assert.ok(DEBUG_STATE_PRESET_KEYS.includes('mid_tower'));
   assert.ok(DEBUG_STATE_PRESET_KEYS.includes('act1_done'));
+});
+
+test('combat debug reference exposes scripted enemies, floors, skills, and intents', () => {
+  const service = createCombatService();
+  const reference = service.getDebugScriptedCombatReference();
+
+  assert.equal(Array.isArray(reference.playerSkills), true);
+  assert.equal(reference.playerSkills.length, 8);
+  assert.deepEqual(
+    reference.playerSkills.map((skill) => skill.key),
+    ['attack', 'defend', 'fireball', 'rally', 'sunder', 'mend', 'cleanse', 'interrupt'],
+  );
+  assert.equal(
+    reference.playerSkills.find((skill) => skill.key === 'interrupt')?.blockedBySilence,
+    true,
+  );
+  assert.equal(reference.scriptedFloors.length, 4);
+  assert.deepEqual(
+    reference.scriptedFloors.map((entry) => [entry.floor, entry.enemyKey]),
+    [
+      [3, 'thorn_beast_alpha'],
+      [5, 'cinder_warden'],
+      [8, 'ash_vanguard_captain'],
+      [10, 'curse_heart_avatar'],
+    ],
+  );
+  assert.equal(
+    reference.enemies.find((enemy) => enemy.key === 'curse_heart_avatar')?.scriptedFloor,
+    10,
+  );
+  assert.equal(
+    reference.enemies.find((enemy) => enemy.key === 'curse_heart_avatar')?.scriptedBossEncounter,
+    true,
+  );
+  assert.equal(
+    reference.scriptedIntents.some(
+      (profile) =>
+        profile.enemyKey === 'cinder_warden' &&
+        profile.intents.some((intent) => intent.key === 'molten_shell' && intent.interruptible === true),
+    ),
+    true,
+  );
+  assert.equal(
+    reference.scriptedIntents.some(
+      (profile) =>
+        profile.enemyKey === 'curse_heart_avatar' &&
+        profile.intents.some((intent) => intent.key === 'cataclysm_ray' && intent.label === 'Cataclysm Ray'),
+    ),
+    true,
+  );
 });
 
 test('blacksmith shop filters offers by unlock flags', async () => {

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, NotFoundException, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/auth.types';
@@ -10,7 +11,10 @@ import { StartCombatDto } from './dto/start-combat.dto';
 @Controller('combat')
 @UseGuards(AccessTokenGuard)
 export class CombatController {
-  constructor(private readonly combatService: CombatService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly combatService: CombatService,
+  ) {}
 
   @Post('start')
   async start(@Req() req: AuthenticatedRequest, @Body() body?: StartCombatDto) {
@@ -27,6 +31,17 @@ export class CombatController {
     return {
       status: 'ok',
       encounter,
+    };
+  }
+
+  @Get('debug/scripted-intents')
+  async debugScriptedIntents() {
+    this.assertDebugEnabled();
+
+    return {
+      status: 'ok',
+      environment: this.configService.get<string>('NODE_ENV', 'development'),
+      combat: this.combatService.getDebugScriptedCombatReference(),
     };
   }
 
@@ -60,5 +75,12 @@ export class CombatController {
       status: 'ok',
       ...await this.combatService.forfeitCombat(req.authUser!.id, id, body ?? {}),
     };
+  }
+
+  private assertDebugEnabled(): void {
+    const environment = this.configService.get<string>('NODE_ENV', 'development');
+    if (environment === 'production') {
+      throw new NotFoundException();
+    }
   }
 }

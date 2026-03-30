@@ -1,6 +1,27 @@
 {
   "frameSize": { "width": 64, "height": 64 },
   "origin": { "x": 0.5, "y": 0.84 },
+  "portraits": {
+    "frameSize": { "width": 128, "height": 128 },
+    "fallback": {
+      "key": "portrait-enemy-default",
+      "path": "portraits/enemies/default.svg"
+    },
+    "byEnemyKey": {
+      "forest_goblin": {
+        "key": "portrait-enemy-forest-goblin",
+        "path": "portraits/enemies/forest_goblin.svg"
+      },
+      "training_dummy": {
+        "key": "portrait-enemy-training-dummy",
+        "path": "portraits/enemies/training_dummy.svg"
+      },
+      "ash_scout": {
+        "key": "portrait-enemy-ash-scout",
+        "path": "portraits/enemies/ash_scout.svg"
+      }
+    }
+  },
   "sprites": {
     "player-hero": {
       "key": "player-hero",

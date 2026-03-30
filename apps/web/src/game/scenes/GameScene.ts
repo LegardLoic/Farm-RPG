@@ -45,6 +45,8 @@ type DebugLoadoutPresetKey = 'starter' | 'tower_mid' | 'boss_trial';
 type DebugStatePresetKey = 'village_open' | 'mid_tower' | 'act1_done';
 type DebugQaStatus = 'idle' | 'loading' | 'success' | 'error';
 type CombatEffectTone = 'neutral' | 'calm' | 'warning' | 'danger' | 'utility';
+type DebugQaReplayAutoPlaySpeedKey = 'slow' | 'normal' | 'fast';
+type StripCalibrationPresetKey = 'manifest' | 'snappy' | 'cinematic';
 
 const FIREBALL_MANA_COST = 5;
 const RALLY_MANA_COST = 3;
@@ -103,6 +105,11 @@ type SpriteManifest = {
   origin: { x: number; y: number };
   sprites: Record<string, SpriteManifestSpriteEntry>;
   strips?: Record<string, SpriteManifestStripEntry>;
+  portraits?: {
+    frameSize?: { width: number; height: number };
+    byEnemyKey?: Record<string, string | { key?: string; path?: string }>;
+    fallback?: string | { key?: string; path?: string };
+  };
 };
 
 type SpriteManifestSpriteEntry = {
@@ -238,6 +245,12 @@ type DebugQaTracePayload = {
     busyAction: DebugQaActionName | null;
     message: string | null;
     error: string | null;
+    replayAutoPlay: {
+      active: boolean;
+      speed: DebugQaReplayAutoPlaySpeedKey;
+      intervalMs: number;
+    };
+    stripCalibrationPreset: StripCalibrationPresetKey;
   };
 };
 
@@ -286,6 +299,15 @@ type DebugQaStepReplayState = {
   baseline: DebugQaReplayBaseline;
 };
 
+type StripCalibrationPreset = {
+  key: StripCalibrationPresetKey;
+  label: string;
+  playerFpsMultiplier: number;
+  playerActionDurationMultiplier: number;
+  hudIntervalMultiplier: number;
+  hudActionDurationMultiplier: number;
+};
+
 const DEBUG_QA_PRESET_OPTIONS: DebugQaPresetOption[] = [
   { key: 'starter', label: 'Starter' },
   { key: 'tower_mid', label: 'Tower mid' },
@@ -302,6 +324,43 @@ const DEBUG_QA_QUEST_STATUS_OPTIONS: Array<{ key: QuestStatus; label: string }> 
   { key: 'active', label: 'Active' },
   { key: 'completed', label: 'Completed' },
   { key: 'claimed', label: 'Claimed' },
+];
+
+const DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS: Array<{
+  key: DebugQaReplayAutoPlaySpeedKey;
+  label: string;
+  intervalMs: number;
+}> = [
+  { key: 'slow', label: 'Slow (1400ms)', intervalMs: 1400 },
+  { key: 'normal', label: 'Normal (900ms)', intervalMs: 900 },
+  { key: 'fast', label: 'Fast (500ms)', intervalMs: 500 },
+];
+
+const STRIP_CALIBRATION_PRESETS: StripCalibrationPreset[] = [
+  {
+    key: 'manifest',
+    label: 'Manifest default',
+    playerFpsMultiplier: 1,
+    playerActionDurationMultiplier: 1,
+    hudIntervalMultiplier: 1,
+    hudActionDurationMultiplier: 1,
+  },
+  {
+    key: 'snappy',
+    label: 'Snappy QA',
+    playerFpsMultiplier: 1.25,
+    playerActionDurationMultiplier: 0.84,
+    hudIntervalMultiplier: 0.84,
+    hudActionDurationMultiplier: 0.86,
+  },
+  {
+    key: 'cinematic',
+    label: 'Cinematic QA',
+    playerFpsMultiplier: 0.82,
+    playerActionDurationMultiplier: 1.2,
+    hudIntervalMultiplier: 1.2,
+    hudActionDurationMultiplier: 1.2,
+  },
 ];
 
 function isDebugQaActionName(value: string): value is DebugQaActionName {
@@ -436,6 +495,10 @@ export class GameScene extends Phaser.Scene {
   private debugQaReplayStepStartButton: HTMLButtonElement | null = null;
   private debugQaReplayStepNextButton: HTMLButtonElement | null = null;
   private debugQaReplayStepStopButton: HTMLButtonElement | null = null;
+  private debugQaReplayAutoPlayButton: HTMLButtonElement | null = null;
+  private debugQaReplayAutoPlaySpeedSelect: HTMLSelectElement | null = null;
+  private debugQaStripCalibrationSelect: HTMLSelectElement | null = null;
+  private debugQaStripCalibrationButton: HTMLButtonElement | null = null;
   private debugQaImportFileInput: HTMLInputElement | null = null;
   private debugQaExportButton: HTMLButtonElement | null = null;
   private debugQaBusyAction: DebugQaActionName | null = null;
@@ -444,7 +507,11 @@ export class GameScene extends Phaser.Scene {
   private debugQaError: string | null = null;
   private debugQaImportedTrace: ImportedDebugQaTrace | null = null;
   private debugQaStepReplayState: DebugQaStepReplayState | null = null;
+  private debugQaReplayAutoPlaySpeed: DebugQaReplayAutoPlaySpeedKey = 'normal';
+  private debugQaReplayAutoPlayIntervalId: number | null = null;
+  private stripCalibrationPreset: StripCalibrationPresetKey = 'manifest';
   private readonly debugQaEnabled = import.meta.env.DEV || import.meta.env.MODE === 'staging';
+  private readonly stripCalibrationEnabled = import.meta.env.MODE === 'staging';
 
   private readonly onDebugQaImportFileChange = (event: Event) => {
     void this.handleDebugQaImportFileChange(event);
@@ -578,6 +645,16 @@ export class GameScene extends Phaser.Scene {
 
     if (debugAction === 'replay-trace-step-stop') {
       this.stopDebugQaStepReplay(true);
+      return;
+    }
+
+    if (debugAction === 'replay-trace-step-autoplay') {
+      this.toggleDebugQaStepReplayAutoPlay();
+      return;
+    }
+
+    if (debugAction === 'apply-strip-calibration') {
+      this.applyStripCalibrationPreset();
       return;
     }
 
@@ -922,6 +999,24 @@ export class GameScene extends Phaser.Scene {
               <span>Replace all flags</span>
               <input data-hud="debugQaWorldFlagsReplace" type="checkbox" />
             </label>
+            <label class="hud-debug-qa-field">
+              <span>Step replay speed</span>
+              <select data-hud="debugQaReplayAutoPlaySpeed">
+                ${DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS.map((option) => `<option value="${option.key}">${option.label}</option>`).join('')}
+              </select>
+            </label>
+            ${
+              this.stripCalibrationEnabled
+                ? `
+            <label class="hud-debug-qa-field">
+              <span>Strip calibration</span>
+              <select data-hud="debugQaStripCalibrationPreset">
+                ${STRIP_CALIBRATION_PRESETS.map((preset) => `<option value="${preset.key}">${preset.label}</option>`).join('')}
+              </select>
+            </label>
+              `
+                : ''
+            }
           </div>
           <div class="hud-debug-qa-actions">
             <button class="hud-debug-qa-button" data-debug-action="grant-resources">Grant resources</button>
@@ -935,7 +1030,15 @@ export class GameScene extends Phaser.Scene {
             <button class="hud-debug-qa-button secondary" data-debug-action="replay-trace">Replay imported trace</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="replay-trace-step-start">Start step replay</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="replay-trace-step-next">Next step</button>
+            <button class="hud-debug-qa-button secondary" data-debug-action="replay-trace-step-autoplay">Start auto-play</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="replay-trace-step-stop">Stop step replay</button>
+            ${
+              this.stripCalibrationEnabled
+                ? `
+            <button class="hud-debug-qa-button secondary" data-debug-action="apply-strip-calibration">Apply strip calibration</button>
+              `
+                : ''
+            }
             <button class="hud-debug-qa-button export" data-debug-action="export-trace" title="Export a local JSON trace of the current QA state">
               Export JSON trace
             </button>
@@ -994,6 +1097,8 @@ export class GameScene extends Phaser.Scene {
     this.debugQaWorldFlagsInput = this.hudRoot.querySelector<HTMLTextAreaElement>('[data-hud="debugQaWorldFlags"]');
     this.debugQaWorldFlagsRemoveInput = this.hudRoot.querySelector<HTMLTextAreaElement>('[data-hud="debugQaWorldFlagsRemove"]');
     this.debugQaWorldFlagsReplaceInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaWorldFlagsReplace"]');
+    this.debugQaReplayAutoPlaySpeedSelect = this.hudRoot.querySelector<HTMLSelectElement>('[data-hud="debugQaReplayAutoPlaySpeed"]');
+    this.debugQaStripCalibrationSelect = this.hudRoot.querySelector<HTMLSelectElement>('[data-hud="debugQaStripCalibrationPreset"]');
     this.debugQaGrantButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="grant-resources"]');
     this.debugQaTowerFloorButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="set-tower-floor"]');
     this.debugQaStatePresetButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="apply-state-preset"]');
@@ -1005,9 +1110,17 @@ export class GameScene extends Phaser.Scene {
     this.debugQaReplayButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="replay-trace"]');
     this.debugQaReplayStepStartButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="replay-trace-step-start"]');
     this.debugQaReplayStepNextButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="replay-trace-step-next"]');
+    this.debugQaReplayAutoPlayButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="replay-trace-step-autoplay"]');
     this.debugQaReplayStepStopButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="replay-trace-step-stop"]');
+    this.debugQaStripCalibrationButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="apply-strip-calibration"]');
     this.debugQaImportFileInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaImportFile"]');
     this.debugQaExportButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="export-trace"]');
+    if (this.debugQaReplayAutoPlaySpeedSelect) {
+      this.debugQaReplayAutoPlaySpeedSelect.value = this.debugQaReplayAutoPlaySpeed;
+    }
+    if (this.debugQaStripCalibrationSelect) {
+      this.debugQaStripCalibrationSelect.value = this.stripCalibrationPreset;
+    }
     if (this.debugQaImportFileInput) {
       this.debugQaImportFileInput.addEventListener('change', this.onDebugQaImportFileChange);
     }
@@ -1076,6 +1189,8 @@ export class GameScene extends Phaser.Scene {
     this.debugQaWorldFlagsInput = null;
     this.debugQaWorldFlagsRemoveInput = null;
     this.debugQaWorldFlagsReplaceInput = null;
+    this.debugQaReplayAutoPlaySpeedSelect = null;
+    this.debugQaStripCalibrationSelect = null;
     this.debugQaGrantButton = null;
     this.debugQaTowerFloorButton = null;
     this.debugQaStatePresetButton = null;
@@ -1087,7 +1202,9 @@ export class GameScene extends Phaser.Scene {
     this.debugQaReplayButton = null;
     this.debugQaReplayStepStartButton = null;
     this.debugQaReplayStepNextButton = null;
+    this.debugQaReplayAutoPlayButton = null;
     this.debugQaReplayStepStopButton = null;
+    this.debugQaStripCalibrationButton = null;
     this.debugQaImportFileInput = null;
     this.debugQaExportButton = null;
     this.questsRenderSignature = '';
@@ -1100,6 +1217,7 @@ export class GameScene extends Phaser.Scene {
     this.debugQaError = null;
     this.debugQaImportedTrace = null;
     this.debugQaStepReplayState = null;
+    this.debugQaReplayAutoPlayIntervalId = null;
     this.spriteManifest = null;
     this.playerUsesStripAnimation = false;
   }
@@ -1240,88 +1358,90 @@ export class GameScene extends Phaser.Scene {
       this.debugQaMessageValue.dataset.variant = this.debugQaError ? 'error' : this.debugQaStatus === 'success' ? 'success' : 'info';
     }
 
-    const disabled = !this.isAuthenticated || this.debugQaStatus === 'loading';
+    const loading = this.debugQaStatus === 'loading';
+    const requiresAuthDisabled = !this.isAuthenticated || loading;
     if (this.debugQaGrantXpInput) {
-      this.debugQaGrantXpInput.disabled = disabled;
+      this.debugQaGrantXpInput.disabled = requiresAuthDisabled;
     }
     if (this.debugQaGrantGoldInput) {
-      this.debugQaGrantGoldInput.disabled = disabled;
+      this.debugQaGrantGoldInput.disabled = requiresAuthDisabled;
     }
     if (this.debugQaTowerFloorInput) {
-      this.debugQaTowerFloorInput.disabled = disabled;
+      this.debugQaTowerFloorInput.disabled = requiresAuthDisabled;
     }
     if (this.debugQaStatePresetSelect) {
-      this.debugQaStatePresetSelect.disabled = disabled;
+      this.debugQaStatePresetSelect.disabled = requiresAuthDisabled;
     }
     if (this.debugQaQuestKeyInput) {
-      this.debugQaQuestKeyInput.disabled = disabled;
+      this.debugQaQuestKeyInput.disabled = requiresAuthDisabled;
     }
     if (this.debugQaQuestStatusSelect) {
-      this.debugQaQuestStatusSelect.disabled = disabled;
+      this.debugQaQuestStatusSelect.disabled = requiresAuthDisabled;
     }
     if (this.debugQaLoadoutPresetSelect) {
-      this.debugQaLoadoutPresetSelect.disabled = disabled;
+      this.debugQaLoadoutPresetSelect.disabled = requiresAuthDisabled;
     }
     if (this.debugQaWorldFlagsInput) {
-      this.debugQaWorldFlagsInput.disabled = disabled;
+      this.debugQaWorldFlagsInput.disabled = requiresAuthDisabled;
     }
     if (this.debugQaWorldFlagsRemoveInput) {
-      this.debugQaWorldFlagsRemoveInput.disabled = disabled;
+      this.debugQaWorldFlagsRemoveInput.disabled = requiresAuthDisabled;
     }
     if (this.debugQaWorldFlagsReplaceInput) {
-      this.debugQaWorldFlagsReplaceInput.disabled = disabled;
+      this.debugQaWorldFlagsReplaceInput.disabled = requiresAuthDisabled;
     }
 
     if (this.debugQaGrantButton) {
-      this.debugQaGrantButton.disabled = disabled;
+      this.debugQaGrantButton.disabled = requiresAuthDisabled;
       this.debugQaGrantButton.textContent =
         this.debugQaBusyAction === 'grant-resources' ? 'Granting...' : 'Grant resources';
     }
     if (this.debugQaTowerFloorButton) {
-      this.debugQaTowerFloorButton.disabled = disabled;
+      this.debugQaTowerFloorButton.disabled = requiresAuthDisabled;
       this.debugQaTowerFloorButton.textContent =
         this.debugQaBusyAction === 'set-tower-floor' ? 'Applying...' : 'Set tower floor';
     }
     if (this.debugQaStatePresetButton) {
-      this.debugQaStatePresetButton.disabled = disabled;
+      this.debugQaStatePresetButton.disabled = requiresAuthDisabled;
       this.debugQaStatePresetButton.textContent =
         this.debugQaBusyAction === 'apply-state-preset' ? 'Applying...' : 'Apply state preset';
     }
     if (this.debugQaSetQuestStatusButton) {
-      this.debugQaSetQuestStatusButton.disabled = disabled;
+      this.debugQaSetQuestStatusButton.disabled = requiresAuthDisabled;
       this.debugQaSetQuestStatusButton.textContent =
         this.debugQaBusyAction === 'set-quest-status' ? 'Applying...' : 'Set quest status';
     }
     if (this.debugQaLoadoutButton) {
-      this.debugQaLoadoutButton.disabled = disabled;
+      this.debugQaLoadoutButton.disabled = requiresAuthDisabled;
       this.debugQaLoadoutButton.textContent =
         this.debugQaBusyAction === 'apply-loadout-preset' ? 'Applying...' : 'Apply loadout';
     }
     if (this.debugQaCompleteQuestsButton) {
-      this.debugQaCompleteQuestsButton.disabled = disabled;
+      this.debugQaCompleteQuestsButton.disabled = requiresAuthDisabled;
       this.debugQaCompleteQuestsButton.textContent =
         this.debugQaBusyAction === 'complete-quests' ? 'Completing...' : 'Complete quests';
     }
     if (this.debugQaSetWorldFlagsButton) {
-      this.debugQaSetWorldFlagsButton.disabled = disabled;
+      this.debugQaSetWorldFlagsButton.disabled = requiresAuthDisabled;
       this.debugQaSetWorldFlagsButton.textContent =
         this.debugQaBusyAction === 'set-world-flags' ? 'Applying...' : 'Set world flags';
     }
 
     const replayActive = Boolean(this.debugQaStepReplayState);
+    const autoPlayActive = this.debugQaReplayAutoPlayIntervalId !== null;
 
     if (this.debugQaImportButton) {
-      this.debugQaImportButton.disabled = this.debugQaStatus === 'loading' || replayActive;
-      this.debugQaImportButton.textContent = this.debugQaStatus === 'loading' ? 'Importing...' : 'Import JSON trace';
+      this.debugQaImportButton.disabled = loading || replayActive;
+      this.debugQaImportButton.textContent = loading ? 'Importing...' : 'Import JSON trace';
     }
 
     if (this.debugQaReplayButton) {
-      this.debugQaReplayButton.disabled = this.debugQaStatus === 'loading' || !this.debugQaImportedTrace || replayActive;
+      this.debugQaReplayButton.disabled = loading || !this.debugQaImportedTrace || replayActive;
       this.debugQaReplayButton.textContent = 'Replay imported trace';
     }
 
     if (this.debugQaReplayStepStartButton) {
-      this.debugQaReplayStepStartButton.disabled = this.debugQaStatus === 'loading' || !this.debugQaImportedTrace || replayActive;
+      this.debugQaReplayStepStartButton.disabled = loading || !this.debugQaImportedTrace || replayActive;
       this.debugQaReplayStepStartButton.textContent = 'Start step replay';
     }
 
@@ -1329,8 +1449,18 @@ export class GameScene extends Phaser.Scene {
       const replayLabel = this.debugQaStepReplayState
         ? `Next step (${this.debugQaStepReplayState.stepIndex}/${this.debugQaStepReplayState.totalSteps})`
         : 'Next step';
-      this.debugQaReplayStepNextButton.disabled = !replayActive;
+      this.debugQaReplayStepNextButton.disabled = !replayActive || autoPlayActive;
       this.debugQaReplayStepNextButton.textContent = replayLabel;
+    }
+
+    if (this.debugQaReplayAutoPlayButton) {
+      this.debugQaReplayAutoPlayButton.disabled = !replayActive;
+      this.debugQaReplayAutoPlayButton.textContent = autoPlayActive ? 'Pause auto-play' : 'Start auto-play';
+    }
+
+    if (this.debugQaReplayAutoPlaySpeedSelect) {
+      this.debugQaReplayAutoPlaySpeedSelect.disabled = !replayActive || autoPlayActive;
+      this.debugQaReplayAutoPlaySpeedSelect.value = this.debugQaReplayAutoPlaySpeed;
     }
 
     if (this.debugQaReplayStepStopButton) {
@@ -1338,12 +1468,22 @@ export class GameScene extends Phaser.Scene {
       this.debugQaReplayStepStopButton.textContent = 'Stop step replay';
     }
 
+    if (this.debugQaStripCalibrationSelect) {
+      this.debugQaStripCalibrationSelect.disabled = loading;
+      this.debugQaStripCalibrationSelect.value = this.stripCalibrationPreset;
+    }
+
+    if (this.debugQaStripCalibrationButton) {
+      this.debugQaStripCalibrationButton.disabled = loading;
+      this.debugQaStripCalibrationButton.textContent = 'Apply strip calibration';
+    }
+
     if (this.debugQaImportFileInput) {
-      this.debugQaImportFileInput.disabled = this.debugQaStatus === 'loading' || replayActive;
+      this.debugQaImportFileInput.disabled = loading || replayActive;
     }
 
     if (this.debugQaExportButton) {
-      this.debugQaExportButton.disabled = this.debugQaStatus === 'loading' || replayActive;
+      this.debugQaExportButton.disabled = loading || replayActive;
       this.debugQaExportButton.textContent = 'Export JSON trace';
     }
   }
@@ -2061,21 +2201,29 @@ export class GameScene extends Phaser.Scene {
     stripElement.hidden = true;
     stripElement.style.removeProperty('background-image');
 
-    const spritePath = this.getCombatEnemySpritePath(enemy.key);
-    if (!spritePath) {
+    const portraitPath = this.getCombatEnemyPortraitPath(enemy.key);
+    const visualPath = portraitPath ?? this.getCombatEnemySpritePath(enemy.key);
+    if (!visualPath) {
       image.hidden = true;
       image.removeAttribute('src');
       image.dataset.enemyKey = '';
+      image.dataset.visualType = '';
       fallback.hidden = false;
       fallback.textContent = enemy.key;
       return;
     }
 
-    if (image.dataset.enemyKey !== enemy.key || image.getAttribute('src') !== spritePath) {
-      image.src = spritePath;
+    const visualType = portraitPath ? 'portrait' : 'sprite';
+    if (
+      image.dataset.enemyKey !== enemy.key ||
+      image.getAttribute('src') !== visualPath ||
+      image.dataset.visualType !== visualType
+    ) {
+      image.src = visualPath;
       image.dataset.enemyKey = enemy.key;
+      image.dataset.visualType = visualType;
     }
-    image.alt = `${enemy.name} sprite`;
+    image.alt = `${enemy.name} ${visualType}`;
     image.hidden = false;
     fallback.hidden = true;
     fallback.textContent = '';
@@ -2246,12 +2394,25 @@ export class GameScene extends Phaser.Scene {
     castDurationMs: number;
   } {
     const player = strip?.timings?.player;
-    return {
+    const base = {
       idleFps: this.resolveTimingValue(player?.idleFps, 4, 1, 24),
       hitFps: this.resolveTimingValue(player?.hitFps, 8, 1, 24),
       castFps: this.resolveTimingValue(player?.castFps, 8, 1, 24),
       hitDurationMs: this.resolveTimingValue(player?.hitDurationMs, 360, 80, 3000),
       castDurationMs: this.resolveTimingValue(player?.castDurationMs, 420, 80, 3000),
+    };
+
+    const preset = this.getActiveStripCalibrationPreset();
+    if (!preset) {
+      return base;
+    }
+
+    return {
+      idleFps: this.scaleTimingWithPreset(base.idleFps, preset.playerFpsMultiplier, 1, 24),
+      hitFps: this.scaleTimingWithPreset(base.hitFps, preset.playerFpsMultiplier, 1, 24),
+      castFps: this.scaleTimingWithPreset(base.castFps, preset.playerFpsMultiplier, 1, 24),
+      hitDurationMs: this.scaleTimingWithPreset(base.hitDurationMs, preset.playerActionDurationMultiplier, 80, 3000),
+      castDurationMs: this.scaleTimingWithPreset(base.castDurationMs, preset.playerActionDurationMultiplier, 80, 3000),
     };
   }
 
@@ -2263,12 +2424,25 @@ export class GameScene extends Phaser.Scene {
     castDurationMs: number;
   } {
     const hud = strip?.timings?.hud;
-    return {
+    const base = {
       idleIntervalMs: this.resolveTimingValue(hud?.idleIntervalMs, 240, 60, 2000),
       hitIntervalMs: this.resolveTimingValue(hud?.hitIntervalMs, 140, 60, 2000),
       castIntervalMs: this.resolveTimingValue(hud?.castIntervalMs, 170, 60, 2000),
       hitDurationMs: this.resolveTimingValue(hud?.hitDurationMs, 460, 80, 3000),
       castDurationMs: this.resolveTimingValue(hud?.castDurationMs, 420, 80, 3000),
+    };
+
+    const preset = this.getActiveStripCalibrationPreset();
+    if (!preset) {
+      return base;
+    }
+
+    return {
+      idleIntervalMs: this.scaleTimingWithPreset(base.idleIntervalMs, preset.hudIntervalMultiplier, 60, 2000),
+      hitIntervalMs: this.scaleTimingWithPreset(base.hitIntervalMs, preset.hudIntervalMultiplier, 60, 2000),
+      castIntervalMs: this.scaleTimingWithPreset(base.castIntervalMs, preset.hudIntervalMultiplier, 60, 2000),
+      hitDurationMs: this.scaleTimingWithPreset(base.hitDurationMs, preset.hudActionDurationMultiplier, 80, 3000),
+      castDurationMs: this.scaleTimingWithPreset(base.castDurationMs, preset.hudActionDurationMultiplier, 80, 3000),
     };
   }
 
@@ -2338,6 +2512,28 @@ export class GameScene extends Phaser.Scene {
       this.playerStripActionTimer = null;
       this.playPlayerStripAnimation('idle', true);
     });
+  }
+
+  private getCombatEnemyPortraitPath(enemyKey: string): string | null {
+    const manifest = this.getSpriteManifest();
+    const byEnemyKey = manifest.portraits?.byEnemyKey;
+    if (byEnemyKey && typeof byEnemyKey === 'object') {
+      const directPath = byEnemyKey[enemyKey];
+      const resolvedDirectPath =
+        typeof directPath === 'string' ? directPath : this.asString((directPath as { path?: unknown })?.path);
+      if (typeof resolvedDirectPath === 'string' && resolvedDirectPath.trim().length > 0) {
+        return this.resolveSpriteAssetPath(resolvedDirectPath.trim());
+      }
+    }
+
+    const fallbackPath = manifest.portraits?.fallback;
+    const resolvedFallbackPath =
+      typeof fallbackPath === 'string' ? fallbackPath : this.asString((fallbackPath as { path?: unknown })?.path);
+    if (typeof resolvedFallbackPath === 'string' && resolvedFallbackPath.trim().length > 0) {
+      return this.resolveSpriteAssetPath(resolvedFallbackPath.trim());
+    }
+
+    return null;
   }
 
   private getCombatEnemySpritePath(enemyKey: string): string | null {
@@ -3247,6 +3443,7 @@ export class GameScene extends Phaser.Scene {
     this.combatStatus = 'idle';
     this.combatMessage = this.isAuthenticated ? 'Aucun combat actif.' : 'Connecte toi pour lancer un combat.';
     this.combatError = null;
+    this.stopDebugQaStepReplayAutoPlay(false);
     this.debugQaStepReplayState = null;
     this.syncHudStateFromCombat(null);
     this.stopEnemyHudStripPlayback();
@@ -3733,6 +3930,131 @@ export class GameScene extends Phaser.Scene {
     this.debugQaImportFileInput.click();
   }
 
+  private toggleDebugQaStepReplayAutoPlay(): void {
+    if (!this.debugQaStepReplayState) {
+      this.debugQaStatus = 'error';
+      this.debugQaError = 'Demarre un replay pas a pas avant d activer l auto-play.';
+      this.debugQaMessage = null;
+      this.updateHud();
+      return;
+    }
+
+    if (this.debugQaReplayAutoPlayIntervalId !== null) {
+      this.stopDebugQaStepReplayAutoPlay(true);
+      this.debugQaStatus = 'success';
+      this.debugQaError = null;
+      this.debugQaMessage = 'Auto-play en pause.';
+      this.updateHud();
+      return;
+    }
+
+    const selectedSpeed = this.readDebugQaReplayAutoPlaySpeed();
+    this.debugQaReplayAutoPlaySpeed = selectedSpeed;
+    const intervalMs = this.getDebugQaReplayAutoPlayIntervalMs(selectedSpeed);
+    this.debugQaReplayAutoPlayIntervalId = window.setInterval(() => {
+      if (!this.debugQaStepReplayState) {
+        this.stopDebugQaStepReplayAutoPlay(true);
+        return;
+      }
+
+      this.advanceDebugQaStepReplay();
+      if (!this.debugQaStepReplayState) {
+        this.stopDebugQaStepReplayAutoPlay(true);
+      }
+    }, intervalMs);
+
+    this.debugQaStatus = 'success';
+    this.debugQaError = null;
+    this.debugQaMessage = `Auto-play actif (${this.getDebugQaReplayAutoPlaySpeedLabel(selectedSpeed)}).`;
+    this.updateHud();
+  }
+
+  private stopDebugQaStepReplayAutoPlay(updateHud: boolean): void {
+    if (this.debugQaReplayAutoPlayIntervalId !== null) {
+      window.clearInterval(this.debugQaReplayAutoPlayIntervalId);
+      this.debugQaReplayAutoPlayIntervalId = null;
+      if (updateHud) {
+        this.updateHud();
+      }
+    }
+  }
+
+  private readDebugQaReplayAutoPlaySpeed(): DebugQaReplayAutoPlaySpeedKey {
+    const value = this.debugQaReplayAutoPlaySpeedSelect?.value ?? this.debugQaReplayAutoPlaySpeed;
+    return value === 'slow' || value === 'normal' || value === 'fast' ? value : 'normal';
+  }
+
+  private getDebugQaReplayAutoPlayIntervalMs(speed: DebugQaReplayAutoPlaySpeedKey): number {
+    const option = DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS.find((entry) => entry.key === speed);
+    return option?.intervalMs ?? 900;
+  }
+
+  private getDebugQaReplayAutoPlaySpeedLabel(speed: DebugQaReplayAutoPlaySpeedKey): string {
+    const option = DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS.find((entry) => entry.key === speed);
+    return option?.label ?? 'Normal (900ms)';
+  }
+
+  private applyStripCalibrationPreset(): void {
+    if (!this.stripCalibrationEnabled) {
+      return;
+    }
+
+    const nextPreset = this.readStripCalibrationPresetFromUi();
+    this.stripCalibrationPreset = nextPreset;
+    this.refreshStripCalibrationRuntime();
+
+    const activePreset = this.getActiveStripCalibrationPreset();
+    this.debugQaStatus = 'success';
+    this.debugQaError = null;
+    this.debugQaMessage = `Strip calibration active: ${activePreset?.label ?? 'Manifest default'}.`;
+    this.updateHud();
+  }
+
+  private readStripCalibrationPresetFromUi(): StripCalibrationPresetKey {
+    const value = this.debugQaStripCalibrationSelect?.value ?? this.stripCalibrationPreset;
+    return value === 'manifest' || value === 'snappy' || value === 'cinematic' ? value : 'manifest';
+  }
+
+  private refreshStripCalibrationRuntime(): void {
+    const playerStrip = this.getStripManifestEntry('player-hero');
+    if (playerStrip) {
+      for (const animation of ['idle', 'hit', 'cast'] as const) {
+        const animationKey = `${playerStrip.key}-${animation}`;
+        if (this.anims.exists(animationKey)) {
+          this.anims.remove(animationKey);
+        }
+      }
+
+      this.ensureStripAnimations(playerStrip);
+      if (this.playerUsesStripAnimation && !this.playerStripActionTimer) {
+        this.playPlayerStripAnimation('idle', true);
+      }
+    }
+
+    this.stopEnemyHudStripPlayback();
+    if (this.combatState) {
+      this.renderCombatEnemySprite();
+    }
+  }
+
+  private getActiveStripCalibrationPreset(): StripCalibrationPreset | null {
+    if (!this.stripCalibrationEnabled) {
+      return null;
+    }
+
+    return STRIP_CALIBRATION_PRESETS.find((preset) => preset.key === this.stripCalibrationPreset) ?? null;
+  }
+
+  private scaleTimingWithPreset(
+    value: number,
+    multiplier: number,
+    min: number,
+    max: number,
+  ): number {
+    const scaled = value * multiplier;
+    return Phaser.Math.Clamp(Math.round(scaled), min, max);
+  }
+
   private replayImportedDebugQaTrace(): void {
     if (!this.debugQaEnabled) {
       return;
@@ -3809,6 +4131,7 @@ export class GameScene extends Phaser.Scene {
 
   private advanceDebugQaStepReplay(): void {
     if (!this.debugQaStepReplayState) {
+      this.stopDebugQaStepReplayAutoPlay(false);
       this.debugQaStatus = 'error';
       this.debugQaError = 'Demarre un replay pas a pas avant d avancer.';
       this.debugQaMessage = null;
@@ -3818,6 +4141,7 @@ export class GameScene extends Phaser.Scene {
 
     const replay = this.debugQaStepReplayState;
     if (replay.stepIndex >= replay.totalSteps) {
+      this.stopDebugQaStepReplayAutoPlay(false);
       this.applyImportedDebugQaTrace(replay.finalTrace);
       this.debugQaStepReplayState = null;
       this.debugQaStatus = 'success';
@@ -3857,6 +4181,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private stopDebugQaStepReplay(restoreBaseline: boolean): void {
+    this.stopDebugQaStepReplayAutoPlay(false);
     const replay = this.debugQaStepReplayState;
     this.debugQaStepReplayState = null;
 
@@ -4138,6 +4463,12 @@ export class GameScene extends Phaser.Scene {
         busyAction: this.debugQaBusyAction,
         message: this.debugQaMessage,
         error: this.debugQaError,
+        replayAutoPlay: {
+          active: this.debugQaReplayAutoPlayIntervalId !== null,
+          speed: this.debugQaReplayAutoPlaySpeed,
+          intervalMs: this.getDebugQaReplayAutoPlayIntervalMs(this.debugQaReplayAutoPlaySpeed),
+        },
+        stripCalibrationPreset: this.stripCalibrationPreset,
       },
     };
   }
