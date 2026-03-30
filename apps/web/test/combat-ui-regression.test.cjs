@@ -34,11 +34,26 @@ test('combat HUD exposes telemetry field and renderer hook', () => {
   assert.equal(gameSceneSource.includes('private getCombatTelemetryLabel(): string'), true);
 });
 
+test('combat HUD exposes enemy sprite visual wiring', () => {
+  assert.equal(gameSceneSource.includes('data-hud="combatEnemySprite"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="combatEnemySpriteFallback"'), true);
+  assert.equal(gameSceneSource.includes('private renderCombatEnemySprite(): void'), true);
+  assert.equal(stylesSource.includes('.combat-enemy-visual'), true);
+});
+
 test('debug QA exposes local JSON trace export wiring', () => {
   assert.equal(gameSceneSource.includes('data-debug-action="export-trace"'), true);
   assert.equal(gameSceneSource.includes('async exportDebugQaTrace(): Promise<void>'), true);
   assert.equal(gameSceneSource.includes('private buildDebugQaTracePayload(): DebugQaTracePayload'), true);
   assert.equal(gameSceneSource.includes('private downloadJsonFile(filename: string, payload: unknown): void'), true);
+});
+
+test('debug QA exposes trace import and replay wiring', () => {
+  assert.equal(gameSceneSource.includes('data-debug-action="import-trace"'), true);
+  assert.equal(gameSceneSource.includes('data-debug-action="replay-trace"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="debugQaImportFile"'), true);
+  assert.equal(gameSceneSource.includes('private triggerDebugQaTraceImport(): void'), true);
+  assert.equal(gameSceneSource.includes('private replayImportedDebugQaTrace(): void'), true);
 });
 
 test('combat intent mapping still covers critical scripted intents', () => {

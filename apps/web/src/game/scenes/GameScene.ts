@@ -101,16 +101,27 @@ type CombatEffectChip = {
 type SpriteManifest = {
   frameSize: { width: number; height: number };
   origin: { x: number; y: number };
-  sprites: Record<
-    string,
-    {
-      key: string;
-      path: string;
-      scale: { x: number; y: number };
-      origin: { x: number; y: number };
-      physics: { width: number; height: number; offsetX: number; offsetY: number };
-    }
-  >;
+  sprites: Record<string, SpriteManifestSpriteEntry>;
+  strips?: Record<string, SpriteManifestStripEntry>;
+};
+
+type SpriteManifestSpriteEntry = {
+  key: string;
+  path: string;
+  scale: { x: number; y: number };
+  origin: { x: number; y: number };
+  physics: { width: number; height: number; offsetX: number; offsetY: number };
+};
+
+type SpriteManifestStripEntry = {
+  key: string;
+  path: string;
+  frameSize: { width: number; height: number };
+  frameCount: number;
+  animations?: Record<string, number[]>;
+  scale?: { x: number; y: number };
+  origin?: { x: number; y: number };
+  physics?: { width: number; height: number; offsetX: number; offsetY: number };
 };
 
 type QuestObjectiveState = {
@@ -212,6 +223,20 @@ type DebugQaTracePayload = {
     message: string | null;
     error: string | null;
   };
+};
+
+type ImportedDebugQaTrace = {
+  sourceFile: string;
+  timestamp: string;
+  authAuthenticated: boolean | null;
+  authStatus: string | null;
+  hudState: Partial<HudState>;
+  combatEncounterId: string | null;
+  combatStatus: CombatUiStatus | null;
+  combatMessage: string | null;
+  combatError: string | null;
+  combatLogs: string[];
+  combatState: CombatEncounterState | null;
 };
 
 const DEBUG_QA_PRESET_OPTIONS: DebugQaPresetOption[] = [
@@ -331,6 +356,7 @@ export class GameScene extends Phaser.Scene {
   private saveSlotsLoadConfirmSlot: number | null = null;
   private saveSlotsError: string | null = null;
   private saveSlotsRenderSignature = '';
+  private spriteManifest: SpriteManifest | null = null;
 
   private debugQaPanelRoot: HTMLElement | null = null;
   private debugQaStatusValue: HTMLElement | null = null;
@@ -352,12 +378,20 @@ export class GameScene extends Phaser.Scene {
   private debugQaLoadoutButton: HTMLButtonElement | null = null;
   private debugQaCompleteQuestsButton: HTMLButtonElement | null = null;
   private debugQaSetWorldFlagsButton: HTMLButtonElement | null = null;
+  private debugQaImportButton: HTMLButtonElement | null = null;
+  private debugQaReplayButton: HTMLButtonElement | null = null;
+  private debugQaImportFileInput: HTMLInputElement | null = null;
   private debugQaExportButton: HTMLButtonElement | null = null;
   private debugQaBusyAction: DebugQaActionName | null = null;
   private debugQaStatus: DebugQaStatus = 'idle';
   private debugQaMessage: string | null = null;
   private debugQaError: string | null = null;
+  private debugQaImportedTrace: ImportedDebugQaTrace | null = null;
   private readonly debugQaEnabled = import.meta.env.DEV || import.meta.env.MODE === 'staging';
+
+  private readonly onDebugQaImportFileChange = (event: Event) => {
+    void this.handleDebugQaImportFileChange(event);
+  };
 
   private readonly onHudClick = (event: MouseEvent) => {
     const target = event.target as HTMLElement | null;
@@ -462,6 +496,16 @@ export class GameScene extends Phaser.Scene {
 
     if (debugAction === 'export-trace') {
       void this.exportDebugQaTrace();
+      return;
+    }
+
+    if (debugAction === 'import-trace') {
+      this.triggerDebugQaTraceImport();
+      return;
+    }
+
+    if (debugAction === 'replay-trace') {
+      this.replayImportedDebugQaTrace();
       return;
     }
 
@@ -632,6 +676,10 @@ export class GameScene extends Phaser.Scene {
             </div>
             <div class="combat-card enemy">
               <span>Enemy</span>
+              <div class="combat-enemy-visual">
+                <img data-hud="combatEnemySprite" alt="Enemy sprite" hidden />
+                <span data-hud="combatEnemySpriteFallback">No enemy</span>
+              </div>
               <div class="combat-card-line"><span>Name</span><strong data-hud="combatEnemyName">-</strong></div>
               <div class="combat-card-line"><span>HP</span><strong data-hud="combatEnemyHp">-</strong></div>
               <div class="combat-card-line"><span>MP</span><strong data-hud="combatEnemyMp">-</strong></div>
@@ -787,9 +835,12 @@ export class GameScene extends Phaser.Scene {
             <button class="hud-debug-qa-button secondary" data-debug-action="complete-quests">Complete quests</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="set-world-flags">Set world flags</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="set-quest-status">Set quest status</button>
+            <button class="hud-debug-qa-button secondary" data-debug-action="import-trace">Import JSON trace</button>
+            <button class="hud-debug-qa-button secondary" data-debug-action="replay-trace">Replay imported trace</button>
             <button class="hud-debug-qa-button export" data-debug-action="export-trace" title="Export a local JSON trace of the current QA state">
               Export JSON trace
             </button>
+            <input data-hud="debugQaImportFile" type="file" accept=".json,application/json" hidden />
           </div>
         </div>
             `
@@ -851,12 +902,22 @@ export class GameScene extends Phaser.Scene {
     this.debugQaLoadoutButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="apply-loadout-preset"]');
     this.debugQaCompleteQuestsButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="complete-quests"]');
     this.debugQaSetWorldFlagsButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="set-world-flags"]');
+    this.debugQaImportButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="import-trace"]');
+    this.debugQaReplayButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="replay-trace"]');
+    this.debugQaImportFileInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaImportFile"]');
     this.debugQaExportButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="export-trace"]');
+    if (this.debugQaImportFileInput) {
+      this.debugQaImportFileInput.addEventListener('change', this.onDebugQaImportFileChange);
+    }
     this.hudRoot.addEventListener('click', this.onHudClick);
     this.updateHud();
   }
 
   private teardownHud(): void {
+    if (this.debugQaImportFileInput) {
+      this.debugQaImportFileInput.removeEventListener('change', this.onDebugQaImportFileChange);
+    }
+
     if (this.hudRoot) {
       this.hudRoot.removeEventListener('click', this.onHudClick);
       this.hudRoot.innerHTML = '';
@@ -911,6 +972,9 @@ export class GameScene extends Phaser.Scene {
     this.debugQaLoadoutButton = null;
     this.debugQaCompleteQuestsButton = null;
     this.debugQaSetWorldFlagsButton = null;
+    this.debugQaImportButton = null;
+    this.debugQaReplayButton = null;
+    this.debugQaImportFileInput = null;
     this.debugQaExportButton = null;
     this.questsRenderSignature = '';
     this.blacksmithRenderSignature = '';
@@ -920,6 +984,8 @@ export class GameScene extends Phaser.Scene {
     this.debugQaStatus = 'idle';
     this.debugQaMessage = null;
     this.debugQaError = null;
+    this.debugQaImportedTrace = null;
+    this.spriteManifest = null;
   }
   private updateHud(): void {
     if (!this.hudRoot) {
@@ -965,6 +1031,7 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('combatPlayerMp', this.getCombatUnitValue(this.hudState.mp, this.hudState.maxMp));
     this.renderCombatEffectChips('combatPlayerEffects', this.getCombatPlayerEffectChips());
     this.setHudText('combatEnemyName', this.combatState ? this.combatState.enemy.name : '-');
+    this.renderCombatEnemySprite();
     this.setHudText('combatEnemyHp', this.getCombatEnemyValue('hp'));
     this.setHudText('combatEnemyMp', this.getCombatEnemyValue('mp'));
     this.renderCombatEffectChips('combatEnemyEffects', this.getCombatEnemyEffectChips());
@@ -1123,6 +1190,20 @@ export class GameScene extends Phaser.Scene {
       this.debugQaSetWorldFlagsButton.disabled = disabled;
       this.debugQaSetWorldFlagsButton.textContent =
         this.debugQaBusyAction === 'set-world-flags' ? 'Applying...' : 'Set world flags';
+    }
+
+    if (this.debugQaImportButton) {
+      this.debugQaImportButton.disabled = this.debugQaStatus === 'loading';
+      this.debugQaImportButton.textContent = this.debugQaStatus === 'loading' ? 'Importing...' : 'Import JSON trace';
+    }
+
+    if (this.debugQaReplayButton) {
+      this.debugQaReplayButton.disabled = this.debugQaStatus === 'loading' || !this.debugQaImportedTrace;
+      this.debugQaReplayButton.textContent = 'Replay imported trace';
+    }
+
+    if (this.debugQaImportFileInput) {
+      this.debugQaImportFileInput.disabled = this.debugQaStatus === 'loading';
     }
 
     if (this.debugQaExportButton) {
@@ -1806,13 +1887,82 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private renderCombatEnemySprite(): void {
+    const image = this.hudRoot?.querySelector<HTMLImageElement>('[data-hud="combatEnemySprite"]');
+    const fallback = this.hudRoot?.querySelector<HTMLElement>('[data-hud="combatEnemySpriteFallback"]');
+    if (!image || !fallback) {
+      return;
+    }
+
+    const enemy = this.combatState?.enemy;
+    if (!enemy) {
+      image.hidden = true;
+      image.removeAttribute('src');
+      image.dataset.enemyKey = '';
+      fallback.hidden = false;
+      fallback.textContent = 'No enemy';
+      return;
+    }
+
+    const spritePath = this.getCombatEnemySpritePath(enemy.key);
+    if (!spritePath) {
+      image.hidden = true;
+      image.removeAttribute('src');
+      image.dataset.enemyKey = '';
+      fallback.hidden = false;
+      fallback.textContent = enemy.key;
+      return;
+    }
+
+    if (image.dataset.enemyKey !== enemy.key || image.getAttribute('src') !== spritePath) {
+      image.src = spritePath;
+      image.dataset.enemyKey = enemy.key;
+    }
+    image.alt = `${enemy.name} sprite`;
+    image.hidden = false;
+    fallback.hidden = true;
+    fallback.textContent = '';
+  }
+
+  private getCombatEnemySpritePath(enemyKey: string): string | null {
+    const manifest = this.getSpriteManifest();
+    const directEntry = manifest.sprites[enemyKey];
+    if (directEntry?.path) {
+      return this.resolveSpriteAssetPath(directEntry.path);
+    }
+
+    for (const entry of Object.values(manifest.sprites)) {
+      if (entry.key === enemyKey && entry.path) {
+        return this.resolveSpriteAssetPath(entry.path);
+      }
+    }
+
+    if (enemyKey.length > 0 && this.textures.exists(enemyKey)) {
+      return `/assets/sprites/characters/${enemyKey}.svg`;
+    }
+
+    return null;
+  }
+
+  private resolveSpriteAssetPath(path: string): string {
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('/')) {
+      return path;
+    }
+    return `/assets/sprites/${path}`;
+  }
+
   private getSpriteManifest(): SpriteManifest {
+    if (this.spriteManifest) {
+      return this.spriteManifest;
+    }
+
     const manifest = this.cache.json.get('sprite-manifest') as SpriteManifest | undefined;
     if (manifest && manifest.sprites && manifest.sprites['player-hero']) {
+      this.spriteManifest = manifest;
       return manifest;
     }
 
-    return {
+    const fallbackManifest: SpriteManifest = {
       frameSize: { width: 64, height: 64 },
       origin: { x: 0.5, y: 0.84 },
       sprites: {
@@ -1825,6 +1975,8 @@ export class GameScene extends Phaser.Scene {
         },
       },
     };
+    this.spriteManifest = fallbackManifest;
+    return fallbackManifest;
   }
 
   private async bootstrapSessionState(): Promise<void> {
@@ -3125,6 +3277,233 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
   }
 
+  private triggerDebugQaTraceImport(): void {
+    if (!this.debugQaEnabled || !this.debugQaImportFileInput || this.debugQaStatus === 'loading') {
+      return;
+    }
+
+    this.debugQaImportFileInput.value = '';
+    this.debugQaImportFileInput.click();
+  }
+
+  private replayImportedDebugQaTrace(): void {
+    if (!this.debugQaEnabled) {
+      return;
+    }
+
+    if (!this.debugQaImportedTrace) {
+      this.debugQaStatus = 'error';
+      this.debugQaError = 'Importe un JSON trace avant de lancer Replay.';
+      this.debugQaMessage = null;
+      this.updateHud();
+      return;
+    }
+
+    this.applyImportedDebugQaTrace(this.debugQaImportedTrace);
+    this.debugQaStatus = 'success';
+    this.debugQaError = null;
+    this.debugQaMessage = `Replay QA applique (${this.debugQaImportedTrace.sourceFile}).`;
+    this.updateHud();
+  }
+
+  private async handleDebugQaImportFileChange(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement | null;
+    const file = input?.files?.[0];
+    if (!file || !this.debugQaEnabled) {
+      return;
+    }
+
+    this.debugQaStatus = 'loading';
+    this.debugQaError = null;
+    this.debugQaMessage = `Importing ${file.name}...`;
+    this.updateHud();
+
+    try {
+      const rawText = await file.text();
+      const rawPayload = JSON.parse(rawText) as unknown;
+      const importedTrace = this.parseImportedDebugQaTrace(rawPayload, file.name);
+      if (!importedTrace) {
+        throw new Error('Le fichier ne contient pas un JSON trace QA valide.');
+      }
+
+      this.debugQaImportedTrace = importedTrace;
+      this.debugQaStatus = 'success';
+      this.debugQaError = null;
+      this.debugQaMessage = `Trace importee: ${file.name} (${importedTrace.timestamp}).`;
+    } catch (error) {
+      this.debugQaStatus = 'error';
+      this.debugQaError = this.getErrorMessage(error, 'Impossible d importer la trace JSON.');
+      this.debugQaMessage = null;
+    } finally {
+      if (input) {
+        input.value = '';
+      }
+      this.updateHud();
+    }
+  }
+
+  private parseImportedDebugQaTrace(rawPayload: unknown, sourceFile: string): ImportedDebugQaTrace | null {
+    if (!this.isRecord(rawPayload)) {
+      return null;
+    }
+
+    const timestamp = this.asString(rawPayload.timestamp) ?? new Date().toISOString();
+    const authRecord = this.asRecord(rawPayload.auth);
+    const hudRecord = this.asRecord(rawPayload.hud);
+    const hudStateRecord = this.asRecord(hudRecord?.state);
+    const combatRecord = this.asRecord(rawPayload.combat);
+
+    const authAuthenticatedValue = authRecord?.authenticated;
+    const authAuthenticated =
+      typeof authAuthenticatedValue === 'boolean' ? authAuthenticatedValue : null;
+    const authStatus = this.asString(authRecord?.status);
+    const hudState = this.normalizeImportedHudState(hudStateRecord);
+    const combatState = this.normalizeCombatPayload(combatRecord?.state ?? null);
+    const combatEncounterId =
+      this.asString(combatRecord?.encounterId) ?? combatState?.id ?? null;
+    const combatStatus = this.asCombatUiStatus(combatRecord?.status) ?? (combatState?.status ?? null);
+    const combatMessage = this.asString(combatRecord?.message);
+    const combatError = this.asString(combatRecord?.error);
+    const combatLogs = this.asStringArray(combatRecord?.logs).slice(-20);
+
+    const hasUsefulData =
+      authAuthenticated !== null ||
+      authStatus !== null ||
+      Object.keys(hudState).length > 0 ||
+      combatState !== null ||
+      combatStatus !== null ||
+      combatEncounterId !== null ||
+      combatMessage !== null ||
+      combatError !== null ||
+      combatLogs.length > 0;
+
+    if (!hasUsefulData) {
+      return null;
+    }
+
+    return {
+      sourceFile,
+      timestamp,
+      authAuthenticated,
+      authStatus,
+      hudState,
+      combatEncounterId,
+      combatStatus,
+      combatMessage,
+      combatError,
+      combatLogs,
+      combatState,
+    };
+  }
+
+  private normalizeImportedHudState(rawState: Record<string, unknown> | null): Partial<HudState> {
+    if (!rawState) {
+      return {};
+    }
+
+    const normalized: Partial<HudState> = {};
+    const day = this.asNumber(rawState.day);
+    const gold = this.asNumber(rawState.gold);
+    const level = this.asNumber(rawState.level);
+    const xp = this.asNumber(rawState.xp);
+    const xpToNext = this.asNumber(rawState.xpToNext);
+    const towerCurrentFloor = this.asNumber(rawState.towerCurrentFloor);
+    const towerHighestFloor = this.asNumber(rawState.towerHighestFloor);
+    const hp = this.asNumber(rawState.hp);
+    const maxHp = this.asNumber(rawState.maxHp);
+    const mp = this.asNumber(rawState.mp);
+    const maxMp = this.asNumber(rawState.maxMp);
+    const stamina = this.asNumber(rawState.stamina);
+    const area = this.asString(rawState.area);
+
+    if (day !== null) {
+      normalized.day = Math.max(1, Math.round(day));
+    }
+    if (gold !== null) {
+      normalized.gold = Math.max(0, Math.round(gold));
+    }
+    if (level !== null) {
+      normalized.level = Math.max(1, Math.round(level));
+    }
+    if (xp !== null) {
+      normalized.xp = Math.max(0, Math.round(xp));
+    }
+    if (xpToNext !== null) {
+      normalized.xpToNext = Math.max(1, Math.round(xpToNext));
+    }
+    if (towerCurrentFloor !== null) {
+      normalized.towerCurrentFloor = Math.max(1, Math.round(towerCurrentFloor));
+    }
+    if (towerHighestFloor !== null) {
+      normalized.towerHighestFloor = Math.max(1, Math.round(towerHighestFloor));
+    }
+    if (typeof rawState.towerBossFloor10Defeated === 'boolean') {
+      normalized.towerBossFloor10Defeated = rawState.towerBossFloor10Defeated;
+    }
+    if (typeof rawState.blacksmithUnlocked === 'boolean') {
+      normalized.blacksmithUnlocked = rawState.blacksmithUnlocked;
+    }
+    if (typeof rawState.blacksmithCurseLifted === 'boolean') {
+      normalized.blacksmithCurseLifted = rawState.blacksmithCurseLifted;
+    }
+    if (hp !== null) {
+      normalized.hp = Math.max(0, hp);
+    }
+    if (maxHp !== null) {
+      normalized.maxHp = Math.max(1, maxHp);
+    }
+    if (mp !== null) {
+      normalized.mp = Math.max(0, mp);
+    }
+    if (maxMp !== null) {
+      normalized.maxMp = Math.max(1, maxMp);
+    }
+    if (stamina !== null) {
+      normalized.stamina = Math.max(0, stamina);
+    }
+    if (area) {
+      normalized.area = area;
+    }
+
+    return normalized;
+  }
+
+  private applyImportedDebugQaTrace(trace: ImportedDebugQaTrace): void {
+    if (trace.authAuthenticated !== null) {
+      this.isAuthenticated = trace.authAuthenticated;
+    }
+    if (trace.authStatus) {
+      this.authStatus = trace.authStatus;
+    }
+
+    this.hudState = {
+      ...this.hudState,
+      ...trace.hudState,
+    };
+
+    if (trace.combatState) {
+      this.combatState = this.cloneCombatState(trace.combatState);
+      this.combatEncounterId = trace.combatState.id;
+      this.combatStatus = trace.combatState.status;
+      this.combatLogs = [...trace.combatState.logs].slice(-20);
+    } else {
+      this.combatEncounterId = trace.combatEncounterId;
+      this.combatStatus = trace.combatStatus ?? 'idle';
+      this.combatLogs = [...trace.combatLogs].slice(-20);
+      if (!trace.combatEncounterId) {
+        this.combatState = null;
+      }
+    }
+
+    if (trace.combatMessage) {
+      this.combatMessage = trace.combatMessage;
+    } else if (!trace.combatState && !trace.combatEncounterId) {
+      this.combatMessage = 'Aucun combat actif.';
+    }
+
+    this.combatError = trace.combatError;
+  }
+
   private buildDebugQaTracePayload(): DebugQaTracePayload {
     const timestamp = new Date().toISOString();
     return {
@@ -4065,6 +4444,14 @@ export class GameScene extends Phaser.Scene {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
   }
 
+  private asCombatUiStatus(value: unknown): CombatUiStatus | null {
+    if (value === 'idle' || value === 'loading' || value === 'error') {
+      return value;
+    }
+
+    return this.asCombatStatus(value);
+  }
+
   private asCombatStatus(value: unknown): CombatStatus | null {
     if (value === 'active' || value === 'won' || value === 'lost' || value === 'fled') {
       return value;
@@ -4105,6 +4492,21 @@ export class GameScene extends Phaser.Scene {
 
   private formatValue(value: number): string {
     return `${Math.max(0, Math.round(value))}`;
+  }
+
+  private cloneCombatState(state: CombatEncounterState): CombatEncounterState {
+    const cloned: CombatEncounterState = {
+      ...state,
+      logs: [...state.logs],
+      player: { ...state.player },
+      enemy: { ...state.enemy },
+    };
+
+    if (state.scriptState) {
+      cloned.scriptState = { ...state.scriptState };
+    }
+
+    return cloned;
   }
 
   private setupCamera(): void {

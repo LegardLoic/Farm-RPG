@@ -796,6 +796,48 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Qualite:
   - non-regression web etendue sur le wiring de l'export QA.
 
+### Lot 58 - E2E API etendu (quest/shop/autosave)
+- Backend QA:
+  - extension du scenario `test:e2e` pour couvrir:
+    - claim de quete
+    - achat boutique forgeron
+    - restauration autosave
+  - fixtures SQL adaptees pour fournir les preconditions de ces parcours.
+  - documentation e2e mise a jour dans `docs/07-e2e-auth-combat-save-load.md`.
+
+### Lot 59 - Pack strips player + boss scriptes
+- Frontend assets:
+  - ajout de strips SVG `idle/hit/cast` dans `apps/web/public/assets/sprites/strips/characters/` pour:
+    - `player-hero`
+    - boss etages `3/5/8/10` (`thorn_beast_alpha`, `cinder_warden`, `ash_vanguard_captain`, `curse_heart_avatar`)
+  - enrichissement `manifest.json` avec une section `strips` (frame size/count + animations + scale/origin/physics).
+  - preload BootScene etendu pour charger les textures strips.
+
+### Lot 60 - Pipeline nightly staging E2E
+- CI GitHub:
+  - ajout du workflow `.github/workflows/nightly-staging-e2e.yml`.
+  - execution quotidienne planifiee + lancement manuel (`workflow_dispatch`).
+  - sequence:
+    - verification variables staging
+    - seed fixtures SQL
+    - run `npm run test:e2e --workspace @farm-rpg/api`.
+
+### Lot 61 - HUD combat: sprite ennemi selon `enemy.key`
+- Frontend combat:
+  - ajout d'un bloc visuel dans la carte ennemi du HUD.
+  - resolution du sprite depuis le `manifest` selon `enemy.key`, avec fallback lisible.
+  - rendu adapte au style HUD (badge visuel + image pixel-friendly).
+
+### Lot 62 - Debug QA: import/replay JSON trace
+- Frontend Debug QA:
+  - ajout des actions:
+    - `Import JSON trace`
+    - `Replay imported trace`
+  - prise en charge d'un fichier JSON local, validation et parsing du payload.
+  - replay applique sur le HUD (auth, progression, snapshot combat/logs) pour reproduire un contexte QA.
+- Qualite:
+  - non-regression web etendue pour verifier le wiring import/replay + sprite ennemi HUD.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -855,11 +897,13 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - ligne telemetry combat (compteurs skills/boss scripts) pour lecture rapide en test
   - panneau `Debug QA` pour piloter les endpoints debug sans quitter le jeu (DEV/staging), incluant world flags, presets de scenario, set quest status et recaps detaillees
   - export local JSON des traces QA depuis le panneau `Debug QA`
+  - import/replay local JSON des traces QA pour rejouer un contexte de debug
+  - carte ennemi enrichie avec sprite resolu via `enemy.key`
 - Chargement web optimise:
   - entree legere
   - bootstrap asynchrone
   - chunk `phaser-vendor` dedie
-  - boot preload aligne sur tous les sprites ennemis actuels.
+  - boot preload aligne sur tous les sprites ennemis actuels et strips player/boss.
 - Integration API avec gestion d'erreurs UI.
 
 ## 6) API actuellement disponible
@@ -921,12 +965,14 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Flux PR continue (`develop` -> `main`) deja utilise et valide.
 - Workflow CI manuel dedie fixtures SQL pour seed reproductible des environnements d'integration.
 - Suite e2e dediee auth/combat/save-load pour validation black-box sur API locale ou distante.
+- Workflow nightly staging e2e pour verification continue des routes critiques avec seed fixtures.
+- Manifest sprites etendu avec metadata `strips` pour preparer l'animation runtime.
 
 ## 9) Prochaines priorites recommandees
-1. Afficher les sprites ennemis directement dans le HUD combat selon `enemy.key` (pas uniquement preload assets).
-2. Passer du pack SVG statique a des strips d'animation (idle/hit/cast) pour player + boss etages 3/5/8/10.
-3. Ajouter un pipeline nightly CI staging: seed fixtures + execution automatique `test:e2e` sur URL de staging.
-4. Ajouter un mode import/replay des traces QA JSON pour rejouer un contexte de debug dans le HUD.
-5. Ajouter des assertions API supplementaires dans `test:e2e` (quest claim + shop buy + restore autosave).
+1. Brancher les strips en runtime Phaser (animations `idle/hit/cast`) pour player et boss, au-dela du preload.
+2. Ajouter un mode replay "pas a pas" des traces QA (avance de logs/tours) au lieu d'un apply snapshot direct.
+3. Etendre la nightly CI staging avec publication d'un resume (artefact JSON + statut lisible en sortie workflow).
+4. Ajouter une smoke QA web automatisee (boot + auth state + start combat) pour completer la couverture API e2e.
+5. Ajouter un mapping de portraits fallback (spritesheets ou miniatures dediees) pour tous les ennemis non-boss.
 
 

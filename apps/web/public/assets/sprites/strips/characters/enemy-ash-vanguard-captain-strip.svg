@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 64">
+  <g transform="translate(0 0)">
+    <path d="M16 30l8-12 10 8 10-8 8 12-4 22H18z" fill="#6e7c92"/>
+    <path d="M20 28l6-10 8 6 8-6 6 10-3 20H23z" fill="#44586d"/>
+    <path d="M24 32h16l-2 10H26z" fill="#d9e2ee"/>
+    <rect x="24" y="46" width="6" height="10" rx="2" fill="#263243"/>
+    <rect x="34" y="46" width="6" height="10" rx="2" fill="#263243"/>
+  </g>
+  <g transform="translate(64 0)">
+    <path d="M14 30l8-12 10 8 10-8 8 12-4 22H18z" fill="#77849a"/>
+    <path d="M18 28l6-10 8 6 8-6 6 10-3 20H21z" fill="#55667c"/>
+    <path d="M22 32h20l-2 12H24z" fill="#dfe7f1"/>
+    <path d="M12 32l8 4-2 8-8-4zM52 32l-8 4 2 8 8-4z" fill="#8f9fb8"/>
+    <rect x="24" y="46" width="6" height="10" rx="2" fill="#263243"/>
+    <rect x="34" y="46" width="6" height="10" rx="2" fill="#263243"/>
+  </g>
+  <g transform="translate(128 0)">
+    <path d="M16 30l8-12 10 8 10-8 8 12-4 22H18z" fill="#67758b"/>
+    <path d="M20 28l6-10 8 6 8-6 6 10-3 20H23z" fill="#39495d"/>
+    <path d="M24 32h16l-2 10H26z" fill="#e8eff8"/>
+    <path d="M20 16l12 6 12-6" fill="none" stroke="#d5b26d" stroke-width="2" stroke-linecap="round"/>
+    <rect x="24" y="46" width="6" height="10" rx="2" fill="#263243"/>
+    <rect x="34" y="46" width="6" height="10" rx="2" fill="#263243"/>
+  </g>
+</svg>

@@ -1,0 +1,58 @@
+name: Nightly Staging E2E
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  nightly-staging-e2e:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL || vars.DATABASE_URL }}
+      E2E_API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || vars.E2E_API_BASE_URL }}
+      E2E_ACCESS_TOKEN_SECRET: ${{ secrets.E2E_ACCESS_TOKEN_SECRET || vars.E2E_ACCESS_TOKEN_SECRET }}
+      E2E_USER_ID: ${{ secrets.E2E_USER_ID || vars.E2E_USER_ID }}
+      E2E_SAVE_SLOT: ${{ secrets.E2E_SAVE_SLOT || vars.E2E_SAVE_SLOT || 3 }}
+      FIXTURE_SCENARIOS: all
+      FIXTURE_RESET_FIRST: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install
+        run: npm ci --include=optional
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Validate staging configuration
+        run: |
+          set -euo pipefail
+
+          missing=()
+          for key in DATABASE_URL E2E_API_BASE_URL E2E_ACCESS_TOKEN_SECRET E2E_USER_ID; do
+            if [ -z "${!key:-}" ]; then
+              missing+=("${key}")
+            fi
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Missing required staging variables: ${missing[*]}" >&2
+            echo "Define them as repository secrets or variables before running this workflow." >&2
+            exit 1
+          fi
+
+      - name: Seed fixtures
+        run: bash apps/api/test/fixtures/run-fixtures.sh
+
+      - name: Run API E2E
+        run: npm run test:e2e --workspace @farm-rpg/api

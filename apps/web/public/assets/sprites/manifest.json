@@ -58,5 +58,77 @@
       "origin": { "x": 0.5, "y": 0.84 },
       "physics": { "width": 20, "height": 20, "offsetX": 2, "offsetY": 2 }
     }
+  },
+  "strips": {
+    "player-hero": {
+      "key": "player-hero-strip",
+      "path": "strips/characters/player-hero-strip.svg",
+      "frameSize": { "width": 64, "height": 64 },
+      "frameCount": 3,
+      "animations": {
+        "idle": [0, 1],
+        "hit": [1, 2],
+        "cast": [0, 2]
+      },
+      "scale": { "x": 0.28125, "y": 0.40625 },
+      "origin": { "x": 0.5, "y": 0.84 },
+      "physics": { "width": 14, "height": 22, "offsetX": 2, "offsetY": 2 }
+    },
+    "enemy-thorn-beast-alpha": {
+      "key": "enemy-thorn-beast-alpha-strip",
+      "path": "strips/characters/enemy-thorn-beast-alpha-strip.svg",
+      "frameSize": { "width": 64, "height": 64 },
+      "frameCount": 3,
+      "animations": {
+        "idle": [0, 1],
+        "hit": [1, 2],
+        "cast": [0, 2]
+      },
+      "scale": { "x": 0.359375, "y": 0.390625 },
+      "origin": { "x": 0.5, "y": 0.84 },
+      "physics": { "width": 19, "height": 21, "offsetX": 2, "offsetY": 2 }
+    },
+    "enemy-cinder-warden": {
+      "key": "enemy-cinder-warden-strip",
+      "path": "strips/characters/enemy-cinder-warden-strip.svg",
+      "frameSize": { "width": 64, "height": 64 },
+      "frameCount": 3,
+      "animations": {
+        "idle": [0, 1],
+        "hit": [1, 2],
+        "cast": [0, 2]
+      },
+      "scale": { "x": 0.34375, "y": 0.375 },
+      "origin": { "x": 0.5, "y": 0.84 },
+      "physics": { "width": 18, "height": 20, "offsetX": 2, "offsetY": 2 }
+    },
+    "enemy-ash-vanguard-captain": {
+      "key": "enemy-ash-vanguard-captain-strip",
+      "path": "strips/characters/enemy-ash-vanguard-captain-strip.svg",
+      "frameSize": { "width": 64, "height": 64 },
+      "frameCount": 3,
+      "animations": {
+        "idle": [0, 1],
+        "hit": [1, 2],
+        "cast": [0, 2]
+      },
+      "scale": { "x": 0.34375, "y": 0.375 },
+      "origin": { "x": 0.5, "y": 0.84 },
+      "physics": { "width": 18, "height": 20, "offsetX": 2, "offsetY": 2 }
+    },
+    "enemy-curse-heart-avatar": {
+      "key": "enemy-curse-heart-avatar-strip",
+      "path": "strips/characters/enemy-curse-heart-avatar-strip.svg",
+      "frameSize": { "width": 64, "height": 64 },
+      "frameCount": 3,
+      "animations": {
+        "idle": [0, 1],
+        "hit": [1, 2],
+        "cast": [0, 2]
+      },
+      "scale": { "x": 0.375, "y": 0.375 },
+      "origin": { "x": 0.5, "y": 0.84 },
+      "physics": { "width": 20, "height": 20, "offsetX": 2, "offsetY": 2 }
+    }
   }
 }

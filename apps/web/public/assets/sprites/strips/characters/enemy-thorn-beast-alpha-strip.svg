@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 64">
+  <g transform="translate(0 0)">
+    <path d="M14 30l8-12 10 8 10-8 8 12-4 22H18z" fill="#4f7b35"/>
+    <path d="M18 28l6-10 8 6 8-6 6 10-3 20H21z" fill="#7da84f"/>
+    <path d="M22 32h20l-2 12H24z" fill="#24331d"/>
+    <path d="M12 32l8 4-2 8-8-4zM52 32l-8 4 2 8 8-4z" fill="#36561f"/>
+    <circle cx="25" cy="30" r="2" fill="#f2f4d1"/>
+    <circle cx="39" cy="30" r="2" fill="#f2f4d1"/>
+  </g>
+  <g transform="translate(64 0)">
+    <path d="M15 28l10-14 7 6 7-6 10 14-5 24H20z" fill="#557f3c"/>
+    <path d="M18 27l7-11 7 5 7-5 7 11-3 19H21z" fill="#8ab25a"/>
+    <path d="M22 31h20l-2 12H24z" fill="#27371f"/>
+    <path d="M10 34l8 3-2 7-8-3zM54 34l-8 3 2 7 8-3z" fill="#436825"/>
+    <circle cx="25" cy="29" r="2" fill="#f5f7dc"/>
+    <circle cx="39" cy="29" r="2" fill="#f5f7dc"/>
+    <path d="M28 16l4 5 4-5" fill="none" stroke="#3c5d20" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(128 0)">
+    <path d="M14 30l8-12 10 8 10-8 8 12-4 22H18z" fill="#4f7b35"/>
+    <path d="M18 28l6-10 8 6 8-6 6 10-3 20H21z" fill="#90bb5f"/>
+    <path d="M22 32h20l-2 12H24z" fill="#24331d"/>
+    <path d="M12 32l8 4-2 8-8-4zM52 32l-8 4 2 8 8-4z" fill="#36561f"/>
+    <circle cx="25" cy="30" r="2" fill="#f2f4d1"/>
+    <circle cx="39" cy="30" r="2" fill="#f2f4d1"/>
+    <path d="M22 18h20" stroke="#5e8f31" stroke-width="2" stroke-linecap="round"/>
+  </g>
+</svg>
