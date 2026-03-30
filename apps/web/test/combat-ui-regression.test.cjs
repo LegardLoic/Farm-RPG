@@ -74,6 +74,9 @@ test('strip runtime animation wiring exists for player and boss assets', () => {
   assert.equal(gameSceneSource.includes('private ensureStripAnimations(strip: SpriteManifestStripEntry): void'), true);
   assert.equal(gameSceneSource.includes('private playPlayerStripAnimation(animation: StripAnimationName, force = false): void'), true);
   assert.equal(gameSceneSource.includes('private playPlayerCombatActionAnimation(action: CombatActionName): void'), true);
+  assert.equal(gameSceneSource.includes('private getStripPlayerTimings(strip: SpriteManifestStripEntry | null): {'), true);
+  assert.equal(gameSceneSource.includes('private getStripHudTimings(strip: SpriteManifestStripEntry | null): {'), true);
+  assert.equal(gameSceneSource.includes('private resolveTimingValue(value: number | undefined, fallback: number, min: number, max: number): number'), true);
 });
 
 test('combat intent mapping still covers critical scripted intents', () => {

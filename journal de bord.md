@@ -882,6 +882,21 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - `e2e.log`
   - echec final controle du workflow si seed ou e2e est en echec.
 
+### Lot 66 - Review/polish animations hero + boss
+- Frontend animation:
+  - passage d'un tuning unique a un tuning par strip via `manifest.strips[*].timings`.
+  - ajout de timings distincts pour:
+    - player runtime (`idleFps/hitFps/castFps`, durées `hit/cast`)
+    - HUD boss (`idle/hit/cast` intervals + durées d'override).
+  - sequences de frames affinees par entite (`idle/hit/cast`) pour lisibilite plus stable.
+- Runtime combat:
+  - `GameScene` lit maintenant les timings depuis le manifest et applique:
+    - FPS des anims player au build des animations Phaser
+    - intervalle d'animation HUD selon le type (`idle/hit/cast`)
+    - durées d'impact/cast synchronisées avec le strip de l'entite.
+- Qualite:
+  - non-regression web etendue pour couvrir la presence du wiring de timing dynamique.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -945,6 +960,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - replay pas a pas des traces JSON (avance tour/log par tour) avec restauration d'etat
   - carte ennemi enrichie avec sprite resolu via `enemy.key`
   - strips runtime actifs (`idle/hit/cast`) pour player et bosses, avec animation HUD cote ennemi
+  - tuning animation centralise dans le manifest (sequences + timings par strip)
 - Chargement web optimise:
   - entree legere
   - bootstrap asynchrone
@@ -1016,12 +1032,13 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Runtime strips Phaser branche pour player + bosses (animation declenchee selon etat combat).
 - Outils QA front renforces: replay instantane + replay pas a pas sur traces JSON.
 - Nightly staging CI instrumentee avec artefacts exploitables pour diagnostics rapides.
+- Tuning animation hero/boss configurable via manifest sans toucher au code runtime.
 
 ## 9) Prochaines priorites recommandees
-1. Review pour ajustement et peaufinage des animations hero et boss existants (timings, silhouettes, lisibilite en combat).
-2. Ajouter une smoke QA web automatisee (boot + auth state + start combat) pour completer la couverture API e2e.
-3. Ajouter un mapping de portraits fallback (spritesheets ou miniatures dediees) pour tous les ennemis non-boss.
-4. Ajouter un endpoint API de lecture des intents/skills scriptes (debug readonly) pour valider les telegraphes cote QA sans jouer un combat complet.
-5. Ajouter un mode auto-play du step replay (intervalle reglable + pause) pour rejouer des sessions longues sans clic manuel.
+1. Ajouter une smoke QA web automatisee (boot + auth state + start combat) pour completer la couverture API e2e.
+2. Ajouter un mapping de portraits fallback (spritesheets ou miniatures dediees) pour tous les ennemis non-boss.
+3. Ajouter un endpoint API de lecture des intents/skills scriptes (debug readonly) pour valider les telegraphes cote QA sans jouer un combat complet.
+4. Ajouter un mode auto-play du step replay (intervalle reglable + pause) pour rejouer des sessions longues sans clic manuel.
+5. Ajouter un preset de calibration visuelle des strips (vitesse/sequence) actif uniquement en `staging` pour iteration QA rapide.
 
 

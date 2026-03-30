@@ -66,9 +66,25 @@
       "frameSize": { "width": 64, "height": 64 },
       "frameCount": 3,
       "animations": {
-        "idle": [0, 1],
-        "hit": [1, 2],
-        "cast": [0, 2]
+        "idle": [0, 1, 0, 2],
+        "hit": [2, 1, 0, 1],
+        "cast": [0, 2, 1, 2]
+      },
+      "timings": {
+        "player": {
+          "idleFps": 5,
+          "hitFps": 10,
+          "castFps": 9,
+          "hitDurationMs": 320,
+          "castDurationMs": 440
+        },
+        "hud": {
+          "idleIntervalMs": 220,
+          "hitIntervalMs": 120,
+          "castIntervalMs": 140,
+          "hitDurationMs": 360,
+          "castDurationMs": 440
+        }
       },
       "scale": { "x": 0.28125, "y": 0.40625 },
       "origin": { "x": 0.5, "y": 0.84 },
@@ -80,9 +96,18 @@
       "frameSize": { "width": 64, "height": 64 },
       "frameCount": 3,
       "animations": {
-        "idle": [0, 1],
-        "hit": [1, 2],
-        "cast": [0, 2]
+        "idle": [0, 1, 0],
+        "hit": [2, 1, 0],
+        "cast": [1, 2, 1, 0]
+      },
+      "timings": {
+        "hud": {
+          "idleIntervalMs": 260,
+          "hitIntervalMs": 130,
+          "castIntervalMs": 165,
+          "hitDurationMs": 440,
+          "castDurationMs": 480
+        }
       },
       "scale": { "x": 0.359375, "y": 0.390625 },
       "origin": { "x": 0.5, "y": 0.84 },
@@ -94,9 +119,18 @@
       "frameSize": { "width": 64, "height": 64 },
       "frameCount": 3,
       "animations": {
-        "idle": [0, 1],
-        "hit": [1, 2],
-        "cast": [0, 2]
+        "idle": [0, 1, 0, 1],
+        "hit": [1, 2, 1],
+        "cast": [0, 2, 2, 1]
+      },
+      "timings": {
+        "hud": {
+          "idleIntervalMs": 250,
+          "hitIntervalMs": 125,
+          "castIntervalMs": 150,
+          "hitDurationMs": 390,
+          "castDurationMs": 520
+        }
       },
       "scale": { "x": 0.34375, "y": 0.375 },
       "origin": { "x": 0.5, "y": 0.84 },
@@ -108,9 +142,18 @@
       "frameSize": { "width": 64, "height": 64 },
       "frameCount": 3,
       "animations": {
-        "idle": [0, 1],
-        "hit": [1, 2],
-        "cast": [0, 2]
+        "idle": [0, 1, 0],
+        "hit": [2, 1, 0],
+        "cast": [0, 2, 1, 2]
+      },
+      "timings": {
+        "hud": {
+          "idleIntervalMs": 240,
+          "hitIntervalMs": 120,
+          "castIntervalMs": 145,
+          "hitDurationMs": 390,
+          "castDurationMs": 470
+        }
       },
       "scale": { "x": 0.34375, "y": 0.375 },
       "origin": { "x": 0.5, "y": 0.84 },
@@ -122,9 +165,18 @@
       "frameSize": { "width": 64, "height": 64 },
       "frameCount": 3,
       "animations": {
-        "idle": [0, 1],
-        "hit": [1, 2],
-        "cast": [0, 2]
+        "idle": [0, 1, 0, 1],
+        "hit": [1, 2, 1, 0],
+        "cast": [2, 1, 0, 2]
+      },
+      "timings": {
+        "hud": {
+          "idleIntervalMs": 220,
+          "hitIntervalMs": 120,
+          "castIntervalMs": 140,
+          "hitDurationMs": 430,
+          "castDurationMs": 540
+        }
       },
       "scale": { "x": 0.375, "y": 0.375 },
       "origin": { "x": 0.5, "y": 0.84 },

@@ -119,6 +119,22 @@ type SpriteManifestStripEntry = {
   frameSize: { width: number; height: number };
   frameCount: number;
   animations?: Record<string, number[]>;
+  timings?: {
+    player?: {
+      idleFps?: number;
+      hitFps?: number;
+      castFps?: number;
+      hitDurationMs?: number;
+      castDurationMs?: number;
+    };
+    hud?: {
+      idleIntervalMs?: number;
+      hitIntervalMs?: number;
+      castIntervalMs?: number;
+      hitDurationMs?: number;
+      castDurationMs?: number;
+    };
+  };
   scale?: { x: number; y: number };
   origin?: { x: number; y: number };
   physics?: { width: number; height: number; offsetX: number; offsetY: number };
@@ -2121,6 +2137,14 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    const hudTimings = this.getStripHudTimings(strip);
+    const intervalMs =
+      animation === 'hit'
+        ? hudTimings.hitIntervalMs
+        : animation === 'cast'
+          ? hudTimings.castIntervalMs
+          : hudTimings.idleIntervalMs;
+
     this.enemyHudStripIntervalId = window.setInterval(() => {
       if (!this.enemyHudStripPlayback) {
         return;
@@ -2130,7 +2154,7 @@ export class GameScene extends Phaser.Scene {
         (this.enemyHudStripPlayback.frameCursor + 1) % this.enemyHudStripPlayback.frames.length;
       const frameIndex = this.enemyHudStripPlayback.frames[this.enemyHudStripPlayback.frameCursor] ?? 0;
       this.applyEnemyHudStripFrame(element, frameIndex, this.enemyHudStripPlayback.frameCount);
-    }, 240);
+    }, intervalMs);
   }
 
   private applyEnemyHudStripFrame(element: HTMLElement, frameIndex: number, frameCount: number): void {
@@ -2214,7 +2238,50 @@ export class GameScene extends Phaser.Scene {
     return [0, Math.min(1, maxFrame)];
   }
 
+  private getStripPlayerTimings(strip: SpriteManifestStripEntry | null): {
+    idleFps: number;
+    hitFps: number;
+    castFps: number;
+    hitDurationMs: number;
+    castDurationMs: number;
+  } {
+    const player = strip?.timings?.player;
+    return {
+      idleFps: this.resolveTimingValue(player?.idleFps, 4, 1, 24),
+      hitFps: this.resolveTimingValue(player?.hitFps, 8, 1, 24),
+      castFps: this.resolveTimingValue(player?.castFps, 8, 1, 24),
+      hitDurationMs: this.resolveTimingValue(player?.hitDurationMs, 360, 80, 3000),
+      castDurationMs: this.resolveTimingValue(player?.castDurationMs, 420, 80, 3000),
+    };
+  }
+
+  private getStripHudTimings(strip: SpriteManifestStripEntry | null): {
+    idleIntervalMs: number;
+    hitIntervalMs: number;
+    castIntervalMs: number;
+    hitDurationMs: number;
+    castDurationMs: number;
+  } {
+    const hud = strip?.timings?.hud;
+    return {
+      idleIntervalMs: this.resolveTimingValue(hud?.idleIntervalMs, 240, 60, 2000),
+      hitIntervalMs: this.resolveTimingValue(hud?.hitIntervalMs, 140, 60, 2000),
+      castIntervalMs: this.resolveTimingValue(hud?.castIntervalMs, 170, 60, 2000),
+      hitDurationMs: this.resolveTimingValue(hud?.hitDurationMs, 460, 80, 3000),
+      castDurationMs: this.resolveTimingValue(hud?.castDurationMs, 420, 80, 3000),
+    };
+  }
+
+  private resolveTimingValue(value: number | undefined, fallback: number, min: number, max: number): number {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return fallback;
+    }
+    return Phaser.Math.Clamp(Math.round(value), min, max);
+  }
+
   private ensureStripAnimations(strip: SpriteManifestStripEntry): void {
+    const playerTimings = this.getStripPlayerTimings(strip);
+
     for (const animation of ['idle', 'hit', 'cast'] as const) {
       const animationKey = `${strip.key}-${animation}`;
       if (this.anims.exists(animationKey)) {
@@ -2222,10 +2289,12 @@ export class GameScene extends Phaser.Scene {
       }
 
       const frames = this.getStripFrames(strip, animation);
+      const frameRate =
+        animation === 'hit' ? playerTimings.hitFps : animation === 'cast' ? playerTimings.castFps : playerTimings.idleFps;
       this.anims.create({
         key: animationKey,
         frames: this.anims.generateFrameNumbers(strip.key, { frames }),
-        frameRate: animation === 'idle' ? 4 : 8,
+        frameRate,
         repeat: animation === 'idle' ? -1 : 0,
       });
     }
@@ -2790,12 +2859,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private playPlayerCombatActionAnimation(action: CombatActionName): void {
+    const playerStrip = this.getStripManifestEntry('player-hero');
+    const playerTimings = this.getStripPlayerTimings(playerStrip);
+
     if (action === 'attack' || action === 'defend') {
-      this.triggerPlayerStripAction('hit');
+      this.triggerPlayerStripAction('hit', playerTimings.hitDurationMs);
       return;
     }
 
-    this.triggerPlayerStripAction('cast');
+    this.triggerPlayerStripAction('cast', playerTimings.castDurationMs);
   }
 
   private async logout(): Promise<void> {
@@ -3146,6 +3218,8 @@ export class GameScene extends Phaser.Scene {
   private applyCombatSnapshot(snapshot: CombatEncounterState): void {
     const previousPlayerHp = this.combatState?.player.hp ?? this.hudState.hp;
     const previousEnemyHp = this.combatState?.enemy.currentHp ?? null;
+    const enemyHudTimings = this.getStripHudTimings(this.getStripManifestEntry(snapshot.enemy.key));
+    const playerTimings = this.getStripPlayerTimings(this.getStripManifestEntry('player-hero'));
 
     this.combatEncounterId = snapshot.id;
     this.combatState = snapshot;
@@ -3156,13 +3230,13 @@ export class GameScene extends Phaser.Scene {
     this.syncHudStateFromCombat(snapshot);
 
     if (snapshot.player.hp < previousPlayerHp) {
-      this.triggerPlayerStripAction('hit', 280);
+      this.triggerPlayerStripAction('hit', playerTimings.hitDurationMs);
     }
 
     if (previousEnemyHp !== null && snapshot.enemy.currentHp < previousEnemyHp) {
-      this.triggerEnemyHudStripOverride('hit', 460);
+      this.triggerEnemyHudStripOverride('hit', enemyHudTimings.hitDurationMs);
     } else if (snapshot.status === 'active' && snapshot.turn === 'enemy') {
-      this.triggerEnemyHudStripOverride('cast', 420);
+      this.triggerEnemyHudStripOverride('cast', enemyHudTimings.castDurationMs);
     }
   }
 
