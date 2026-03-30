@@ -52,7 +52,100 @@ jobs:
           fi
 
       - name: Seed fixtures
-        run: bash apps/api/test/fixtures/run-fixtures.sh
+        id: seed_fixtures
+        continue-on-error: true
+        run: |
+          set +e
+          mkdir -p artifacts/nightly
+          bash apps/api/test/fixtures/run-fixtures.sh 2>&1 | tee artifacts/nightly/seed.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+          if [ "${code}" -eq 0 ]; then
+            echo "result=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=failed" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
 
       - name: Run API E2E
-        run: npm run test:e2e --workspace @farm-rpg/api
+        id: run_e2e
+        if: ${{ steps.seed_fixtures.outputs.exit_code == '0' }}
+        continue-on-error: true
+        run: |
+          set +e
+          mkdir -p artifacts/nightly
+          npm run test:e2e --workspace @farm-rpg/api 2>&1 | tee artifacts/nightly/e2e.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+          if [ "${code}" -eq 0 ]; then
+            echo "result=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=failed" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Build nightly summary
+        if: always()
+        env:
+          SEED_RESULT: ${{ steps.seed_fixtures.outputs.result }}
+          SEED_EXIT_CODE: ${{ steps.seed_fixtures.outputs.exit_code }}
+          E2E_RESULT: ${{ steps.run_e2e.outputs.result }}
+          E2E_EXIT_CODE: ${{ steps.run_e2e.outputs.exit_code }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPOSITORY: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/nightly
+
+          if [ -z "${E2E_RESULT:-}" ]; then
+            E2E_RESULT="skipped"
+          fi
+          if [ -z "${E2E_EXIT_CODE:-}" ]; then
+            E2E_EXIT_CODE="-"
+          fi
+
+          timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat > artifacts/nightly/summary.json <<EOF
+          {
+            "timestamp": "${timestamp}",
+            "repository": "${REPOSITORY}",
+            "ref": "${REF_NAME}",
+            "runUrl": "${RUN_URL}",
+            "seed": {
+              "result": "${SEED_RESULT}",
+              "exitCode": "${SEED_EXIT_CODE}"
+            },
+            "e2e": {
+              "result": "${E2E_RESULT}",
+              "exitCode": "${E2E_EXIT_CODE}"
+            }
+          }
+          EOF
+
+          {
+            echo "## Nightly Staging E2E Summary"
+            echo ""
+            echo "- Timestamp (UTC): ${timestamp}"
+            echo "- Branch: \`${REF_NAME}\`"
+            echo "- Seed fixtures: **${SEED_RESULT}** (exit: \`${SEED_EXIT_CODE}\`)"
+            echo "- API E2E: **${E2E_RESULT}** (exit: \`${E2E_EXIT_CODE}\`)"
+            echo "- Run URL: ${RUN_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload nightly artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-staging-e2e-${{ github.run_number }}
+          path: |
+            artifacts/nightly/summary.json
+            artifacts/nightly/seed.log
+            artifacts/nightly/e2e.log
+          if-no-files-found: warn
+
+      - name: Fail workflow when checks fail
+        if: ${{ steps.seed_fixtures.outputs.exit_code != '0' || steps.run_e2e.outputs.exit_code != '0' }}
+        run: |
+          echo "Nightly staging checks failed (see summary/artifacts)." >&2
+          exit 1

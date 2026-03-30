@@ -869,6 +869,19 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Qualite:
   - non-regression web etendue pour valider le wiring des controles step replay.
 
+### Lot 65 - Nightly staging CI: resume publie et artefacts
+- CI GitHub:
+  - workflow nightly staging enrichi avec statuts explicites pour:
+    - seed fixtures
+    - execution API e2e
+  - generation d'un `summary.json` (timestamp, branche, statuts, exit codes, run URL).
+  - publication d'un resume lisible dans `GITHUB_STEP_SUMMARY`.
+  - upload des artefacts nightly:
+    - `summary.json`
+    - `seed.log`
+    - `e2e.log`
+  - echec final controle du workflow si seed ou e2e est en echec.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1002,9 +1015,10 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Manifest sprites etendu avec metadata `strips` pour preparer l'animation runtime.
 - Runtime strips Phaser branche pour player + bosses (animation declenchee selon etat combat).
 - Outils QA front renforces: replay instantane + replay pas a pas sur traces JSON.
+- Nightly staging CI instrumentee avec artefacts exploitables pour diagnostics rapides.
 
 ## 9) Prochaines priorites recommandees
-1. Etendre la nightly CI staging avec publication d'un resume (artefact JSON + statut lisible en sortie workflow).
+1. Review pour ajustement et peaufinage des animations hero et boss existants (timings, silhouettes, lisibilite en combat).
 2. Ajouter une smoke QA web automatisee (boot + auth state + start combat) pour completer la couverture API e2e.
 3. Ajouter un mapping de portraits fallback (spritesheets ou miniatures dediees) pour tous les ennemis non-boss.
 4. Ajouter un endpoint API de lecture des intents/skills scriptes (debug readonly) pour valider les telegraphes cote QA sans jouer un combat complet.
