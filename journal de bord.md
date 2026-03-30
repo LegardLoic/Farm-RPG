@@ -897,6 +897,20 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Qualite:
   - non-regression web etendue pour couvrir la presence du wiring de timing dynamique.
 
+### Lot 67 - Smoke QA web automatisee (boot + auth + guard combat)
+- Frontend QA:
+  - ajout d'un script Playwright `apps/web/test/smoke-web-auth-combat.mjs`.
+  - controles smoke verifies:
+    - chargement de la page et du HUD (`#hud-root`)
+    - statut auth attendu (`Non connecte` par defaut)
+    - bouton `Start combat` desactive hors session.
+  - garde supplementaire:
+    - verification qu'aucun `POST /combat/start` n'est emis tant que le joueur n'est pas connecte.
+- CI GitHub:
+  - workflow nightly staging enrichi pour lancer ce smoke web apres seed fixtures + API e2e.
+  - publication du statut smoke dans `summary.json` et `GITHUB_STEP_SUMMARY`.
+  - upload du log dedie `artifacts/nightly/web-smoke.log`.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1032,13 +1046,14 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Runtime strips Phaser branche pour player + bosses (animation declenchee selon etat combat).
 - Outils QA front renforces: replay instantane + replay pas a pas sur traces JSON.
 - Nightly staging CI instrumentee avec artefacts exploitables pour diagnostics rapides.
+- Nightly staging CI completee avec smoke web Playwright (auth guard + non emission `combat/start` hors session).
 - Tuning animation hero/boss configurable via manifest sans toucher au code runtime.
 
 ## 9) Prochaines priorites recommandees
-1. Ajouter une smoke QA web automatisee (boot + auth state + start combat) pour completer la couverture API e2e.
-2. Ajouter un mapping de portraits fallback (spritesheets ou miniatures dediees) pour tous les ennemis non-boss.
-3. Ajouter un endpoint API de lecture des intents/skills scriptes (debug readonly) pour valider les telegraphes cote QA sans jouer un combat complet.
-4. Ajouter un mode auto-play du step replay (intervalle reglable + pause) pour rejouer des sessions longues sans clic manuel.
-5. Ajouter un preset de calibration visuelle des strips (vitesse/sequence) actif uniquement en `staging` pour iteration QA rapide.
+1. Ajouter un mapping de portraits fallback (spritesheets ou miniatures dediees) pour tous les ennemis non-boss.
+2. Ajouter un endpoint API de lecture des intents/skills scriptes (debug readonly) pour valider les telegraphes cote QA sans jouer un combat complet.
+3. Ajouter un mode auto-play du step replay (intervalle reglable + pause) pour rejouer des sessions longues sans clic manuel.
+4. Ajouter un preset de calibration visuelle des strips (vitesse/sequence) actif uniquement en `staging` pour iteration QA rapide.
+5. Ajouter un mode smoke web authentifie (cookie/session fixture) pour verifier `Start combat` end-to-end cote front.
 
 
