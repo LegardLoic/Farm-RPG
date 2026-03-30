@@ -751,6 +751,51 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Qualite:
   - test web de non-regression etendu pour verifier la presence du champ HUD `combatTelemetry`.
 
+### Lot 54 - Extension sprite pack ennemis
+- Frontend assets:
+  - ajout des sprites SVG manquants pour les ennemis:
+    - `training_dummy`
+    - `ash_scout`
+    - `thorn_beast_alpha`
+  - enrichissement du `manifest.json` sprites avec les nouvelles entrees (scale/origin/physics).
+  - prechargement BootScene etendu pour charger tous les sprites ennemis de la table combat actuelle.
+
+### Lot 55 - Workflow CI dedie fixtures SQL
+- CI integration:
+  - ajout d'un workflow manuel `Fixtures Integration` (workflow_dispatch) dedie aux fixtures SQL.
+  - support des scenarios selectionnables (`baseline-authenticated-user`, `mid-tower-progression`, `active-combat-save-state`, `all`).
+  - support du reset optionnel avant application (`reset_first`).
+  - installation automatique de `postgresql-client` sur runner Ubuntu.
+- Tooling fixtures:
+  - ajout du script `apps/api/test/fixtures/run-fixtures.sh` pour orchestration locale/CI des fixtures.
+  - doc fixtures mise a jour avec mode local + mode CI.
+
+### Lot 56 - E2E auth -> combat -> save/load
+- Backend QA:
+  - ajout d'un test e2e Node dedie:
+    - `GET /auth/me`
+    - `POST /combat/start`
+    - `POST /saves/:slot/capture`
+    - `POST /saves/:slot/load`
+    - verification finale `GET /combat/current` => `null` apres `load`.
+  - auth e2e par JWT signe via `E2E_ACCESS_TOKEN_SECRET` et `E2E_USER_ID` fixture.
+  - script npm dedie: `npm run test:e2e --workspace @farm-rpg/api`.
+  - doc d'execution ajoutee: `docs/07-e2e-auth-combat-save-load.md`.
+
+### Lot 57 - Export JSON des traces QA HUD
+- Frontend Debug QA:
+  - ajout d'une action HUD `Export JSON trace`.
+  - generation locale d'un fichier JSON telechargeable (sans backend).
+  - payload exporte:
+    - metadonnees frontend/env + viewport + user agent
+    - etat auth
+    - snapshot HUD
+    - snapshot combat complet (incluant `scriptState` et telemetry)
+    - statut/messages Debug QA.
+  - style dedie du bouton d'export pour le distinguer des actions debug serveur.
+- Qualite:
+  - non-regression web etendue sur le wiring de l'export QA.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -809,10 +854,12 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - glossaire visuel des raretes de loot (`common`, `uncommon`, `rare`, `epic`, `legendary`)
   - ligne telemetry combat (compteurs skills/boss scripts) pour lecture rapide en test
   - panneau `Debug QA` pour piloter les endpoints debug sans quitter le jeu (DEV/staging), incluant world flags, presets de scenario, set quest status et recaps detaillees
+  - export local JSON des traces QA depuis le panneau `Debug QA`
 - Chargement web optimise:
   - entree legere
   - bootstrap asynchrone
   - chunk `phaser-vendor` dedie
+  - boot preload aligne sur tous les sprites ennemis actuels.
 - Integration API avec gestion d'erreurs UI.
 
 ## 6) API actuellement disponible
@@ -872,12 +919,14 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Rewards combat enrichies avec metadonnees de loot (`rarity`, `source`) pour faciliter l'UI future.
 - Skills combat serveur avec validations metier strictes (couts MP, debuffs actifs, interruption conditionnelle sur telegraphes).
 - Flux PR continue (`develop` -> `main`) deja utilise et valide.
+- Workflow CI manuel dedie fixtures SQL pour seed reproductible des environnements d'integration.
+- Suite e2e dediee auth/combat/save-load pour validation black-box sur API locale ou distante.
 
 ## 9) Prochaines priorites recommandees
-1. Commencer generation/normalisation sprites definitifs pour persos et ennemis.
-2. Brancher les sprites sur plus d'ennemis/animations pour sortir du pack statique initial.
-3. Ajouter une execution optionnelle des fixtures SQL dans un job CI d'integration dedie.
-4. Industrialiser des tests e2e auth -> combat -> save/load sur base de fixtures.
-5. Ajouter un export JSON des traces QA (combat/debug HUD) pour partager les runs entre dev/prod.
+1. Afficher les sprites ennemis directement dans le HUD combat selon `enemy.key` (pas uniquement preload assets).
+2. Passer du pack SVG statique a des strips d'animation (idle/hit/cast) pour player + boss etages 3/5/8/10.
+3. Ajouter un pipeline nightly CI staging: seed fixtures + execution automatique `test:e2e` sur URL de staging.
+4. Ajouter un mode import/replay des traces QA JSON pour rejouer un contexte de debug dans le HUD.
+5. Ajouter des assertions API supplementaires dans `test:e2e` (quest claim + shop buy + restore autosave).
 
 
