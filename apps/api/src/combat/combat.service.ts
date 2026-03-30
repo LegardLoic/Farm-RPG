@@ -54,6 +54,9 @@ import {
 import type {
   CombatActionName,
   CombatActionResult,
+  CombatDebugEnemyScriptSummary,
+  CombatDebugPlayerSkillSummary,
+  CombatDebugReference,
   CombatEnemyDefinition,
   CombatEncounterState,
   CombatEncounterSummary,
@@ -104,6 +107,60 @@ type ResolvedLootDrop = CombatLootDropDefinition & {
 type DebugForcedCombatStart = {
   enemy: CombatEnemyDefinition;
   isScriptedBossEncounter: boolean;
+};
+
+const COMBAT_DEBUG_PLAYER_SKILLS: Record<
+  CombatActionName,
+  Pick<CombatDebugPlayerSkillSummary, 'label' | 'manaCost' | 'blockedBySilence' | 'description'>
+> = {
+  attack: {
+    label: 'Attack',
+    manaCost: 0,
+    blockedBySilence: false,
+    description: 'Strike a single target with a physical attack.',
+  },
+  defend: {
+    label: 'Defend',
+    manaCost: 0,
+    blockedBySilence: false,
+    description: 'Reduce incoming damage until the next enemy turn.',
+  },
+  fireball: {
+    label: 'Fireball',
+    manaCost: FIREBALL_MANA_COST,
+    blockedBySilence: true,
+    description: 'Deal direct magical damage.',
+  },
+  rally: {
+    label: 'Rally',
+    manaCost: RALLY_MANA_COST,
+    blockedBySilence: true,
+    description: 'Boost attack and magic for two turns.',
+  },
+  sunder: {
+    label: 'Sunder',
+    manaCost: SUNDER_MANA_COST,
+    blockedBySilence: true,
+    description: 'Damage the enemy and reduce their defense for two turns.',
+  },
+  mend: {
+    label: 'Mend',
+    manaCost: MEND_MANA_COST,
+    blockedBySilence: true,
+    description: 'Restore HP based on magical power.',
+  },
+  cleanse: {
+    label: 'Cleanse',
+    manaCost: CLEANSE_MANA_COST,
+    blockedBySilence: false,
+    description: 'Remove Burning or Silence and open a cleanse reaction window.',
+  },
+  interrupt: {
+    label: 'Interrupt',
+    manaCost: INTERRUPT_MANA_COST,
+    blockedBySilence: true,
+    description: 'Break interruptible enemy intentions and expose the target.',
+  },
 };
 
 @Injectable()
@@ -228,6 +285,47 @@ export class CombatService {
   async getCombatById(userId: string, encounterId: string): Promise<CombatActionResult> {
     const row = await this.findEncounterById(userId, encounterId, false);
     return this.toActionResult(this.toEncounterState(row));
+  }
+
+  getDebugScriptedCombatReference(): CombatDebugReference {
+    const scriptedFloors = Object.entries(TOWER_FLOOR_SCRIPTED_ENEMIES)
+      .map(([floorKey, enemyKey]) => {
+        const floor = Number(floorKey);
+        const enemy = this.resolveEnemyDefinitionFromState(enemyKey);
+
+        return {
+          floor,
+          enemyKey: enemy.key,
+          enemyName: enemy.name,
+          scriptedBossEncounter: floor === 10,
+        };
+      })
+      .sort((left, right) => left.floor - right.floor);
+
+    const scriptedFloorByEnemyKey = new Map(scriptedFloors.map((entry) => [entry.enemyKey, entry]));
+
+    return {
+      playerSkills: this.getDebugPlayerSkills(),
+      enemies: Object.values(COMBAT_ENEMY_DEFINITIONS)
+        .map((enemy) => {
+          const scriptedFloor = scriptedFloorByEnemyKey.get(enemy.key);
+          return {
+            key: enemy.key,
+            name: enemy.name,
+            hp: enemy.hp,
+            mp: enemy.mp,
+            attack: enemy.attack,
+            defense: enemy.defense,
+            magicAttack: enemy.magicAttack,
+            speed: enemy.speed,
+            scriptedFloor: scriptedFloor?.floor ?? null,
+            scriptedBossEncounter: scriptedFloor?.scriptedBossEncounter ?? false,
+          };
+        })
+        .sort((left, right) => left.key.localeCompare(right.key)),
+      scriptedFloors,
+      scriptedIntents: this.getDebugScriptedEnemySummaries(scriptedFloors),
+    };
   }
 
   async performAction(
@@ -1720,6 +1818,105 @@ export class CombatService {
     const next = this.cloneEncounter(encounter);
     this.pushLog(next, message);
     return next;
+  }
+
+  private getDebugPlayerSkills(): CombatDebugPlayerSkillSummary[] {
+    const skillOrder: CombatActionName[] = [
+      'attack',
+      'defend',
+      'fireball',
+      'rally',
+      'sunder',
+      'mend',
+      'cleanse',
+      'interrupt',
+    ];
+
+    return skillOrder.map((key) => ({
+      key,
+      ...COMBAT_DEBUG_PLAYER_SKILLS[key],
+    }));
+  }
+
+  private getDebugScriptedEnemySummaries(
+    scriptedFloors: CombatDebugReference['scriptedFloors'],
+  ): CombatDebugEnemyScriptSummary[] {
+    const scriptedFloorByEnemyKey = new Map(scriptedFloors.map((entry) => [entry.enemyKey, entry]));
+
+    const profiles: Array<{
+      enemyKey: string;
+      intents: Array<{
+        key: string;
+        trigger: string;
+      }>;
+    }> = [
+      {
+        enemyKey: 'thorn_beast_alpha',
+        intents: [
+          { key: 'basic_strike', trigger: 'default fallback when no scripted condition is met' },
+          { key: 'root_smash', trigger: `round % ${THORN_BEAST_ALPHA_ROOT_SMASH_INTERVAL} === 0` },
+          { key: 'opening_punish', trigger: 'player Rally active and round is even' },
+        ],
+      },
+      {
+        enemyKey: 'cinder_warden',
+        intents: [
+          { key: 'basic_strike', trigger: 'default fallback when no scripted condition is met' },
+          { key: 'cinder_burst', trigger: 'recent Cleanse reaction window or periodic burst round' },
+          { key: 'molten_shell', trigger: 'enemy shatter active and MP available' },
+        ],
+      },
+      {
+        enemyKey: 'ash_vanguard_captain',
+        intents: [
+          { key: 'basic_strike', trigger: 'default fallback when no scripted condition is met' },
+          { key: 'twin_slash', trigger: 'recent Interrupt reaction window or periodic slash round' },
+          { key: 'iron_recenter', trigger: 'enemy shatter active and MP available' },
+        ],
+      },
+      {
+        enemyKey: 'curse_heart_avatar',
+        intents: [
+          { key: 'cursed_claw', trigger: 'default fallback when no scripted condition is met' },
+          { key: 'null_sigil', trigger: 'player Rally active or recent Cleanse reaction window' },
+          {
+            key: 'cataclysm_ray',
+            trigger: `avatar enraged and round % ${CURSE_HEART_AVATAR_CATACLYSM_INTERVAL} === 0`,
+          },
+        ],
+      },
+    ];
+
+    return profiles
+      .map((profile) => {
+        const enemy = COMBAT_ENEMY_DEFINITIONS[profile.enemyKey];
+        if (!enemy) {
+          return null;
+        }
+
+        const scriptedFloor = scriptedFloorByEnemyKey.get(profile.enemyKey);
+        return {
+          enemyKey: enemy.key,
+          enemyName: enemy.name,
+          scriptedFloor: scriptedFloor?.floor ?? null,
+          scriptedBossEncounter: scriptedFloor?.scriptedBossEncounter ?? false,
+          intents: profile.intents.map((intent) => ({
+            key: intent.key,
+            label: this.formatCombatIntentLabel(intent.key),
+            interruptible: this.isEnemyIntentInterruptible(intent.key as EnemyIntent),
+            trigger: intent.trigger,
+          })),
+        };
+      })
+      .filter((entry) => entry !== null) as CombatDebugEnemyScriptSummary[];
+  }
+
+  private formatCombatIntentLabel(intent: string): string {
+    return intent
+      .split('_')
+      .filter((part) => part.length > 0)
+      .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+      .join(' ');
   }
 
   private pushLog(encounter: CombatEncounterState, message: string): void {

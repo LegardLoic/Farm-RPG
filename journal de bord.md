@@ -911,6 +911,62 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - publication du statut smoke dans `summary.json` et `GITHUB_STEP_SUMMARY`.
   - upload du log dedie `artifacts/nightly/web-smoke.log`.
 
+### Lot 68 - Endpoint debug readonly des scripts combat
+- Backend combat:
+  - ajout de la route `GET /combat/debug/scripted-intents` (auth requise, bloquee en `production`).
+  - payload QA fourni:
+    - skills joueur (`attack/defend/fireball/rally/sunder/mend/cleanse/interrupt`)
+    - liste ennemis + stats + floor script eventuel
+    - mapping floors scripts (`3/5/8/10`)
+    - intents scriptes par boss avec trigger et interruptibilite.
+- Qualite:
+  - test API crosscut ajoute pour valider le contrat debug retourne.
+
+### Lot 69 - Portraits fallback pour ennemis non-boss
+- Assets:
+  - ajout d'un dossier `apps/web/public/assets/sprites/portraits/enemies/`.
+  - ajout de portraits dedies:
+    - `forest_goblin`
+    - `training_dummy`
+    - `ash_scout`
+    - `default` (fallback).
+- Frontend combat:
+  - rendu ennemi HUD etendu pour prioriser un portrait mappe (`manifest.portraits.byEnemyKey`) avant le sprite statique.
+  - fallback global `manifest.portraits.fallback` si portrait dedie absent.
+
+### Lot 70 - Replay pas a pas: mode auto-play
+- Frontend Debug QA:
+  - ajout d'un mode auto-play sur le replay pas a pas:
+    - `Start auto-play` / `Pause auto-play`
+    - vitesses reglables (`slow`, `normal`, `fast`).
+  - arret auto robuste:
+    - fin de replay
+    - stop manuel
+    - reset combat/teardown HUD.
+
+### Lot 71 - Preset de calibration visuelle strips (staging only)
+- Frontend Debug QA:
+  - ajout d'un preset de calibration strips actif uniquement en `staging`.
+  - presets:
+    - `Manifest default`
+    - `Snappy QA`
+    - `Cinematic QA`
+  - application runtime:
+    - recalcul des FPS/durees player
+    - recalcul des intervalles/durees HUD ennemi
+    - refresh immediat des animations en cours.
+
+### Lot 72 - Smoke web authentifie (fixture cookie/token)
+- Frontend QA + CI:
+  - smoke Playwright etendu avec 2 modes:
+    - `guest` (guard non-connecte)
+    - `auth` (injection cookie access token et verif `Start combat` end-to-end).
+  - nightly CI:
+    - run `web smoke guest`
+    - build fixture auth automatique depuis `E2E_ACCESS_TOKEN_SECRET + E2E_USER_ID` si token web non fourni
+    - run `web smoke auth`
+    - logs/summary separes (`guest` vs `auth`).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -972,7 +1028,10 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - export local JSON des traces QA depuis le panneau `Debug QA`
   - import/replay local JSON des traces QA pour rejouer un contexte de debug
   - replay pas a pas des traces JSON (avance tour/log par tour) avec restauration d'etat
+  - replay pas a pas avec auto-play (slow/normal/fast) + pause
+  - preset de calibration strips (staging only) pour iteration visuelle rapide
   - carte ennemi enrichie avec sprite resolu via `enemy.key`
+  - portraits fallback dedies pour ennemis non-boss (`manifest.portraits`)
   - strips runtime actifs (`idle/hit/cast`) pour player et bosses, avec animation HUD cote ennemi
   - tuning animation centralise dans le manifest (sequences + timings par strip)
 - Chargement web optimise:
@@ -1009,6 +1068,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `POST /equipment/unequip`
 - `POST /combat/start`
 - `GET /combat/current`
+- `GET /combat/debug/scripted-intents` (dev only)
 - `GET /combat/:id`
 - `POST /combat/:id/action`
 - `POST /combat/:id/forfeit`
@@ -1047,13 +1107,15 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Outils QA front renforces: replay instantane + replay pas a pas sur traces JSON.
 - Nightly staging CI instrumentee avec artefacts exploitables pour diagnostics rapides.
 - Nightly staging CI completee avec smoke web Playwright (auth guard + non emission `combat/start` hors session).
+- Nightly staging CI couvre maintenant aussi un smoke web authentifie avec fixture auto (token/cookie).
+- Endpoint debug readonly disponible pour auditer scripts combat sans lancer un combat complet.
 - Tuning animation hero/boss configurable via manifest sans toucher au code runtime.
 
 ## 9) Prochaines priorites recommandees
-1. Ajouter un mapping de portraits fallback (spritesheets ou miniatures dediees) pour tous les ennemis non-boss.
-2. Ajouter un endpoint API de lecture des intents/skills scriptes (debug readonly) pour valider les telegraphes cote QA sans jouer un combat complet.
-3. Ajouter un mode auto-play du step replay (intervalle reglable + pause) pour rejouer des sessions longues sans clic manuel.
-4. Ajouter un preset de calibration visuelle des strips (vitesse/sequence) actif uniquement en `staging` pour iteration QA rapide.
-5. Ajouter un mode smoke web authentifie (cookie/session fixture) pour verifier `Start combat` end-to-end cote front.
+1. Brancher `GET /combat/debug/scripted-intents` dans le panneau `Debug QA` (frontend) pour inspection live in-game.
+2. Ajouter un nettoyage automatique du combat ouvert apres smoke web auth (forfeit) pour eviter l'accumulation d'encounters actifs en staging.
+3. Etendre le mapping portraits fallback a des variantes d'etat (normal/hit/cast) pour les ennemis non-boss les plus frequents.
+4. Ajouter une persistance locale (`localStorage`) du preset strip calibration et de la vitesse auto-play.
+5. Ajouter un mini tableau de bord nightly (history sur 7 jours) pour suivre la tendance guest/auth smoke + API e2e.
 
 

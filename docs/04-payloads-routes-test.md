@@ -9,6 +9,7 @@ Ce document regroupe les payloads utilises pendant nos tests manuels (front + AP
 - Base URL prod API: `https://farm-rpg-api.onrender.com`
 - Routes protegees: necessitent une session auth valide (cookie access token)
 - Routes `debug/admin/*`: disponibles uniquement hors production
+- Le smoke web Playwright peut injecter le cookie `farm_rpg_at` sur l'origine API si une fixture auth est fournie.
 
 ## Tableau des payloads
 
@@ -18,6 +19,8 @@ Ce document regroupe les payloads utilises pendant nos tests manuels (front + AP
 | `/auth/logout` | `POST` | non (si cookie present) | `{}` | Forcer deconnexion et nettoyage cookies |
 | `/combat/start` | `POST` | oui | `{}` | Demarrer un combat normal selon la tour courante |
 | `/combat/start` | `POST` | oui | `{ "enemyKey": "forest_goblin" }` | Demarrer avec un ennemi cible (si non ecrase par un boss script) |
+| `/combat/start` | `POST` | cookie access token | `{}` | Smoke web auth: verifier que `Start combat` devient activable et qu'un encounter actif est retourne |
+| `/combat/debug/scripted-intents` | `GET` | oui (dev only) | `n/a` | Lire la reference QA des ennemis, skills joueur, intents scripts et paliers de tour |
 | `/combat/:id/action` | `POST` | oui | `{ "action": "attack" }` | Action de tour joueur. Valeurs: `attack`, `defend`, `fireball`, `rally`, `sunder`, `mend`, `cleanse`, `interrupt` |
 | `/combat/:id/forfeit` | `POST` | oui | `{ "reason": "debug reset" }` | Abandonner le combat actif |
 | `/inventory/add` | `POST` | oui | `{ "itemKey": "healing_herb", "quantity": 3 }` | Injecter item en inventaire via route metier |
@@ -178,3 +181,28 @@ Presets disponibles:
 - `village_open`
 - `mid_tower`
 - `act1_done`
+
+### 12) Lire la reference debug combat
+
+Route:
+
+```text
+GET /combat/debug/scripted-intents
+```
+
+Reponse type:
+
+```json
+{
+  "status": "ok",
+  "environment": "development",
+  "combat": {
+    "playerSkills": [
+      { "key": "attack", "label": "Attack", "manaCost": 0, "blockedBySilence": false, "description": "..." }
+    ],
+    "scriptedFloors": [
+      { "floor": 3, "enemyKey": "thorn_beast_alpha", "enemyName": "Thorn Beast Alpha", "scriptedBossEncounter": false }
+    ]
+  }
+}
+```

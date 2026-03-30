@@ -41,10 +41,12 @@ test('combat HUD exposes enemy sprite visual wiring', () => {
   assert.equal(gameSceneSource.includes('data-hud="combatEnemySprite"'), true);
   assert.equal(gameSceneSource.includes('data-hud="combatEnemySpriteFallback"'), true);
   assert.equal(gameSceneSource.includes('private renderCombatEnemySprite(): void'), true);
+  assert.equal(gameSceneSource.includes('private getCombatEnemyPortraitPath(enemyKey: string): string | null'), true);
   assert.equal(gameSceneSource.includes('private startEnemyHudStripPlayback('), true);
   assert.equal(gameSceneSource.includes('private getEnemyHudStripPreferredAnimation(): StripAnimationName'), true);
   assert.equal(stylesSource.includes('.combat-enemy-visual'), true);
   assert.equal(stylesSource.includes('.combat-enemy-strip'), true);
+  assert.equal(stylesSource.includes('.combat-enemy-visual img[data-visual-type="portrait"]'), true);
 });
 
 test('debug QA exposes local JSON trace export wiring', () => {
@@ -59,13 +61,25 @@ test('debug QA exposes trace import and replay wiring', () => {
   assert.equal(gameSceneSource.includes('data-debug-action="replay-trace"'), true);
   assert.equal(gameSceneSource.includes('data-debug-action="replay-trace-step-start"'), true);
   assert.equal(gameSceneSource.includes('data-debug-action="replay-trace-step-next"'), true);
+  assert.equal(gameSceneSource.includes('data-debug-action="replay-trace-step-autoplay"'), true);
   assert.equal(gameSceneSource.includes('data-debug-action="replay-trace-step-stop"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="debugQaReplayAutoPlaySpeed"'), true);
   assert.equal(gameSceneSource.includes('data-hud="debugQaImportFile"'), true);
   assert.equal(gameSceneSource.includes('private triggerDebugQaTraceImport(): void'), true);
   assert.equal(gameSceneSource.includes('private replayImportedDebugQaTrace(): void'), true);
   assert.equal(gameSceneSource.includes('private startDebugQaStepReplay(): void'), true);
   assert.equal(gameSceneSource.includes('private advanceDebugQaStepReplay(): void'), true);
+  assert.equal(gameSceneSource.includes('private toggleDebugQaStepReplayAutoPlay(): void'), true);
+  assert.equal(gameSceneSource.includes('private stopDebugQaStepReplayAutoPlay(updateHud: boolean): void'), true);
   assert.equal(gameSceneSource.includes('private stopDebugQaStepReplay(restoreBaseline: boolean): void'), true);
+});
+
+test('staging strip calibration preset wiring exists', () => {
+  assert.equal(gameSceneSource.includes('data-hud="debugQaStripCalibrationPreset"'), true);
+  assert.equal(gameSceneSource.includes('data-debug-action="apply-strip-calibration"'), true);
+  assert.equal(gameSceneSource.includes('private applyStripCalibrationPreset(): void'), true);
+  assert.equal(gameSceneSource.includes('private getActiveStripCalibrationPreset(): StripCalibrationPreset | null'), true);
+  assert.equal(gameSceneSource.includes('private refreshStripCalibrationRuntime(): void'), true);
 });
 
 test('strip runtime animation wiring exists for player and boss assets', () => {

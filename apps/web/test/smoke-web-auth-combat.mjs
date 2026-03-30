@@ -1,7 +1,18 @@
 import { chromium } from 'playwright';
 
 const baseUrl = process.env.E2E_WEB_BASE_URL?.trim() ?? '';
-const expectedAuthStatus = process.env.E2E_WEB_EXPECTED_AUTH_STATUS?.trim() || 'Non connecte';
+const apiBaseUrl =
+  process.env.E2E_WEB_API_BASE_URL?.trim() ||
+  process.env.E2E_API_BASE_URL?.trim() ||
+  '';
+const authCookieName = process.env.E2E_WEB_AUTH_COOKIE_NAME?.trim() || 'farm_rpg_at';
+const authToken =
+  process.env.E2E_WEB_AUTH_ACCESS_TOKEN?.trim() ||
+  process.env.E2E_WEB_AUTH_COOKIE_VALUE?.trim() ||
+  '';
+const smokeMode = authToken ? 'auth' : 'guest';
+const expectedAuthStatus =
+  process.env.E2E_WEB_EXPECTED_AUTH_STATUS?.trim() || (smokeMode === 'auth' ? 'Connecte' : 'Non connecte');
 const pendingAuthStatus = process.env.E2E_WEB_PENDING_AUTH_STATUS?.trim() || 'Verification...';
 const timeoutMs = Number.parseInt(process.env.E2E_WEB_TIMEOUT_MS ?? '30000', 10);
 const idleWaitMs = Number.parseInt(process.env.E2E_WEB_IDLE_WAIT_MS ?? '1200', 10);
@@ -16,9 +27,39 @@ function normalize(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function hasWindowText(text, fragments) {
+  const normalized = normalize(text).toLowerCase();
+  return fragments.some((fragment) => normalized.includes(fragment.toLowerCase()));
+}
+
+async function prepareAuthFixture(context) {
+  if (!authToken) {
+    return false;
+  }
+
+  if (!apiBaseUrl) {
+    throw new Error('Missing API base URL for authenticated web smoke mode.');
+  }
+
+  await context.addCookies([
+    {
+      name: authCookieName,
+      value: authToken,
+      url: apiBaseUrl,
+      path: '/',
+      httpOnly: true,
+      secure: apiBaseUrl.startsWith('https://'),
+      sameSite: 'Lax',
+    },
+  ]);
+
+  return true;
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  const authFixtureApplied = await prepareAuthFixture(context);
   const page = await context.newPage();
 
   let combatStartRequestCount = 0;
@@ -59,32 +100,103 @@ async function main() {
     if (authStatusIsPending && !allowPendingAuthStatus) {
       throw new Error(`Auth status still pending after timeout: "${authStatus}".`);
     }
-    if (!authStatusIsPending && !authStatus.toLowerCase().includes(expectedAuthStatus.toLowerCase())) {
+    if (!authStatusIsPending && !hasWindowText(authStatus, [expectedAuthStatus])) {
       throw new Error(`Unexpected auth status "${authStatus}" (expected contains "${expectedAuthStatus}").`);
     }
 
     const startButtonDisabled = await page.isDisabled('[data-combat-action="start"]');
-    if (!startButtonDisabled) {
-      throw new Error('Expected start combat button to be disabled while unauthenticated.');
+    if (smokeMode === 'guest') {
+      if (!startButtonDisabled) {
+        throw new Error('Expected start combat button to be disabled while unauthenticated.');
+      }
+
+      await page.waitForTimeout(Math.max(200, idleWaitMs));
+
+      const combatError = normalize(await page.textContent('[data-hud="combatError"]'));
+      const combatErrorVisible = await page.isVisible('[data-hud="combatError"]');
+      if (combatStartRequestCount > 0) {
+        throw new Error(`Unexpected /combat/start request count: ${combatStartRequestCount}.`);
+      }
+      if (combatErrorVisible && combatError.length > 0) {
+        throw new Error(`Unexpected visible combat error while idle: "${combatError}".`);
+      }
+
+      const summary = {
+        baseUrl,
+        mode: smokeMode,
+        authFixtureApplied,
+        authStatus,
+        authResolved,
+        authStatusIsPending,
+        startButtonDisabled,
+        combatError,
+        combatStartRequestCount,
+        result: 'passed',
+      };
+      console.log(JSON.stringify(summary, null, 2));
+      return;
     }
 
-    await page.waitForTimeout(Math.max(200, idleWaitMs));
+    if (startButtonDisabled) {
+      throw new Error('Expected start combat button to be enabled while authenticated.');
+    }
 
+    await page.click('[data-combat-action="start"]', { timeout: timeoutMs });
+
+    await page.waitForFunction(
+      () => {
+        const element = document.querySelector('[data-hud="combatEncounterId"]');
+        if (!(element instanceof HTMLElement)) {
+          return false;
+        }
+        const value = (element.textContent ?? '').trim();
+        return value.length > 0 && value !== '-';
+      },
+      { timeout: timeoutMs },
+    );
+
+    await page.waitForFunction(
+      () => {
+        const element = document.querySelector('[data-hud="combatStatus"]');
+        if (!(element instanceof HTMLElement)) {
+          return false;
+        }
+        const value = (element.textContent ?? '').trim();
+        return value.length > 0 && value !== 'Inactif' && value !== 'Chargement';
+      },
+      { timeout: timeoutMs },
+    );
+
+    const combatEncounterId = normalize(await page.textContent('[data-hud="combatEncounterId"]'));
+    const combatStatus = normalize(await page.textContent('[data-hud="combatStatus"]'));
+    const combatResult = normalize(await page.textContent('[data-hud="combatResult"]'));
     const combatError = normalize(await page.textContent('[data-hud="combatError"]'));
     const combatErrorVisible = await page.isVisible('[data-hud="combatError"]');
-    if (combatStartRequestCount > 0) {
-      throw new Error(`Unexpected /combat/start request count: ${combatStartRequestCount}.`);
+
+    if (combatStartRequestCount === 0) {
+      throw new Error('Expected /combat/start request to be emitted in authenticated mode.');
+    }
+    if (combatEncounterId === '-' || combatEncounterId.length === 0) {
+      throw new Error('Expected combat encounter id to be populated after start combat.');
+    }
+    if (!combatStatus.toLowerCase().includes('cours')) {
+      throw new Error(`Unexpected combat status after start: "${combatStatus}".`);
     }
     if (combatErrorVisible && combatError.length > 0) {
-      throw new Error(`Unexpected visible combat error while idle: "${combatError}".`);
+      throw new Error(`Unexpected visible combat error after auth start: "${combatError}".`);
     }
 
     const summary = {
       baseUrl,
+      mode: smokeMode,
+      authFixtureApplied,
       authStatus,
       authResolved,
       authStatusIsPending,
       startButtonDisabled,
+      combatEncounterId,
+      combatStatus,
+      combatResult,
       combatError,
       combatStartRequestCount,
       result: 'passed',
