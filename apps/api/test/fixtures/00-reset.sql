@@ -7,6 +7,7 @@ TRUNCATE TABLE
   save_slots,
   autosaves,
   player_progression,
+  world_state,
   quest_states,
   world_flags,
   tower_progression,

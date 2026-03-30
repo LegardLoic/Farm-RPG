@@ -172,6 +172,64 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         experience INTEGER NOT NULL DEFAULT 0 CHECK (experience >= 0),
         experience_to_next INTEGER NOT NULL DEFAULT 100 CHECK (experience_to_next > 0),
         gold INTEGER NOT NULL DEFAULT 120 CHECK (gold >= 0),
+        current_hp INTEGER NOT NULL DEFAULT 32 CHECK (current_hp >= 0),
+        max_hp INTEGER NOT NULL DEFAULT 32 CHECK (max_hp > 0),
+        current_mp INTEGER NOT NULL DEFAULT 15 CHECK (current_mp >= 0),
+        max_mp INTEGER NOT NULL DEFAULT 15 CHECK (max_mp > 0),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await this.query(`
+      ALTER TABLE player_progression
+      ADD COLUMN IF NOT EXISTS current_hp INTEGER NOT NULL DEFAULT 32;
+    `);
+
+    await this.query(`
+      ALTER TABLE player_progression
+      ADD COLUMN IF NOT EXISTS max_hp INTEGER NOT NULL DEFAULT 32;
+    `);
+
+    await this.query(`
+      ALTER TABLE player_progression
+      ADD COLUMN IF NOT EXISTS current_mp INTEGER NOT NULL DEFAULT 15;
+    `);
+
+    await this.query(`
+      ALTER TABLE player_progression
+      ADD COLUMN IF NOT EXISTS max_mp INTEGER NOT NULL DEFAULT 15;
+    `);
+
+    await this.query(`
+      UPDATE player_progression
+      SET current_hp = 32
+      WHERE current_hp IS NULL OR current_hp < 0;
+    `);
+
+    await this.query(`
+      UPDATE player_progression
+      SET max_hp = 32
+      WHERE max_hp IS NULL OR max_hp <= 0;
+    `);
+
+    await this.query(`
+      UPDATE player_progression
+      SET current_mp = 15
+      WHERE current_mp IS NULL OR current_mp < 0;
+    `);
+
+    await this.query(`
+      UPDATE player_progression
+      SET max_mp = 15
+      WHERE max_mp IS NULL OR max_mp <= 0;
+    `);
+
+    await this.query(`
+      CREATE TABLE IF NOT EXISTS world_state (
+        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        zone TEXT NOT NULL DEFAULT 'Ferme',
+        day INTEGER NOT NULL DEFAULT 1 CHECK (day >= 1),
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );

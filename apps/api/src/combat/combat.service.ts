@@ -3,10 +3,17 @@ import { randomUUID } from 'crypto';
 
 import { DatabaseService, type TransactionClient } from '../database/database.service';
 import {
+  BASE_PLAYER_CURRENT_HP,
+  BASE_PLAYER_CURRENT_MP,
   BASE_PLAYER_EXPERIENCE,
   BASE_PLAYER_GOLD,
   BASE_PLAYER_LEVEL,
+  BASE_PLAYER_MAX_HP,
+  BASE_PLAYER_MAX_MP,
+  BASE_WORLD_DAY,
+  BASE_WORLD_ZONE,
   PLAYER_PROGRESSION_TABLE,
+  WORLD_STATE_TABLE,
   WORLD_FLAGS_TABLE,
   xpRequiredForLevel,
 } from '../gameplay/gameplay.constants';
@@ -45,6 +52,10 @@ import {
   THORN_BEAST_ALPHA_ROOT_SMASH_INTERVAL,
   CINDER_WARDEN_PURGE_MANA_COST,
   CINDER_WARDEN_CINDER_BURST_INTERVAL,
+  DEFEAT_GOLD_LOSS_PERCENT_MAX,
+  DEFEAT_GOLD_LOSS_PERCENT_MIN,
+  DEFEAT_ITEM_STACKS_LOST_MAX,
+  DEFEAT_ITEM_STACKS_LOST_MIN,
   SUNDER_DURATION_TURNS,
   SUNDER_MANA_COST,
   ASH_CAPTAIN_PURGE_MANA_COST,
@@ -57,6 +68,7 @@ import type {
   CombatDebugEnemyScriptSummary,
   CombatDebugPlayerSkillSummary,
   CombatDebugReference,
+  CombatDefeatPenaltyItem,
   CombatEnemyDefinition,
   CombatEncounterState,
   CombatEncounterSummary,
@@ -86,6 +98,20 @@ type PlayerProgressionRow = {
   experience: number;
   experience_to_next: number;
   gold: number;
+  current_hp: number;
+  max_hp: number;
+  current_mp: number;
+  max_mp: number;
+};
+
+type InventoryStackRow = {
+  item_key: string;
+  quantity: number;
+};
+
+type WorldStateRow = {
+  zone: string;
+  day: number;
 };
 
 type EnemyIntent =
@@ -190,10 +216,12 @@ export class CombatService {
         const enemy = forcedStart
           ? forcedStart.enemy
           : this.resolveStartingEnemy(tower.currentFloor, scriptedEnemyKey, payload?.enemyKey);
+        const progression = await this.getProgressionForUpdate(tx, userId);
         const encounter = this.createEncounter(
           userId,
           enemy,
           tower.currentFloor,
+          progression,
           forcedStart ? forcedStart.isScriptedBossEncounter : scriptedEnemyKey !== null,
         );
         if (forcedStart) {
@@ -247,6 +275,7 @@ export class CombatService {
       }
 
       let enemy: CombatEnemyDefinition;
+      const progression = await this.getProgressionForUpdate(tx, userId);
       try {
         enemy = forcedStart
           ? forcedStart.enemy
@@ -259,6 +288,7 @@ export class CombatService {
         userId,
         enemy,
         towerFloor,
+        progression,
         forcedStart
           ? forcedStart.isScriptedBossEncounter
           : scriptedEnemyKey !== null && enemy.key === scriptedEnemyKey,
@@ -374,7 +404,10 @@ export class CombatService {
         }
       }
 
-      const savedRow = await this.saveEncounter(tx, finalizedState);
+      const withPenalty = await this.applyDefeatPenaltyIfNeeded(tx, userId, finalizedState);
+      await this.persistPostCombatVitalsIfEnded(tx, userId, withPenalty);
+
+      const savedRow = await this.saveEncounter(tx, withPenalty);
       const savedEncounter = this.toEncounterState(savedRow);
 
       return this.toActionResult(savedEncounter);
@@ -404,6 +437,9 @@ export class CombatService {
       forfeited.lastAction = null;
       this.clearEnemyTelegraph(forfeited);
       forfeited.updatedAt = forfeited.endedAt;
+      forfeited.defeatPenalty = null;
+
+      await this.persistPostCombatVitalsIfEnded(tx, userId, forfeited);
 
       const savedRow = await this.saveEncounter(tx, forfeited);
       return this.toActionResult(this.toEncounterState(savedRow));
@@ -414,6 +450,7 @@ export class CombatService {
     userId: string,
     enemy: CombatEnemyDefinition,
     towerFloor: number,
+    progression: PlayerProgressionRow,
     isScriptedBossEncounter: boolean,
   ): CombatEncounterState {
     const now = new Date().toISOString();
@@ -431,7 +468,7 @@ export class CombatService {
       status: 'active',
       round: 1,
       logs: [firstLog],
-      player: { ...DEFAULT_PLAYER_COMBAT_STATE },
+      player: this.toPlayerCombatState(progression),
       enemy: {
         ...enemy,
         currentHp: enemy.hp,
@@ -440,6 +477,7 @@ export class CombatService {
       scriptState: {},
       lastAction: null,
       rewards: null,
+      defeatPenalty: null,
       rewardsGranted: false,
       createdAt: now,
       updatedAt: now,
@@ -705,22 +743,218 @@ export class CombatService {
     return next;
   }
 
+  private async applyDefeatPenaltyIfNeeded(
+    executor: TransactionClient,
+    userId: string,
+    encounter: CombatEncounterState,
+  ): Promise<CombatEncounterState> {
+    if (encounter.status !== 'lost' || encounter.defeatPenalty) {
+      return encounter;
+    }
+
+    const next = this.cloneEncounter(encounter);
+    const progressionBefore = await this.getProgressionForUpdate(executor, userId);
+
+    const goldLossPercent = this.randomInt(DEFEAT_GOLD_LOSS_PERCENT_MIN, DEFEAT_GOLD_LOSS_PERCENT_MAX);
+    const goldLost =
+      progressionBefore.gold <= 0 ? 0 : Math.min(progressionBefore.gold, Math.max(1, Math.floor((progressionBefore.gold * goldLossPercent) / 100)));
+    const stacksToLose = this.randomInt(DEFEAT_ITEM_STACKS_LOST_MIN, DEFEAT_ITEM_STACKS_LOST_MAX);
+    const itemsLost = await this.applyDefeatInventoryPenalty(executor, userId, stacksToLose);
+    const worldState = await this.advanceWorldStateAfterDefeat(executor, userId);
+
+    next.player.hp = 1;
+    next.player.mp = Math.max(0, Math.min(next.player.maxMp, next.player.mp));
+
+    const progressionAfter: PlayerProgressionRow = {
+      ...progressionBefore,
+      gold: Math.max(0, progressionBefore.gold - goldLost),
+      current_hp: 1,
+      current_mp: next.player.mp,
+    };
+    await this.persistProgression(executor, progressionAfter);
+
+    next.defeatPenalty = {
+      goldLossPercent,
+      goldLost,
+      itemsLost,
+      respawnZone: worldState.zone,
+      respawnDay: worldState.day,
+      playerHpAfterDefeat: 1,
+    };
+
+    this.pushLog(
+      next,
+      `Defeat penalty: -${goldLost} gold (${goldLossPercent}%), wake up at ${worldState.zone} on day ${worldState.day} with 1 HP.`,
+    );
+
+    if (itemsLost.length > 0) {
+      this.pushLog(
+        next,
+        `Items lost: ${itemsLost.map((entry) => `${entry.itemKey} x${entry.quantity}`).join(', ')}.`,
+      );
+    } else {
+      this.pushLog(next, 'Items lost: none (inventory empty).');
+    }
+
+    return next;
+  }
+
+  private async applyDefeatInventoryPenalty(
+    executor: TransactionClient,
+    userId: string,
+    stacksToLose: number,
+  ): Promise<CombatDefeatPenaltyItem[]> {
+    const result = await executor.query<InventoryStackRow>(
+      `
+        SELECT item_key, quantity
+        FROM ${INVENTORY_ITEMS_TABLE}
+        WHERE user_id = $1
+          AND quantity > 0
+        ORDER BY item_key ASC
+        FOR UPDATE
+      `,
+      [userId],
+    );
+
+    if (result.rows.length === 0) {
+      return [];
+    }
+
+    const targetCount = Math.max(1, Math.min(stacksToLose, result.rows.length));
+    const shuffled = [...result.rows];
+    for (let cursor = shuffled.length - 1; cursor > 0; cursor -= 1) {
+      const swapWith = this.randomInt(0, cursor);
+      [shuffled[cursor], shuffled[swapWith]] = [shuffled[swapWith], shuffled[cursor]];
+    }
+
+    const selected = shuffled.slice(0, targetCount);
+    const losses: CombatDefeatPenaltyItem[] = [];
+    for (const stack of selected) {
+      if (stack.quantity <= 1) {
+        await executor.query(
+          `
+            DELETE FROM ${INVENTORY_ITEMS_TABLE}
+            WHERE user_id = $1
+              AND item_key = $2
+          `,
+          [userId, stack.item_key],
+        );
+      } else {
+        await executor.query(
+          `
+            UPDATE ${INVENTORY_ITEMS_TABLE}
+            SET quantity = quantity - 1,
+                updated_at = NOW()
+            WHERE user_id = $1
+              AND item_key = $2
+          `,
+          [userId, stack.item_key],
+        );
+      }
+
+      losses.push({
+        itemKey: stack.item_key,
+        quantity: 1,
+      });
+    }
+
+    return losses;
+  }
+
+  private async getOrInitWorldStateForUpdate(
+    executor: TransactionClient,
+    userId: string,
+  ): Promise<WorldStateRow> {
+    await executor.query(
+      `
+        INSERT INTO ${WORLD_STATE_TABLE} (user_id, zone, day)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id) DO NOTHING
+      `,
+      [userId, BASE_WORLD_ZONE, BASE_WORLD_DAY],
+    );
+
+    const result = await executor.query<WorldStateRow>(
+      `
+        SELECT zone, day
+        FROM ${WORLD_STATE_TABLE}
+        WHERE user_id = $1
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [userId],
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      throw new NotFoundException(`World state not found for user ${userId}`);
+    }
+
+    return {
+      zone: row.zone?.trim() ? row.zone.trim() : BASE_WORLD_ZONE,
+      day: Number.isFinite(row.day) && row.day > 0 ? Math.floor(row.day) : BASE_WORLD_DAY,
+    };
+  }
+
+  private async advanceWorldStateAfterDefeat(
+    executor: TransactionClient,
+    userId: string,
+  ): Promise<WorldStateRow> {
+    const current = await this.getOrInitWorldStateForUpdate(executor, userId);
+    const nextDay = Math.max(BASE_WORLD_DAY, current.day + 1);
+    await executor.query(
+      `
+        UPDATE ${WORLD_STATE_TABLE}
+        SET zone = $2,
+            day = $3,
+            updated_at = NOW()
+        WHERE user_id = $1
+      `,
+      [userId, BASE_WORLD_ZONE, nextDay],
+    );
+
+    return {
+      zone: BASE_WORLD_ZONE,
+      day: nextDay,
+    };
+  }
+
   private async getProgressionForUpdate(
     executor: TransactionClient,
     userId: string,
   ): Promise<PlayerProgressionRow> {
     await executor.query(
       `
-        INSERT INTO ${PLAYER_PROGRESSION_TABLE} (user_id, level, experience, experience_to_next, gold)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO ${PLAYER_PROGRESSION_TABLE} (
+          user_id,
+          level,
+          experience,
+          experience_to_next,
+          gold,
+          current_hp,
+          max_hp,
+          current_mp,
+          max_mp
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (user_id) DO NOTHING
       `,
-      [userId, BASE_PLAYER_LEVEL, BASE_PLAYER_EXPERIENCE, xpRequiredForLevel(BASE_PLAYER_LEVEL), BASE_PLAYER_GOLD],
+      [
+        userId,
+        BASE_PLAYER_LEVEL,
+        BASE_PLAYER_EXPERIENCE,
+        xpRequiredForLevel(BASE_PLAYER_LEVEL),
+        BASE_PLAYER_GOLD,
+        BASE_PLAYER_CURRENT_HP,
+        BASE_PLAYER_MAX_HP,
+        BASE_PLAYER_CURRENT_MP,
+        BASE_PLAYER_MAX_MP,
+      ],
     );
 
     const result = await executor.query<PlayerProgressionRow>(
       `
-        SELECT user_id, level, experience, experience_to_next, gold
+        SELECT user_id, level, experience, experience_to_next, gold, current_hp, max_hp, current_mp, max_mp
         FROM ${PLAYER_PROGRESSION_TABLE}
         WHERE user_id = $1
         LIMIT 1
@@ -741,6 +975,11 @@ export class CombatService {
     executor: TransactionClient,
     progression: PlayerProgressionRow,
   ): Promise<void> {
+    const maxHp = Math.max(1, Math.round(progression.max_hp));
+    const maxMp = Math.max(1, Math.round(progression.max_mp));
+    const currentHp = Math.max(0, Math.min(maxHp, Math.round(progression.current_hp)));
+    const currentMp = Math.max(0, Math.min(maxMp, Math.round(progression.current_mp)));
+
     await executor.query(
       `
         UPDATE ${PLAYER_PROGRESSION_TABLE}
@@ -748,6 +987,10 @@ export class CombatService {
             experience = $3,
             experience_to_next = $4,
             gold = $5,
+            current_hp = $6,
+            max_hp = $7,
+            current_mp = $8,
+            max_mp = $9,
             updated_at = NOW()
         WHERE user_id = $1
       `,
@@ -757,8 +1000,43 @@ export class CombatService {
         progression.experience,
         progression.experience_to_next,
         progression.gold,
+        currentHp,
+        maxHp,
+        currentMp,
+        maxMp,
       ],
     );
+  }
+
+  private async persistPostCombatVitalsIfEnded(
+    executor: TransactionClient,
+    userId: string,
+    encounter: CombatEncounterState,
+  ): Promise<void> {
+    if (encounter.status === 'active') {
+      return;
+    }
+
+    const progression = await this.getProgressionForUpdate(executor, userId);
+    progression.current_hp = Math.max(0, Math.min(progression.max_hp, encounter.player.hp));
+    progression.current_mp = Math.max(0, Math.min(progression.max_mp, encounter.player.mp));
+    await this.persistProgression(executor, progression);
+  }
+
+  private toPlayerCombatState(progression: PlayerProgressionRow): CombatUnitState {
+    const maxHp = Math.max(1, progression.max_hp ?? BASE_PLAYER_MAX_HP);
+    const maxMp = Math.max(1, progression.max_mp ?? BASE_PLAYER_MAX_MP);
+    const currentHp = Math.max(1, Math.min(maxHp, progression.current_hp ?? maxHp));
+    const currentMp = Math.max(0, Math.min(maxMp, progression.current_mp ?? maxMp));
+
+    return {
+      ...DEFAULT_PLAYER_COMBAT_STATE,
+      hp: currentHp,
+      maxHp,
+      mp: currentMp,
+      maxMp,
+      defending: false,
+    };
   }
 
   private computeProgressionAfterVictory(
@@ -1739,6 +2017,10 @@ export class CombatService {
           ? parsed.scriptState
           : {},
       rewards: parsed.rewards ?? null,
+      defeatPenalty:
+        parsed.defeatPenalty && typeof parsed.defeatPenalty === 'object'
+          ? parsed.defeatPenalty
+          : null,
       rewardsGranted: Boolean(parsed.rewardsGranted),
       lastAction:
         typeof parsed.lastAction === 'string' && COMBAT_ACTIONS.includes(parsed.lastAction as CombatActionName)

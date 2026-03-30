@@ -3,6 +3,10 @@ export interface PlayerProgressionState {
   experience: number;
   experienceToNextLevel: number;
   gold: number;
+  currentHp: number;
+  maxHp: number;
+  currentMp: number;
+  maxMp: number;
 }
 
 export interface GameplayWorldState {
