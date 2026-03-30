@@ -44,9 +44,11 @@ import {
   INTERRUPT_MANA_COST,
   INTERRUPT_REACTION_WINDOW_TURNS,
   MEND_MANA_COST,
-  PLAYER_BURNING_DAMAGE,
-  PLAYER_BURNING_DURATION_TURNS,
-  PLAYER_SILENCED_DURATION_TURNS,
+  PLAYER_BLINDED_DURATION_TURNS,
+  PLAYER_BLINDED_MISS_CHANCE,
+  PLAYER_DARKENED_DURATION_TURNS,
+  PLAYER_POISON_DAMAGE,
+  PLAYER_POISON_DURATION_TURNS,
   RALLY_DURATION_TURNS,
   RALLY_MANA_COST,
   THORN_BEAST_ALPHA_ROOT_SMASH_INTERVAL,
@@ -155,37 +157,37 @@ const COMBAT_DEBUG_PLAYER_SKILLS: Record<
     label: 'Fireball',
     manaCost: FIREBALL_MANA_COST,
     blockedBySilence: true,
-    description: 'Deal direct magical damage.',
+    description: 'Deal direct magical damage (blocked by Obscurite).',
   },
   rally: {
     label: 'Rally',
     manaCost: RALLY_MANA_COST,
     blockedBySilence: true,
-    description: 'Boost attack and magic for two turns.',
+    description: 'Boost attack and magic for two turns (blocked by Obscurite).',
   },
   sunder: {
     label: 'Sunder',
     manaCost: SUNDER_MANA_COST,
-    blockedBySilence: true,
+    blockedBySilence: false,
     description: 'Damage the enemy and reduce their defense for two turns.',
   },
   mend: {
     label: 'Mend',
     manaCost: MEND_MANA_COST,
     blockedBySilence: true,
-    description: 'Restore HP based on magical power.',
+    description: 'Restore HP based on magical power (blocked by Obscurite).',
   },
   cleanse: {
     label: 'Cleanse',
     manaCost: CLEANSE_MANA_COST,
     blockedBySilence: false,
-    description: 'Remove Burning or Silence and open a cleanse reaction window.',
+    description: 'Remove Poison, Cecite or Obscurite and open a cleanse reaction window.',
   },
   interrupt: {
     label: 'Interrupt',
     manaCost: INTERRUPT_MANA_COST,
     blockedBySilence: true,
-    description: 'Break interruptible enemy intentions and expose the target.',
+    description: 'Break interruptible enemy intentions and expose the target (blocked by Obscurite).',
   },
 };
 
@@ -495,12 +497,17 @@ export class CombatService {
     next.turn = 'enemy';
     next.player.defending = false;
 
-    if (this.getPlayerSilencedTurns(next) > 0 && this.isActionBlockedBySilence(action)) {
-      throw new BadRequestException('You are silenced and cannot cast this skill');
+    if (this.getPlayerDarkenedTurns(next) > 0 && this.isActionBlockedByDarkness(action)) {
+      throw new BadRequestException('You are shrouded in Darkness and cannot focus this skill');
     }
 
     switch (action) {
       case 'attack': {
+        if (this.rollPlayerBlindMiss(next, action)) {
+          this.pushLog(next, 'You miss your attack because of Cecite.');
+          break;
+        }
+
         const damage = this.calculatePhysicalDamage(
           next.player,
           next.enemy,
@@ -548,6 +555,11 @@ export class CombatService {
         }
 
         next.player.mp -= SUNDER_MANA_COST;
+        if (this.rollPlayerBlindMiss(next, action)) {
+          this.pushLog(next, 'Cecite disrupts Sunder. The strike misses.');
+          break;
+        }
+
         this.setEnemyShatterTurns(next, SUNDER_DURATION_TURNS);
         const damage = Math.max(
           1,
@@ -585,28 +597,34 @@ export class CombatService {
           throw new BadRequestException('Not enough MP for Cleanse');
         }
 
-        const hadBurning = this.getPlayerBurningTurns(next) > 0;
-        const hadSilence = this.getPlayerSilencedTurns(next) > 0;
-        if (!hadBurning && !hadSilence) {
+        const hadPoison = this.getPlayerPoisonedTurns(next) > 0;
+        const hadBlind = this.getPlayerBlindedTurns(next) > 0;
+        const hadDarkness = this.getPlayerDarkenedTurns(next) > 0;
+        if (!hadPoison && !hadBlind && !hadDarkness) {
           throw new BadRequestException('No debuffs to cleanse');
         }
 
         next.player.mp -= CLEANSE_MANA_COST;
-        this.setPlayerBurningTurns(next, 0);
-        this.setPlayerSilencedTurns(next, 0);
+        this.setPlayerPoisonedTurns(next, 0);
+        this.setPlayerBlindedTurns(next, 0);
+        this.setPlayerDarkenedTurns(next, 0);
         this.setPlayerCleanseReactionWindow(next, CLEANSE_REACTION_WINDOW_TURNS);
         this.incrementTelemetryCounter(next, 'telemetryCleanseUses');
 
         const removed: string[] = [];
-        if (hadBurning) {
-          removed.push('Burning');
+        if (hadPoison) {
+          removed.push('Poison');
         }
-        if (hadSilence) {
-          removed.push('Silence');
+        if (hadBlind) {
+          removed.push('Cecite');
+        }
+        if (hadDarkness) {
+          removed.push('Obscurite');
         }
         this.pushLog(next, `You cast Cleanse and remove ${removed.join(' + ')}.`);
 
-        const recoveredMp = hadBurning && hadSilence ? Math.min(1, next.player.maxMp - next.player.mp) : 0;
+        const removedCount = Number(hadPoison) + Number(hadBlind) + Number(hadDarkness);
+        const recoveredMp = removedCount >= 2 ? Math.min(1, next.player.maxMp - next.player.mp) : 0;
         if (recoveredMp > 0) {
           next.player.mp += recoveredMp;
           this.pushLog(next, `Cleanse restores ${recoveredMp} MP through purified focus.`);
@@ -1154,6 +1172,11 @@ export class CombatService {
       case 'root_smash':
         damage += 3;
         label = `${encounter.enemy.name} uses Root Smash`;
+        this.setPlayerBlindedTurns(
+          encounter,
+          Math.max(this.getPlayerBlindedTurns(encounter), PLAYER_BLINDED_DURATION_TURNS),
+        );
+        this.pushLog(encounter, `You are afflicted by Cecite for ${PLAYER_BLINDED_DURATION_TURNS} turns.`);
         break;
       case 'opening_punish':
         damage += 2;
@@ -1163,11 +1186,11 @@ export class CombatService {
         encounter.enemy.currentMp -= 3;
         damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + 2;
         label = `${encounter.enemy.name} casts Cinder Burst`;
-        this.setPlayerBurningTurns(
+        this.setPlayerPoisonedTurns(
           encounter,
-          Math.max(this.getPlayerBurningTurns(encounter), PLAYER_BURNING_DURATION_TURNS),
+          Math.max(this.getPlayerPoisonedTurns(encounter), PLAYER_POISON_DURATION_TURNS),
         );
-        this.pushLog(encounter, `You are Burning for ${PLAYER_BURNING_DURATION_TURNS} turns.`);
+        this.pushLog(encounter, `You are afflicted by Poison for ${PLAYER_POISON_DURATION_TURNS} turns.`);
         break;
       case 'molten_shell':
         encounter.enemy.currentMp -= CINDER_WARDEN_PURGE_MANA_COST;
@@ -1194,15 +1217,15 @@ export class CombatService {
         const enraged = Boolean(encounter.scriptState?.avatarEnraged);
         encounter.enemy.currentMp -= CURSE_AVATAR_DISPEL_MANA_COST;
         this.setPlayerRallyTurns(encounter, 0);
-        this.setPlayerSilencedTurns(
+        this.setPlayerDarkenedTurns(
           encounter,
-          Math.max(this.getPlayerSilencedTurns(encounter), PLAYER_SILENCED_DURATION_TURNS),
+          Math.max(this.getPlayerDarkenedTurns(encounter), PLAYER_DARKENED_DURATION_TURNS),
         );
         damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + (enraged ? 3 : 2);
         label = `${encounter.enemy.name} casts Null Sigil`;
         this.pushLog(
           encounter,
-          `Your Rally buff is dispelled and you are Silenced for ${PLAYER_SILENCED_DURATION_TURNS} turn.`,
+          `Your Rally buff is dispelled and you are shrouded in Obscurite for ${PLAYER_DARKENED_DURATION_TURNS} turns.`,
         );
         break;
       }
@@ -1314,14 +1337,25 @@ export class CombatService {
     }
   }
 
-  private isActionBlockedBySilence(action: CombatActionName): boolean {
+  private isActionBlockedByDarkness(action: CombatActionName): boolean {
     return (
       action === 'fireball' ||
       action === 'rally' ||
-      action === 'sunder' ||
       action === 'mend' ||
       action === 'interrupt'
     );
+  }
+
+  private rollPlayerBlindMiss(encounter: CombatEncounterState, action: CombatActionName): boolean {
+    if (this.getPlayerBlindedTurns(encounter) <= 0) {
+      return false;
+    }
+
+    if (action !== 'attack' && action !== 'sunder') {
+      return false;
+    }
+
+    return Math.random() < PLAYER_BLINDED_MISS_CHANCE;
   }
 
   private isAvatarEnragedOrCrossing(encounter: CombatEncounterState): boolean {
@@ -1387,11 +1421,17 @@ export class CombatService {
 
   private applyEnemyIntentStateForForecast(encounter: CombatEncounterState, intent: EnemyIntent): void {
     switch (intent) {
+      case 'root_smash':
+        this.setPlayerBlindedTurns(
+          encounter,
+          Math.max(this.getPlayerBlindedTurns(encounter), PLAYER_BLINDED_DURATION_TURNS),
+        );
+        break;
       case 'cinder_burst':
         encounter.enemy.currentMp = Math.max(0, encounter.enemy.currentMp - 3);
-        this.setPlayerBurningTurns(
+        this.setPlayerPoisonedTurns(
           encounter,
-          Math.max(this.getPlayerBurningTurns(encounter), PLAYER_BURNING_DURATION_TURNS),
+          Math.max(this.getPlayerPoisonedTurns(encounter), PLAYER_POISON_DURATION_TURNS),
         );
         break;
       case 'molten_shell':
@@ -1405,9 +1445,9 @@ export class CombatService {
       case 'null_sigil':
         encounter.enemy.currentMp = Math.max(0, encounter.enemy.currentMp - CURSE_AVATAR_DISPEL_MANA_COST);
         this.setPlayerRallyTurns(encounter, 0);
-        this.setPlayerSilencedTurns(
+        this.setPlayerDarkenedTurns(
           encounter,
-          Math.max(this.getPlayerSilencedTurns(encounter), PLAYER_SILENCED_DURATION_TURNS),
+          Math.max(this.getPlayerDarkenedTurns(encounter), PLAYER_DARKENED_DURATION_TURNS),
         );
         break;
       case 'cataclysm_ray':
@@ -1429,14 +1469,19 @@ export class CombatService {
       this.setEnemyShatterTurns(encounter, shatterTurns - 1);
     }
 
-    const burningTurns = this.getPlayerBurningTurns(encounter);
-    if (burningTurns > 0) {
-      this.setPlayerBurningTurns(encounter, burningTurns - 1);
+    const poisonedTurns = this.getPlayerPoisonedTurns(encounter);
+    if (poisonedTurns > 0) {
+      this.setPlayerPoisonedTurns(encounter, poisonedTurns - 1);
     }
 
-    const silencedTurns = this.getPlayerSilencedTurns(encounter);
-    if (silencedTurns > 0) {
-      this.setPlayerSilencedTurns(encounter, silencedTurns - 1);
+    const blindedTurns = this.getPlayerBlindedTurns(encounter);
+    if (blindedTurns > 0) {
+      this.setPlayerBlindedTurns(encounter, blindedTurns - 1);
+    }
+
+    const darkenedTurns = this.getPlayerDarkenedTurns(encounter);
+    if (darkenedTurns > 0) {
+      this.setPlayerDarkenedTurns(encounter, darkenedTurns - 1);
     }
 
     const interruptedTurns = this.getEnemyInterruptedTurns(encounter);
@@ -1487,8 +1532,12 @@ export class CombatService {
     };
   }
 
-  private getPlayerBurningTurns(encounter: CombatEncounterState): number {
-    const raw = Number(encounter.scriptState?.playerBurningTurns ?? 0);
+  private getPlayerPoisonedTurns(encounter: CombatEncounterState): number {
+    const raw = Number(
+      encounter.scriptState?.playerPoisonedTurns ??
+        encounter.scriptState?.playerBurningTurns ??
+        0,
+    );
     if (!Number.isFinite(raw) || raw <= 0) {
       return 0;
     }
@@ -1496,15 +1545,15 @@ export class CombatService {
     return Math.floor(raw);
   }
 
-  private setPlayerBurningTurns(encounter: CombatEncounterState, turns: number): void {
+  private setPlayerPoisonedTurns(encounter: CombatEncounterState, turns: number): void {
     encounter.scriptState = {
       ...(encounter.scriptState ?? {}),
-      playerBurningTurns: Math.max(0, Math.floor(turns)),
+      playerPoisonedTurns: Math.max(0, Math.floor(turns)),
     };
   }
 
-  private getPlayerSilencedTurns(encounter: CombatEncounterState): number {
-    const raw = Number(encounter.scriptState?.playerSilencedTurns ?? 0);
+  private getPlayerBlindedTurns(encounter: CombatEncounterState): number {
+    const raw = Number(encounter.scriptState?.playerBlindedTurns ?? 0);
     if (!Number.isFinite(raw) || raw <= 0) {
       return 0;
     }
@@ -1512,10 +1561,30 @@ export class CombatService {
     return Math.floor(raw);
   }
 
-  private setPlayerSilencedTurns(encounter: CombatEncounterState, turns: number): void {
+  private setPlayerBlindedTurns(encounter: CombatEncounterState, turns: number): void {
     encounter.scriptState = {
       ...(encounter.scriptState ?? {}),
-      playerSilencedTurns: Math.max(0, Math.floor(turns)),
+      playerBlindedTurns: Math.max(0, Math.floor(turns)),
+    };
+  }
+
+  private getPlayerDarkenedTurns(encounter: CombatEncounterState): number {
+    const raw = Number(
+      encounter.scriptState?.playerDarkenedTurns ??
+        encounter.scriptState?.playerSilencedTurns ??
+        0,
+    );
+    if (!Number.isFinite(raw) || raw <= 0) {
+      return 0;
+    }
+
+    return Math.floor(raw);
+  }
+
+  private setPlayerDarkenedTurns(encounter: CombatEncounterState, turns: number): void {
+    encounter.scriptState = {
+      ...(encounter.scriptState ?? {}),
+      playerDarkenedTurns: Math.max(0, Math.floor(turns)),
     };
   }
 
@@ -1624,23 +1693,32 @@ export class CombatService {
       }
     }
 
-    const burningTurns = this.getPlayerBurningTurns(encounter);
-    if (burningTurns > 0) {
-      encounter.player.hp = Math.max(0, encounter.player.hp - PLAYER_BURNING_DAMAGE);
-      this.pushLog(encounter, `Burning deals ${PLAYER_BURNING_DAMAGE} damage to you.`);
-      const nextTurns = burningTurns - 1;
-      this.setPlayerBurningTurns(encounter, nextTurns);
+    const poisonedTurns = this.getPlayerPoisonedTurns(encounter);
+    if (poisonedTurns > 0) {
+      encounter.player.hp = Math.max(0, encounter.player.hp - PLAYER_POISON_DAMAGE);
+      this.pushLog(encounter, `Poison deals ${PLAYER_POISON_DAMAGE} damage to you.`);
+      const nextTurns = poisonedTurns - 1;
+      this.setPlayerPoisonedTurns(encounter, nextTurns);
       if (nextTurns === 0) {
-        this.pushLog(encounter, 'Burning effect has faded.');
+        this.pushLog(encounter, 'Poison effect has faded.');
       }
     }
 
-    const silencedTurns = this.getPlayerSilencedTurns(encounter);
-    if (silencedTurns > 0) {
-      const nextTurns = silencedTurns - 1;
-      this.setPlayerSilencedTurns(encounter, nextTurns);
+    const blindedTurns = this.getPlayerBlindedTurns(encounter);
+    if (blindedTurns > 0) {
+      const nextTurns = blindedTurns - 1;
+      this.setPlayerBlindedTurns(encounter, nextTurns);
       if (nextTurns === 0) {
-        this.pushLog(encounter, 'Silence effect has faded.');
+        this.pushLog(encounter, 'Cecite has dissipated.');
+      }
+    }
+
+    const darkenedTurns = this.getPlayerDarkenedTurns(encounter);
+    if (darkenedTurns > 0) {
+      const nextTurns = darkenedTurns - 1;
+      this.setPlayerDarkenedTurns(encounter, nextTurns);
+      if (nextTurns === 0) {
+        this.pushLog(encounter, 'Obscurite has faded.');
       }
     }
 
@@ -2144,7 +2222,10 @@ export class CombatService {
         enemyKey: 'cinder_warden',
         intents: [
           { key: 'basic_strike', trigger: 'default fallback when no scripted condition is met' },
-          { key: 'cinder_burst', trigger: 'recent Cleanse reaction window or periodic burst round' },
+          {
+            key: 'cinder_burst',
+            trigger: 'recent Cleanse reaction window or periodic burst round (applies Poison)',
+          },
           { key: 'molten_shell', trigger: 'enemy shatter active and MP available' },
         ],
       },
@@ -2160,7 +2241,10 @@ export class CombatService {
         enemyKey: 'curse_heart_avatar',
         intents: [
           { key: 'cursed_claw', trigger: 'default fallback when no scripted condition is met' },
-          { key: 'null_sigil', trigger: 'player Rally active or recent Cleanse reaction window' },
+          {
+            key: 'null_sigil',
+            trigger: 'player Rally active or recent Cleanse reaction window (applies Obscurite)',
+          },
           {
             key: 'cataclysm_ray',
             trigger: `avatar enraged and round % ${CURSE_HEART_AVATAR_CATACLYSM_INTERVAL} === 0`,

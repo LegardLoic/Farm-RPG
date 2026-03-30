@@ -2163,19 +2163,19 @@ export class GameScene extends Phaser.Scene {
     const mana = this.combatState?.player.mp ?? 0;
     const hp = this.combatState?.player.hp ?? 0;
     const maxHp = this.combatState?.player.maxHp ?? 0;
-    const silenced = this.getCombatScriptTurns('playerSilencedTurns') > 0;
-    const fireballReady = Boolean(playerTurn && mana >= FIREBALL_MANA_COST && !silenced);
+    const darkened = this.getCombatStatusTurns('playerDarkenedTurns') > 0;
+    const fireballReady = Boolean(playerTurn && mana >= FIREBALL_MANA_COST && !darkened);
     const mendReady = Boolean(playerTurn && mana >= MEND_MANA_COST && hp < maxHp);
     const cleanseReady = Boolean(playerTurn && mana >= CLEANSE_MANA_COST && this.hasCleanseableDebuffs());
     const interruptReady = Boolean(
       playerTurn &&
       mana >= INTERRUPT_MANA_COST &&
-      !silenced &&
+      !darkened &&
       this.hasInterruptibleEnemyIntent(),
     );
-    const rallyReady = Boolean(playerTurn && mana >= RALLY_MANA_COST && !silenced);
-    const sunderReady = Boolean(playerTurn && mana >= SUNDER_MANA_COST && !silenced);
-    const effectiveMendReady = Boolean(mendReady && !silenced);
+    const rallyReady = Boolean(playerTurn && mana >= RALLY_MANA_COST && !darkened);
+    const sunderReady = Boolean(playerTurn && mana >= SUNDER_MANA_COST);
+    const effectiveMendReady = Boolean(mendReady && !darkened);
 
     if (this.combatStartButton) {
       this.combatStartButton.disabled = !this.isAuthenticated || this.combatBusy;
@@ -3094,15 +3094,14 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const silenced = this.getCombatScriptTurns('playerSilencedTurns') > 0;
-    const blockedBySilence =
+    const darkened = this.getCombatStatusTurns('playerDarkenedTurns') > 0;
+    const blockedByDarkness =
       action === 'fireball' ||
       action === 'rally' ||
-      action === 'sunder' ||
       action === 'mend' ||
       action === 'interrupt';
-    if (silenced && blockedBySilence) {
-      this.setCombatError('Tu es sous Silence et ne peux pas lancer ce skill.');
+    if (darkened && blockedByDarkness) {
+      this.setCombatError('Tu es sous Obscurite et ne peux pas te concentrer sur ce skill.');
       this.updateHud();
       return;
     }
@@ -3719,14 +3718,19 @@ export class GameScene extends Phaser.Scene {
       effects.push({ label: `Rally ${rallyTurns}t`, tone: 'calm' });
     }
 
-    const burningTurns = this.getCombatScriptTurns('playerBurningTurns');
-    if (burningTurns > 0) {
-      effects.push({ label: `Burning ${burningTurns}t`, tone: 'danger' });
+    const poisonedTurns = this.getCombatStatusTurns('playerPoisonedTurns');
+    if (poisonedTurns > 0) {
+      effects.push({ label: `Poison ${poisonedTurns}t`, tone: 'danger' });
     }
 
-    const silencedTurns = this.getCombatScriptTurns('playerSilencedTurns');
-    if (silencedTurns > 0) {
-      effects.push({ label: `Silenced ${silencedTurns}t`, tone: 'warning' });
+    const blindedTurns = this.getCombatStatusTurns('playerBlindedTurns');
+    if (blindedTurns > 0) {
+      effects.push({ label: `Cecite ${blindedTurns}t`, tone: 'warning' });
+    }
+
+    const darkenedTurns = this.getCombatStatusTurns('playerDarkenedTurns');
+    if (darkenedTurns > 0) {
+      effects.push({ label: `Obscurite ${darkenedTurns}t`, tone: 'warning' });
     }
 
     const cleanseWindowTurns = this.getCombatScriptTurns('playerCleanseReactionWindowTurns');
@@ -4014,12 +4018,35 @@ export class GameScene extends Phaser.Scene {
     return Math.max(0, Math.floor(raw));
   }
 
+  private getCombatStatusTurns(
+    key: 'playerPoisonedTurns' | 'playerBlindedTurns' | 'playerDarkenedTurns',
+  ): number {
+    const scriptState = this.combatState?.scriptState;
+    if (scriptState && Object.prototype.hasOwnProperty.call(scriptState, key)) {
+      return this.getCombatScriptTurns(key);
+    }
+
+    if (key === 'playerPoisonedTurns') {
+      return this.getCombatScriptTurns('playerBurningTurns');
+    }
+
+    if (key === 'playerDarkenedTurns') {
+      return this.getCombatScriptTurns('playerSilencedTurns');
+    }
+
+    return 0;
+  }
+
   private getCombatScriptFlag(key: string): boolean {
     return this.combatState?.scriptState?.[key] === true;
   }
 
   private hasCleanseableDebuffs(): boolean {
-    return this.getCombatScriptTurns('playerBurningTurns') > 0 || this.getCombatScriptTurns('playerSilencedTurns') > 0;
+    return (
+      this.getCombatStatusTurns('playerPoisonedTurns') > 0 ||
+      this.getCombatStatusTurns('playerBlindedTurns') > 0 ||
+      this.getCombatStatusTurns('playerDarkenedTurns') > 0
+    );
   }
 
   private hasInterruptibleEnemyIntent(): boolean {
@@ -4290,7 +4317,7 @@ export class GameScene extends Phaser.Scene {
     lines.push(`Player skills (${reference.playerSkills.length})`);
     for (const skill of reference.playerSkills) {
       lines.push(
-        `- ${skill.label} [${skill.key}] | mana ${skill.manaCost} | silence ${skill.blockedBySilence ? 'blocked' : 'open'}`,
+        `- ${skill.label} [${skill.key}] | mana ${skill.manaCost} | obscurite ${skill.blockedBySilence ? 'blocked' : 'open'}`,
       );
       lines.push(`  ${skill.description}`);
     }
