@@ -3,10 +3,17 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { DatabaseService, type TransactionClient } from '../database/database.service';
 import { EQUIPMENT_SLOTS, EQUIPMENT_SLOTS_TABLE, type EquipmentSlot } from '../equipment/equipment.constants';
 import {
+  BASE_PLAYER_CURRENT_HP,
+  BASE_PLAYER_CURRENT_MP,
   BASE_PLAYER_EXPERIENCE,
   BASE_PLAYER_GOLD,
   BASE_PLAYER_LEVEL,
+  BASE_PLAYER_MAX_HP,
+  BASE_PLAYER_MAX_MP,
+  BASE_WORLD_DAY,
+  BASE_WORLD_ZONE,
   PLAYER_PROGRESSION_TABLE,
+  WORLD_STATE_TABLE,
   WORLD_FLAGS_TABLE,
   xpRequiredForLevel,
 } from '../gameplay/gameplay.constants';
@@ -36,10 +43,19 @@ type PlayerProgressionRow = {
   experience: number;
   experience_to_next: number;
   gold: number;
+  current_hp: number;
+  max_hp: number;
+  current_mp: number;
+  max_mp: number;
 };
 
 type WorldFlagRow = {
   flag_key: string;
+};
+
+type WorldStateRow = {
+  zone: string;
+  day: number;
 };
 
 type UpsertAutoSaveParams = {
@@ -62,6 +78,10 @@ type SaveSnapshotV1 = {
     experience: number;
     experienceToNextLevel: number;
     gold: number;
+    currentHp: number;
+    maxHp: number;
+    currentMp: number;
+    maxMp: number;
   };
   tower: {
     currentFloor: number;
@@ -407,16 +427,36 @@ export class SavesService {
   ): Promise<PlayerProgressionRow> {
     await executor.query(
       `
-        INSERT INTO ${PLAYER_PROGRESSION_TABLE} (user_id, level, experience, experience_to_next, gold)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO ${PLAYER_PROGRESSION_TABLE} (
+          user_id,
+          level,
+          experience,
+          experience_to_next,
+          gold,
+          current_hp,
+          max_hp,
+          current_mp,
+          max_mp
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (user_id) DO NOTHING
       `,
-      [userId, BASE_PLAYER_LEVEL, BASE_PLAYER_EXPERIENCE, xpRequiredForLevel(BASE_PLAYER_LEVEL), BASE_PLAYER_GOLD],
+      [
+        userId,
+        BASE_PLAYER_LEVEL,
+        BASE_PLAYER_EXPERIENCE,
+        xpRequiredForLevel(BASE_PLAYER_LEVEL),
+        BASE_PLAYER_GOLD,
+        BASE_PLAYER_CURRENT_HP,
+        BASE_PLAYER_MAX_HP,
+        BASE_PLAYER_CURRENT_MP,
+        BASE_PLAYER_MAX_MP,
+      ],
     );
 
     const result = await executor.query<PlayerProgressionRow>(
       `
-        SELECT level, experience, experience_to_next, gold
+        SELECT level, experience, experience_to_next, gold, current_hp, max_hp, current_mp, max_mp
         FROM ${PLAYER_PROGRESSION_TABLE}
         WHERE user_id = $1
         LIMIT 1
@@ -490,9 +530,38 @@ export class SavesService {
     return result.rows.map((row) => row.flag_key);
   }
 
+  private async getOrInitWorldState(executor: TransactionClient, userId: string): Promise<WorldStateRow> {
+    await executor.query(
+      `
+        INSERT INTO ${WORLD_STATE_TABLE} (user_id, zone, day)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id) DO NOTHING
+      `,
+      [userId, BASE_WORLD_ZONE, BASE_WORLD_DAY],
+    );
+
+    const result = await executor.query<WorldStateRow>(
+      `
+        SELECT zone, day
+        FROM ${WORLD_STATE_TABLE}
+        WHERE user_id = $1
+        LIMIT 1
+      `,
+      [userId],
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      throw new NotFoundException(`World state missing for user ${userId}`);
+    }
+
+    return row;
+  }
+
   private async buildLiveSnapshot(executor: TransactionClient, userId: string): Promise<SaveSnapshotV1> {
     const progression = await this.getOrInitPlayerProgression(executor, userId);
     const tower = await this.getOrInitTower(executor, userId);
+    const worldState = await this.getOrInitWorldState(executor, userId);
     const worldFlags = await this.getWorldFlags(executor, userId);
     const inventory = await this.getInventorySnapshot(executor, userId);
     const equipment = await this.getEquipmentSnapshot(executor, userId);
@@ -502,14 +571,18 @@ export class SavesService {
       schemaVersion: 1,
       capturedAt,
       world: {
-        zone: 'Ferme',
-        day: 1,
+        zone: worldState.zone?.trim() ? worldState.zone.trim() : BASE_WORLD_ZONE,
+        day: Number.isFinite(worldState.day) && worldState.day > 0 ? Math.floor(worldState.day) : BASE_WORLD_DAY,
       },
       player: {
         level: progression.level,
         experience: progression.experience,
         experienceToNextLevel: progression.experience_to_next,
         gold: progression.gold,
+        currentHp: progression.current_hp,
+        maxHp: progression.max_hp,
+        currentMp: progression.current_mp,
+        maxMp: progression.max_mp,
       },
       tower: {
         currentFloor: tower.current_floor,
@@ -553,14 +626,28 @@ export class SavesService {
 
     await executor.query(
       `
-        INSERT INTO ${PLAYER_PROGRESSION_TABLE} (user_id, level, experience, experience_to_next, gold)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO ${PLAYER_PROGRESSION_TABLE} (
+          user_id,
+          level,
+          experience,
+          experience_to_next,
+          gold,
+          current_hp,
+          max_hp,
+          current_mp,
+          max_mp
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (user_id)
         DO UPDATE
           SET level = EXCLUDED.level,
               experience = EXCLUDED.experience,
               experience_to_next = EXCLUDED.experience_to_next,
               gold = EXCLUDED.gold,
+              current_hp = EXCLUDED.current_hp,
+              max_hp = EXCLUDED.max_hp,
+              current_mp = EXCLUDED.current_mp,
+              max_mp = EXCLUDED.max_mp,
               updated_at = NOW()
       `,
       [
@@ -569,7 +656,24 @@ export class SavesService {
         snapshot.player.experience,
         snapshot.player.experienceToNextLevel,
         snapshot.player.gold,
+        snapshot.player.currentHp,
+        snapshot.player.maxHp,
+        snapshot.player.currentMp,
+        snapshot.player.maxMp,
       ],
+    );
+
+    await executor.query(
+      `
+        INSERT INTO ${WORLD_STATE_TABLE} (user_id, zone, day)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id)
+        DO UPDATE
+          SET zone = EXCLUDED.zone,
+              day = EXCLUDED.day,
+              updated_at = NOW()
+      `,
+      [userId, snapshot.world.zone, snapshot.world.day],
     );
 
     await executor.query(
@@ -776,14 +880,18 @@ export class SavesService {
       schemaVersion: 1,
       capturedAt,
       world: {
-        zone: this.toStringOrNull(world.zone) ?? 'Ferme',
-        day: this.toPositiveInt(world.day, 1),
+        zone: this.toStringOrNull(world.zone) ?? BASE_WORLD_ZONE,
+        day: this.toPositiveInt(world.day, BASE_WORLD_DAY),
       },
       player: {
         level: this.toPositiveInt(player.level, 1),
         experience: this.toNonNegativeInt(player.experience, 0),
         experienceToNextLevel: this.toPositiveInt(player.experienceToNextLevel, 100),
         gold: this.toNonNegativeInt(player.gold, 0),
+        currentHp: this.toNonNegativeInt(player.currentHp, BASE_PLAYER_CURRENT_HP),
+        maxHp: this.toPositiveInt(player.maxHp, BASE_PLAYER_MAX_HP),
+        currentMp: this.toNonNegativeInt(player.currentMp, BASE_PLAYER_CURRENT_MP),
+        maxMp: this.toPositiveInt(player.maxMp, BASE_PLAYER_MAX_MP),
       },
       tower: {
         currentFloor: this.toPositiveInt(tower.currentFloor, 1),
@@ -805,6 +913,7 @@ export class SavesService {
     if (parsed.tower.highestFloor < parsed.tower.currentFloor) {
       parsed.tower.highestFloor = parsed.tower.currentFloor;
     }
+    this.normalizeSnapshotPlayerVitals(parsed.player);
 
     return parsed;
   }
@@ -823,14 +932,18 @@ export class SavesService {
       schemaVersion: 1,
       capturedAt,
       world: {
-        zone: this.toStringOrNull(world.zone) ?? 'Ferme',
-        day: this.toPositiveInt(world.day, 1),
+        zone: this.toStringOrNull(world.zone) ?? BASE_WORLD_ZONE,
+        day: this.toPositiveInt(world.day, BASE_WORLD_DAY),
       },
       player: {
         level: this.toPositiveInt(player.level, 1),
         experience: this.toNonNegativeInt(player.experience, 0),
         experienceToNextLevel: this.toPositiveInt(player.experienceToNext ?? player.experienceToNextLevel, 100),
         gold: this.toNonNegativeInt(player.gold, 0),
+        currentHp: this.toNonNegativeInt(player.currentHp, BASE_PLAYER_CURRENT_HP),
+        maxHp: this.toPositiveInt(player.maxHp, BASE_PLAYER_MAX_HP),
+        currentMp: this.toNonNegativeInt(player.currentMp, BASE_PLAYER_CURRENT_MP),
+        maxMp: this.toPositiveInt(player.maxMp, BASE_PLAYER_MAX_MP),
       },
       tower: {
         currentFloor: this.toPositiveInt(tower.currentFloor, 1),
@@ -852,8 +965,16 @@ export class SavesService {
     if (parsed.tower.highestFloor < parsed.tower.currentFloor) {
       parsed.tower.highestFloor = parsed.tower.currentFloor;
     }
+    this.normalizeSnapshotPlayerVitals(parsed.player);
 
     return parsed;
+  }
+
+  private normalizeSnapshotPlayerVitals(player: SaveSnapshotV1['player']): void {
+    player.maxHp = Math.max(1, player.maxHp);
+    player.maxMp = Math.max(1, player.maxMp);
+    player.currentHp = Math.max(0, Math.min(player.maxHp, player.currentHp));
+    player.currentMp = Math.max(0, Math.min(player.maxMp, player.currentMp));
   }
 
   private parseInventoryEntry(value: unknown): { itemKey: string; quantity: number } | null {

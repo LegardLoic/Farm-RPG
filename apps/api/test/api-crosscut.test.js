@@ -144,6 +144,102 @@ function createCombatService() {
   return new CombatService({}, {}, {}, {});
 }
 
+function createDefeatPenaltyExecutor() {
+  const state = {
+    progression: {
+      user_id: 'user-1',
+      level: 3,
+      experience: 40,
+      experience_to_next: 150,
+      gold: 200,
+      current_hp: 18,
+      max_hp: 32,
+      current_mp: 9,
+      max_mp: 15,
+    },
+    inventory: new Map([
+      ['healing_herb', 2],
+      ['iron_ore', 1],
+    ]),
+    world: {
+      zone: 'Village',
+      day: 3,
+    },
+  };
+
+  return {
+    state,
+    async query(text, values = []) {
+      if (text.includes('INSERT INTO player_progression')) {
+        return { rows: [] };
+      }
+
+      if (text.includes('SELECT user_id, level, experience, experience_to_next, gold, current_hp')) {
+        return {
+          rows: [{ ...state.progression }],
+        };
+      }
+
+      if (text.includes('UPDATE player_progression') && text.includes('current_hp')) {
+        state.progression = {
+          ...state.progression,
+          level: values[1],
+          experience: values[2],
+          experience_to_next: values[3],
+          gold: values[4],
+          current_hp: values[5],
+          max_hp: values[6],
+          current_mp: values[7],
+          max_mp: values[8],
+        };
+        return { rows: [] };
+      }
+
+      if (text.includes('SELECT item_key, quantity') && text.includes('FROM inventory_items')) {
+        return {
+          rows: Array.from(state.inventory.entries())
+            .map(([item_key, quantity]) => ({ item_key, quantity }))
+            .sort((left, right) => left.item_key.localeCompare(right.item_key)),
+        };
+      }
+
+      if (text.includes('DELETE FROM inventory_items')) {
+        state.inventory.delete(values[1]);
+        return { rows: [] };
+      }
+
+      if (text.includes('UPDATE inventory_items') && text.includes('quantity = quantity - 1')) {
+        const itemKey = values[1];
+        const current = state.inventory.get(itemKey) ?? 0;
+        if (current > 1) {
+          state.inventory.set(itemKey, current - 1);
+        }
+        return { rows: [] };
+      }
+
+      if (text.includes('INSERT INTO world_state')) {
+        return { rows: [] };
+      }
+
+      if (text.includes('SELECT zone, day') && text.includes('FROM world_state')) {
+        return {
+          rows: [{ ...state.world }],
+        };
+      }
+
+      if (text.includes('UPDATE world_state')) {
+        state.world = {
+          zone: values[1],
+          day: values[2],
+        };
+        return { rows: [] };
+      }
+
+      throw new Error(`Unexpected combat penalty query: ${text}`);
+    },
+  };
+}
+
 test('auth service issues JWTs and persists hashed refresh tokens', async () => {
   const db = createAuthDatabaseStub();
   const service = new AuthService(db, createConfigService({
@@ -304,6 +400,72 @@ test('combat debug reference exposes scripted enemies, floors, skills, and inten
   );
 });
 
+test('combat defeat penalty applies gold/item loss, respawn day advance, and 1 HP recovery', async () => {
+  const service = createCombatService();
+  const executor = createDefeatPenaltyExecutor();
+
+  service.randomInt = (min) => min;
+  const encounter = {
+    id: 'encounter-lost-1',
+    userId: 'user-1',
+    enemyKey: 'forest_goblin',
+    towerFloor: 2,
+    isScriptedBossEncounter: false,
+    turn: 'player',
+    status: 'lost',
+    round: 4,
+    logs: ['You have been defeated.'],
+    player: {
+      hp: 0,
+      maxHp: 32,
+      mp: 5,
+      maxMp: 15,
+      attack: 7,
+      defense: 2,
+      magicAttack: 10,
+      speed: 6,
+      defending: false,
+    },
+    enemy: {
+      key: 'forest_goblin',
+      name: 'Forest Goblin',
+      hp: 24,
+      mp: 4,
+      attack: 5,
+      defense: 1,
+      magicAttack: 2,
+      speed: 4,
+      rewards: { experience: 28, gold: 12, loot: [] },
+      currentHp: 12,
+      currentMp: 1,
+    },
+    scriptState: {},
+    lastAction: 'attack',
+    rewards: null,
+    defeatPenalty: null,
+    rewardsGranted: false,
+    createdAt: '2026-03-30T00:00:00.000Z',
+    updatedAt: '2026-03-30T00:00:00.000Z',
+    endedAt: '2026-03-30T00:00:00.000Z',
+  };
+
+  const penalized = await service.applyDefeatPenaltyIfNeeded(executor, 'user-1', encounter);
+
+  assert.equal(penalized.player.hp, 1);
+  assert.ok(penalized.defeatPenalty);
+  assert.equal(penalized.defeatPenalty.goldLossPercent, 10);
+  assert.equal(penalized.defeatPenalty.goldLost, 20);
+  assert.equal(penalized.defeatPenalty.respawnZone, 'Ferme');
+  assert.equal(penalized.defeatPenalty.respawnDay, 4);
+  assert.equal(penalized.defeatPenalty.itemsLost.length, 1);
+
+  assert.equal(executor.state.progression.gold, 180);
+  assert.equal(executor.state.progression.current_hp, 1);
+  assert.equal(executor.state.world.zone, 'Ferme');
+  assert.equal(executor.state.world.day, 4);
+  assert.equal(Array.from(executor.state.inventory.values()).reduce((sum, quantity) => sum + quantity, 0), 2);
+});
+
 test('blacksmith shop filters offers by unlock flags', async () => {
   const db = createShopDatabaseStub({
     unlocked: true,
@@ -372,6 +534,10 @@ test('save snapshot parsing normalizes version 1 data and legacy autosaves', () 
     experience: 0,
     experienceToNextLevel: 100,
     gold: 0,
+    currentHp: 32,
+    maxHp: 32,
+    currentMp: 15,
+    maxMp: 15,
   });
   assert.deepEqual(versionOne.tower, {
     currentFloor: 8,
@@ -411,6 +577,10 @@ test('save snapshot parsing normalizes version 1 data and legacy autosaves', () 
     experience: 45,
     experienceToNextLevel: 90,
     gold: 120,
+    currentHp: 32,
+    maxHp: 32,
+    currentMp: 15,
+    maxMp: 15,
   });
   assert.deepEqual(legacy.tower, {
     currentFloor: 5,

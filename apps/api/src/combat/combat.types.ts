@@ -65,6 +65,20 @@ export interface CombatRewardSummary {
   levelAfter: number;
 }
 
+export interface CombatDefeatPenaltyItem {
+  itemKey: string;
+  quantity: number;
+}
+
+export interface CombatDefeatPenaltySummary {
+  goldLossPercent: number;
+  goldLost: number;
+  itemsLost: CombatDefeatPenaltyItem[];
+  respawnZone: string;
+  respawnDay: number;
+  playerHpAfterDefeat: number;
+}
+
 export interface CombatEncounterState {
   id: string;
   userId: string;
@@ -80,6 +94,7 @@ export interface CombatEncounterState {
   scriptState?: Record<string, boolean | number | string>;
   lastAction: CombatActionName | null;
   rewards: CombatRewardSummary | null;
+  defeatPenalty: CombatDefeatPenaltySummary | null;
   rewardsGranted: boolean;
   createdAt: string;
   updatedAt: string;

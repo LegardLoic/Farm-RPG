@@ -3473,6 +3473,10 @@ export class GameScene extends Phaser.Scene {
     const level = this.asNumber(progression.level);
     const experience = this.asNumber(progression.experience);
     const experienceToNextLevel = this.asNumber(progression.experienceToNextLevel);
+    const currentHp = this.asNumber(progression.currentHp);
+    const maxHp = this.asNumber(progression.maxHp);
+    const currentMp = this.asNumber(progression.currentMp);
+    const maxMp = this.asNumber(progression.maxMp);
 
     if (gold !== null) {
       this.hudState.gold = Math.max(0, Math.round(gold));
@@ -3488,6 +3492,19 @@ export class GameScene extends Phaser.Scene {
 
     if (experienceToNextLevel !== null) {
       this.hudState.xpToNext = Math.max(1, Math.round(experienceToNextLevel));
+    }
+
+    if (maxHp !== null) {
+      this.hudState.maxHp = Math.max(1, Math.round(maxHp));
+    }
+    if (currentHp !== null) {
+      this.hudState.hp = Math.max(0, Math.min(this.hudState.maxHp, Math.round(currentHp)));
+    }
+    if (maxMp !== null) {
+      this.hudState.maxMp = Math.max(1, Math.round(maxMp));
+    }
+    if (currentMp !== null) {
+      this.hudState.mp = Math.max(0, Math.min(this.hudState.maxMp, Math.round(currentMp)));
     }
 
     const village = this.asRecord(payload.village);
@@ -3603,10 +3620,6 @@ export class GameScene extends Phaser.Scene {
 
   private syncHudStateFromCombat(snapshot: CombatEncounterState | null): void {
     if (!snapshot) {
-      this.hudState.hp = 32;
-      this.hudState.maxHp = 32;
-      this.hudState.mp = 15;
-      this.hudState.maxMp = 15;
       return;
     }
 
