@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="cloak" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#7fbef8"/>
+      <stop offset="100%" stop-color="#3f6fc9"/>
+    </linearGradient>
+  </defs>
+  <rect x="22" y="12" width="20" height="12" rx="4" fill="#f6d7a6"/>
+  <path d="M18 24h28l6 28H12z" fill="url(#cloak)"/>
+  <path d="M23 26h18l-2 22h-14z" fill="#e9efff" opacity="0.9"/>
+  <rect x="27" y="36" width="10" height="18" rx="3" fill="#6d4b2e"/>
+  <rect x="16" y="30" width="8" height="18" rx="3" fill="#2d3556"/>
+  <rect x="40" y="30" width="8" height="18" rx="3" fill="#2d3556"/>
+  <circle cx="28" cy="18" r="2" fill="#2d3556"/>
+  <circle cx="36" cy="18" r="2" fill="#2d3556"/>
+</svg>

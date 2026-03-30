@@ -36,3 +36,6 @@ jobs:
 
       - name: API Combat Tests
         run: npm run test --workspace @farm-rpg/api --if-present
+
+      - name: Web UI Regression Tests
+        run: npm run test --workspace @farm-rpg/web --if-present
