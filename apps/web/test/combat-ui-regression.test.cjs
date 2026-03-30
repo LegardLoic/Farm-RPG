@@ -34,6 +34,13 @@ test('combat HUD exposes telemetry field and renderer hook', () => {
   assert.equal(gameSceneSource.includes('private getCombatTelemetryLabel(): string'), true);
 });
 
+test('debug QA exposes local JSON trace export wiring', () => {
+  assert.equal(gameSceneSource.includes('data-debug-action="export-trace"'), true);
+  assert.equal(gameSceneSource.includes('async exportDebugQaTrace(): Promise<void>'), true);
+  assert.equal(gameSceneSource.includes('private buildDebugQaTracePayload(): DebugQaTracePayload'), true);
+  assert.equal(gameSceneSource.includes('private downloadJsonFile(filename: string, payload: unknown): void'), true);
+});
+
 test('combat intent mapping still covers critical scripted intents', () => {
   const requiredIntents = ['root_smash', 'cinder_burst', 'molten_shell', 'iron_recenter', 'null_sigil', 'cataclysm_ray'];
   for (const intent of requiredIntents) {
@@ -50,4 +57,8 @@ test('combat effect chip styles keep tone variants', () => {
       `missing chip tone style: ${tone}`,
     );
   }
+});
+
+test('debug QA export button keeps dedicated styling', () => {
+  assert.equal(stylesSource.includes('.hud-debug-qa-button.export'), true);
 });

@@ -482,6 +482,15 @@ body::before {
   background: rgba(226, 182, 109, 0.16);
 }
 
+.hud-debug-qa-button.export {
+  flex: 1 1 100%;
+  border-color: rgba(115, 183, 255, 0.46);
+  background: rgba(115, 183, 255, 0.16);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 .hud-debug-qa-button:hover:not(:disabled) {
   filter: brightness(1.06);
   transform: translateY(-1px);
