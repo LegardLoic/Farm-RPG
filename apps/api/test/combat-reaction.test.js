@@ -9,6 +9,7 @@ const {
   CLEANSE_REACTION_WINDOW_TURNS,
   INTERRUPT_REACTION_WINDOW_TURNS,
   DEFAULT_PLAYER_COMBAT_STATE,
+  DEFAULT_COMBAT_ENEMY_KEY,
 } = require('../dist/combat/combat.constants.js');
 
 function createCombatService() {
@@ -178,4 +179,71 @@ test('legacy burning/silenced keys are still interpreted for active encounters',
   assert.equal(encounter.player.hp, 18);
   assert.equal(encounter.scriptState.playerPoisonedTurns, 0);
   assert.equal(encounter.scriptState.playerDarkenedTurns, 0);
+});
+
+test('progression curve caps level at 10 and keeps XP stable at cap', () => {
+  const service = createCombatService();
+  const nearCap = service.computeProgressionAfterVictory(
+    {
+      user_id: 'user-test',
+      level: 9,
+      experience: 600,
+      experience_to_next: 620,
+      gold: 200,
+      current_hp: 20,
+      max_hp: 32,
+      current_mp: 8,
+      max_mp: 15,
+    },
+    400,
+    30,
+  );
+
+  assert.equal(nearCap.level, 10);
+  assert.equal(nearCap.experience_to_next, 9999);
+  assert.ok(nearCap.experience >= 0);
+  assert.ok(nearCap.experience < 9999);
+  assert.equal(nearCap.gold, 230);
+
+  const atCap = service.computeProgressionAfterVictory(
+    {
+      ...nearCap,
+      level: 10,
+      experience: 777,
+      experience_to_next: 9999,
+    },
+    9999,
+    11,
+  );
+  assert.equal(atCap.level, 10);
+  assert.equal(atCap.experience, 777);
+  assert.equal(atCap.gold, nearCap.gold + 11);
+});
+
+test('non-scripted encounters scale with floor tiers while scripted bosses keep baseline profile', () => {
+  const service = createCombatService();
+  const progression = {
+    user_id: 'user-test',
+    level: 4,
+    experience: 0,
+    experience_to_next: 220,
+    gold: 100,
+    current_hp: 20,
+    max_hp: 32,
+    current_mp: 10,
+    max_mp: 15,
+  };
+  const enemy = COMBAT_ENEMY_DEFINITIONS[DEFAULT_COMBAT_ENEMY_KEY];
+  const lowTier = service.createEncounter('user-test', enemy, 2, progression, false);
+  const highTier = service.createEncounter('user-test', enemy, 8, progression, false);
+
+  assert.ok(highTier.enemy.hp > lowTier.enemy.hp);
+  assert.ok(highTier.enemy.attack >= lowTier.enemy.attack);
+  assert.ok(highTier.enemy.rewards.experience > lowTier.enemy.rewards.experience);
+  assert.ok(highTier.logs.some((entry) => entry.includes('Difficulty Tier IV')));
+
+  const boss = COMBAT_ENEMY_DEFINITIONS.thorn_beast_alpha;
+  const scriptedBoss = service.createEncounter('user-test', boss, 3, progression, true);
+  assert.equal(scriptedBoss.enemy.hp, boss.hp);
+  assert.equal(scriptedBoss.enemy.rewards.experience, boss.rewards.experience);
 });

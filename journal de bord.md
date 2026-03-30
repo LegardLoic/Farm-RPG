@@ -1041,6 +1041,27 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - blocage skills sous `Obscurite`
     - miss physique possible sous `Cecite`.
 
+### Lot 79 - Courbe progression 1->10 + calibration paliers 3/5/8/10
+- Progression backend:
+  - courbe XP explicite verrouillee niveau `1 -> 10` (table fixe) avec `PLAYER_MAX_LEVEL = 10`.
+  - clamp serveur des niveaux hors borne et stabilisation de `experience_to_next`.
+  - au niveau max, l'XP est plafonnee proprement (pas de depassement de courbe).
+- Combat backend:
+  - calibration difficulte par paliers de tour:
+    - floor `1-2` -> Tier I
+    - floor `3-4` -> Tier II
+    - floor `5-7` -> Tier III
+    - floor `8-9` -> Tier IV
+    - floor `10+` -> Tier V
+  - combats non-scriptes scales par tier (HP/stats/rewards) pour une montee de difficulte lisible.
+  - boss scriptes conserves baseline (pas de sur-scale) pour garder leur tuning dedie.
+  - rewards victoire ajustees selon ecart `niveau joueur` vs `floor` (anti over-farm + bonus risque).
+- QA:
+  - tests ajoutes:
+    - cap niveau 10 + stabilite XP au cap
+    - scaling tier des encounters non-scriptes
+    - boss scriptes non scales.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1193,25 +1214,25 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 79 - Progression: verrouiller la courbe niveau 1->10 (xp, gains, difficulte paliers 3/5/8/10).
-2. Lot 80 - UX combat: ajouter un recap fin de combat plus detaille (degats, soins, MP, loot, statuts appliques).
-3. Lot 81 - Debug QA: filtres + export markdown des recaps et scripts intents.
-4. Lot 82 - CI QA: smoke auth etendu avec assertion `Debug QA reference loaded` + alerte nightly sur 2 fails consecutifs.
-5. Lot 83 - Personnage: ecran creation hero minimal (nom, apparence de base) + persistence profil.
-6. Lot 84 - Input: premiere passe support manette (navigation HUD + actions combat principales).
-7. Lot 85 - Narration: sequence d'intro MVP (arrivee village, maire, attribution ferme) en mode textuel/cinematique simple.
-8. Lot 86 - PNJ: systeme d'etats PNJ (maire, forgeron, marchand) pilote par flags monde.
-9. Lot 87 - Village economy: boutique graines + rachat recoltes (API + HUD) pour demarrer la boucle ferme.
-10. Lot 88 - Ferme data model: parcelles, cultures plantees, etats arrose/non arrose, timers de croissance.
-11. Lot 89 - Ferme backend: endpoints `plant`, `water`, `harvest` avec validations metier serveur.
-12. Lot 90 - Ferme frontend: panneau ferme jouable (selection graine, plantation, arrosage, recolte).
-13. Lot 91 - Temps: cycle jour/nuit MVP + action `sleep` qui avance le jour et fait pousser les cultures.
-14. Lot 92 - Crafting ferme: recettes basiques (consommables combat) basees sur recoltes.
-15. Lot 93 - Quetes ferme/village: quetes secondaires simples liees aux recoltes et livraisons.
-16. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
-17. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
-18. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
-19. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
-20. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
+1. Lot 80 - UX combat: ajouter un recap fin de combat plus detaille (degats, soins, MP, loot, statuts appliques).
+2. Lot 81 - Debug QA: filtres + export markdown des recaps et scripts intents.
+3. Lot 82 - CI QA: smoke auth etendu avec assertion `Debug QA reference loaded` + alerte nightly sur 2 fails consecutifs.
+4. Lot 83 - Personnage: ecran creation hero minimal (nom, apparence de base) + persistence profil.
+5. Lot 84 - Input: premiere passe support manette (navigation HUD + actions combat principales).
+6. Lot 85 - Narration: sequence d'intro MVP (arrivee village, maire, attribution ferme) en mode textuel/cinematique simple.
+7. Lot 86 - PNJ: systeme d'etats PNJ (maire, forgeron, marchand) pilote par flags monde.
+8. Lot 87 - Village economy: boutique graines + rachat recoltes (API + HUD) pour demarrer la boucle ferme.
+9. Lot 88 - Ferme data model: parcelles, cultures plantees, etats arrose/non arrose, timers de croissance.
+10. Lot 89 - Ferme backend: endpoints `plant`, `water`, `harvest` avec validations metier serveur.
+11. Lot 90 - Ferme frontend: panneau ferme jouable (selection graine, plantation, arrosage, recolte).
+12. Lot 91 - Temps: cycle jour/nuit MVP + action `sleep` qui avance le jour et fait pousser les cultures.
+13. Lot 92 - Crafting ferme: recettes basiques (consommables combat) basees sur recoltes.
+14. Lot 93 - Quetes ferme/village: quetes secondaires simples liees aux recoltes et livraisons.
+15. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
+16. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
+17. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
+18. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
+19. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
+20. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
 
 

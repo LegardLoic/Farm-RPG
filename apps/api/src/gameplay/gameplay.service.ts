@@ -14,6 +14,7 @@ import {
   PLAYER_PROGRESSION_TABLE,
   WORLD_STATE_TABLE,
   WORLD_FLAGS_TABLE,
+  clampPlayerLevel,
   xpRequiredForLevel,
 } from './gameplay.constants';
 import type { GameplayVillageState, GameplayWorldState, PlayerProgressionState } from './gameplay.types';
@@ -83,11 +84,14 @@ export class GameplayService {
     );
 
     const row = result.rows[0];
+    const level = clampPlayerLevel(row.level);
+    const experienceToNextLevel = xpRequiredForLevel(level);
+    const experience = Math.max(0, Math.min(Math.floor(row.experience), experienceToNextLevel - 1));
     return {
-      level: row.level,
-      experience: row.experience,
-      experienceToNextLevel: row.experience_to_next,
-      gold: row.gold,
+      level,
+      experience,
+      experienceToNextLevel,
+      gold: Math.max(0, Math.floor(row.gold)),
       currentHp: row.current_hp,
       maxHp: row.max_hp,
       currentMp: row.current_mp,
