@@ -57,9 +57,15 @@ test('debug QA exposes local JSON trace export wiring', () => {
 test('debug QA exposes trace import and replay wiring', () => {
   assert.equal(gameSceneSource.includes('data-debug-action="import-trace"'), true);
   assert.equal(gameSceneSource.includes('data-debug-action="replay-trace"'), true);
+  assert.equal(gameSceneSource.includes('data-debug-action="replay-trace-step-start"'), true);
+  assert.equal(gameSceneSource.includes('data-debug-action="replay-trace-step-next"'), true);
+  assert.equal(gameSceneSource.includes('data-debug-action="replay-trace-step-stop"'), true);
   assert.equal(gameSceneSource.includes('data-hud="debugQaImportFile"'), true);
   assert.equal(gameSceneSource.includes('private triggerDebugQaTraceImport(): void'), true);
   assert.equal(gameSceneSource.includes('private replayImportedDebugQaTrace(): void'), true);
+  assert.equal(gameSceneSource.includes('private startDebugQaStepReplay(): void'), true);
+  assert.equal(gameSceneSource.includes('private advanceDebugQaStepReplay(): void'), true);
+  assert.equal(gameSceneSource.includes('private stopDebugQaStepReplay(restoreBaseline: boolean): void'), true);
 });
 
 test('strip runtime animation wiring exists for player and boss assets', () => {

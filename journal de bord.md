@@ -854,6 +854,21 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Qualite:
   - tests web de non-regression etendus sur le wiring strips runtime (BootScene + GameScene + styles).
 
+### Lot 64 - Debug QA: replay pas a pas des traces importees
+- Frontend Debug QA:
+  - ajout des actions:
+    - `Start step replay`
+    - `Next step`
+    - `Stop step replay`
+  - le replay pas a pas lit les logs de la trace importee et avance etape par etape dans le HUD.
+  - progression visible via compteur `stepIndex/totalSteps` sur le bouton `Next step`.
+  - `Stop` restaure le snapshot local precedent (auth/hud/combat) pour ne pas polluer la session courante.
+- Robustesse:
+  - import d'une nouvelle trace pendant un replay actif stoppe proprement le replay en cours.
+  - replay snapshot direct (`Replay imported trace`) reste disponible en complement.
+- Qualite:
+  - non-regression web etendue pour valider le wiring des controles step replay.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -914,6 +929,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - panneau `Debug QA` pour piloter les endpoints debug sans quitter le jeu (DEV/staging), incluant world flags, presets de scenario, set quest status et recaps detaillees
   - export local JSON des traces QA depuis le panneau `Debug QA`
   - import/replay local JSON des traces QA pour rejouer un contexte de debug
+  - replay pas a pas des traces JSON (avance tour/log par tour) avec restauration d'etat
   - carte ennemi enrichie avec sprite resolu via `enemy.key`
   - strips runtime actifs (`idle/hit/cast`) pour player et bosses, avec animation HUD cote ennemi
 - Chargement web optimise:
@@ -985,12 +1001,13 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Workflow nightly staging e2e pour verification continue des routes critiques avec seed fixtures.
 - Manifest sprites etendu avec metadata `strips` pour preparer l'animation runtime.
 - Runtime strips Phaser branche pour player + bosses (animation declenchee selon etat combat).
+- Outils QA front renforces: replay instantane + replay pas a pas sur traces JSON.
 
 ## 9) Prochaines priorites recommandees
-1. Ajouter un mode replay "pas a pas" des traces QA (avance de logs/tours) au lieu d'un apply snapshot direct.
-2. Etendre la nightly CI staging avec publication d'un resume (artefact JSON + statut lisible en sortie workflow).
-3. Ajouter une smoke QA web automatisee (boot + auth state + start combat) pour completer la couverture API e2e.
-4. Ajouter un mapping de portraits fallback (spritesheets ou miniatures dediees) pour tous les ennemis non-boss.
-5. Ajouter un endpoint API de lecture des intents/skills scriptes (debug readonly) pour valider les telegraphes cote QA sans jouer un combat complet.
+1. Etendre la nightly CI staging avec publication d'un resume (artefact JSON + statut lisible en sortie workflow).
+2. Ajouter une smoke QA web automatisee (boot + auth state + start combat) pour completer la couverture API e2e.
+3. Ajouter un mapping de portraits fallback (spritesheets ou miniatures dediees) pour tous les ennemis non-boss.
+4. Ajouter un endpoint API de lecture des intents/skills scriptes (debug readonly) pour valider les telegraphes cote QA sans jouer un combat complet.
+5. Ajouter un mode auto-play du step replay (intervalle reglable + pause) pour rejouer des sessions longues sans clic manuel.
 
 

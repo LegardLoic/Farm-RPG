@@ -250,6 +250,26 @@ type HudStripPlaybackState = {
   frameCursor: number;
 };
 
+type DebugQaReplayBaseline = {
+  isAuthenticated: boolean;
+  authStatus: string;
+  hudState: HudState;
+  combatEncounterId: string | null;
+  combatStatus: CombatUiStatus;
+  combatState: CombatEncounterState | null;
+  combatLogs: string[];
+  combatMessage: string;
+  combatError: string | null;
+};
+
+type DebugQaStepReplayState = {
+  logs: string[];
+  stepIndex: number;
+  totalSteps: number;
+  finalTrace: ImportedDebugQaTrace;
+  baseline: DebugQaReplayBaseline;
+};
+
 const DEBUG_QA_PRESET_OPTIONS: DebugQaPresetOption[] = [
   { key: 'starter', label: 'Starter' },
   { key: 'tower_mid', label: 'Tower mid' },
@@ -397,6 +417,9 @@ export class GameScene extends Phaser.Scene {
   private debugQaSetWorldFlagsButton: HTMLButtonElement | null = null;
   private debugQaImportButton: HTMLButtonElement | null = null;
   private debugQaReplayButton: HTMLButtonElement | null = null;
+  private debugQaReplayStepStartButton: HTMLButtonElement | null = null;
+  private debugQaReplayStepNextButton: HTMLButtonElement | null = null;
+  private debugQaReplayStepStopButton: HTMLButtonElement | null = null;
   private debugQaImportFileInput: HTMLInputElement | null = null;
   private debugQaExportButton: HTMLButtonElement | null = null;
   private debugQaBusyAction: DebugQaActionName | null = null;
@@ -404,6 +427,7 @@ export class GameScene extends Phaser.Scene {
   private debugQaMessage: string | null = null;
   private debugQaError: string | null = null;
   private debugQaImportedTrace: ImportedDebugQaTrace | null = null;
+  private debugQaStepReplayState: DebugQaStepReplayState | null = null;
   private readonly debugQaEnabled = import.meta.env.DEV || import.meta.env.MODE === 'staging';
 
   private readonly onDebugQaImportFileChange = (event: Event) => {
@@ -523,6 +547,21 @@ export class GameScene extends Phaser.Scene {
 
     if (debugAction === 'replay-trace') {
       this.replayImportedDebugQaTrace();
+      return;
+    }
+
+    if (debugAction === 'replay-trace-step-start') {
+      this.startDebugQaStepReplay();
+      return;
+    }
+
+    if (debugAction === 'replay-trace-step-next') {
+      this.advanceDebugQaStepReplay();
+      return;
+    }
+
+    if (debugAction === 'replay-trace-step-stop') {
+      this.stopDebugQaStepReplay(true);
       return;
     }
 
@@ -878,6 +917,9 @@ export class GameScene extends Phaser.Scene {
             <button class="hud-debug-qa-button secondary" data-debug-action="set-quest-status">Set quest status</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="import-trace">Import JSON trace</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="replay-trace">Replay imported trace</button>
+            <button class="hud-debug-qa-button secondary" data-debug-action="replay-trace-step-start">Start step replay</button>
+            <button class="hud-debug-qa-button secondary" data-debug-action="replay-trace-step-next">Next step</button>
+            <button class="hud-debug-qa-button secondary" data-debug-action="replay-trace-step-stop">Stop step replay</button>
             <button class="hud-debug-qa-button export" data-debug-action="export-trace" title="Export a local JSON trace of the current QA state">
               Export JSON trace
             </button>
@@ -945,6 +987,9 @@ export class GameScene extends Phaser.Scene {
     this.debugQaSetWorldFlagsButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="set-world-flags"]');
     this.debugQaImportButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="import-trace"]');
     this.debugQaReplayButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="replay-trace"]');
+    this.debugQaReplayStepStartButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="replay-trace-step-start"]');
+    this.debugQaReplayStepNextButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="replay-trace-step-next"]');
+    this.debugQaReplayStepStopButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="replay-trace-step-stop"]');
     this.debugQaImportFileInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaImportFile"]');
     this.debugQaExportButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="export-trace"]');
     if (this.debugQaImportFileInput) {
@@ -955,6 +1000,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private teardownHud(): void {
+    this.stopDebugQaStepReplay(false);
+
     if (this.playerStripActionTimer) {
       this.playerStripActionTimer.remove(false);
       this.playerStripActionTimer = null;
@@ -1022,6 +1069,9 @@ export class GameScene extends Phaser.Scene {
     this.debugQaSetWorldFlagsButton = null;
     this.debugQaImportButton = null;
     this.debugQaReplayButton = null;
+    this.debugQaReplayStepStartButton = null;
+    this.debugQaReplayStepNextButton = null;
+    this.debugQaReplayStepStopButton = null;
     this.debugQaImportFileInput = null;
     this.debugQaExportButton = null;
     this.questsRenderSignature = '';
@@ -1033,6 +1083,7 @@ export class GameScene extends Phaser.Scene {
     this.debugQaMessage = null;
     this.debugQaError = null;
     this.debugQaImportedTrace = null;
+    this.debugQaStepReplayState = null;
     this.spriteManifest = null;
     this.playerUsesStripAnimation = false;
   }
@@ -1241,22 +1292,42 @@ export class GameScene extends Phaser.Scene {
         this.debugQaBusyAction === 'set-world-flags' ? 'Applying...' : 'Set world flags';
     }
 
+    const replayActive = Boolean(this.debugQaStepReplayState);
+
     if (this.debugQaImportButton) {
-      this.debugQaImportButton.disabled = this.debugQaStatus === 'loading';
+      this.debugQaImportButton.disabled = this.debugQaStatus === 'loading' || replayActive;
       this.debugQaImportButton.textContent = this.debugQaStatus === 'loading' ? 'Importing...' : 'Import JSON trace';
     }
 
     if (this.debugQaReplayButton) {
-      this.debugQaReplayButton.disabled = this.debugQaStatus === 'loading' || !this.debugQaImportedTrace;
+      this.debugQaReplayButton.disabled = this.debugQaStatus === 'loading' || !this.debugQaImportedTrace || replayActive;
       this.debugQaReplayButton.textContent = 'Replay imported trace';
     }
 
+    if (this.debugQaReplayStepStartButton) {
+      this.debugQaReplayStepStartButton.disabled = this.debugQaStatus === 'loading' || !this.debugQaImportedTrace || replayActive;
+      this.debugQaReplayStepStartButton.textContent = 'Start step replay';
+    }
+
+    if (this.debugQaReplayStepNextButton) {
+      const replayLabel = this.debugQaStepReplayState
+        ? `Next step (${this.debugQaStepReplayState.stepIndex}/${this.debugQaStepReplayState.totalSteps})`
+        : 'Next step';
+      this.debugQaReplayStepNextButton.disabled = !replayActive;
+      this.debugQaReplayStepNextButton.textContent = replayLabel;
+    }
+
+    if (this.debugQaReplayStepStopButton) {
+      this.debugQaReplayStepStopButton.disabled = !replayActive;
+      this.debugQaReplayStepStopButton.textContent = 'Stop step replay';
+    }
+
     if (this.debugQaImportFileInput) {
-      this.debugQaImportFileInput.disabled = this.debugQaStatus === 'loading';
+      this.debugQaImportFileInput.disabled = this.debugQaStatus === 'loading' || replayActive;
     }
 
     if (this.debugQaExportButton) {
-      this.debugQaExportButton.disabled = this.debugQaStatus === 'loading';
+      this.debugQaExportButton.disabled = this.debugQaStatus === 'loading' || replayActive;
       this.debugQaExportButton.textContent = 'Export JSON trace';
     }
   }
@@ -3102,6 +3173,7 @@ export class GameScene extends Phaser.Scene {
     this.combatStatus = 'idle';
     this.combatMessage = this.isAuthenticated ? 'Aucun combat actif.' : 'Connecte toi pour lancer un combat.';
     this.combatError = null;
+    this.debugQaStepReplayState = null;
     this.syncHudStateFromCombat(null);
     this.stopEnemyHudStripPlayback();
     this.clearEnemyHudStripOverride();
@@ -3600,6 +3672,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.stopDebugQaStepReplay(false);
     this.applyImportedDebugQaTrace(this.debugQaImportedTrace);
     this.debugQaStatus = 'success';
     this.debugQaError = null;
@@ -3607,11 +3680,160 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
   }
 
+  private startDebugQaStepReplay(): void {
+    if (!this.debugQaEnabled) {
+      return;
+    }
+
+    if (!this.debugQaImportedTrace) {
+      this.debugQaStatus = 'error';
+      this.debugQaError = 'Importe un JSON trace avant de lancer le replay pas a pas.';
+      this.debugQaMessage = null;
+      this.updateHud();
+      return;
+    }
+
+    const logs = this.debugQaImportedTrace.combatLogs.slice(-20);
+    if (logs.length === 0) {
+      this.debugQaStatus = 'error';
+      this.debugQaError = 'La trace importee ne contient pas de logs combat exploitables.';
+      this.debugQaMessage = null;
+      this.updateHud();
+      return;
+    }
+
+    this.stopDebugQaStepReplay(false);
+    const baseline = this.captureDebugQaReplayBaseline();
+    this.applyImportedDebugQaTrace(this.debugQaImportedTrace);
+
+    this.combatStatus = 'active';
+    this.combatLogs = [];
+    this.combatMessage = `Replay step 0/${logs.length}`;
+    this.combatError = null;
+
+    if (this.combatState) {
+      this.combatState = this.cloneCombatState(this.combatState);
+      this.combatState.status = 'active';
+      this.combatState.logs = [];
+      this.combatState.round = 1;
+      this.combatState.turn = 'player';
+    }
+
+    this.debugQaStepReplayState = {
+      logs,
+      stepIndex: 0,
+      totalSteps: logs.length,
+      finalTrace: this.debugQaImportedTrace,
+      baseline,
+    };
+
+    this.debugQaStatus = 'success';
+    this.debugQaError = null;
+    this.debugQaMessage = `Replay pas a pas demarre (${logs.length} steps).`;
+    this.updateHud();
+  }
+
+  private advanceDebugQaStepReplay(): void {
+    if (!this.debugQaStepReplayState) {
+      this.debugQaStatus = 'error';
+      this.debugQaError = 'Demarre un replay pas a pas avant d avancer.';
+      this.debugQaMessage = null;
+      this.updateHud();
+      return;
+    }
+
+    const replay = this.debugQaStepReplayState;
+    if (replay.stepIndex >= replay.totalSteps) {
+      this.applyImportedDebugQaTrace(replay.finalTrace);
+      this.debugQaStepReplayState = null;
+      this.debugQaStatus = 'success';
+      this.debugQaError = null;
+      this.debugQaMessage = 'Replay pas a pas termine (etat final applique).';
+      this.updateHud();
+      return;
+    }
+
+    const nextStep = replay.stepIndex + 1;
+    replay.stepIndex = nextStep;
+
+    this.combatLogs = replay.logs.slice(0, nextStep);
+    this.combatMessage = replay.logs[nextStep - 1] ?? this.combatMessage;
+    this.combatError = null;
+    this.combatStatus = nextStep >= replay.totalSteps ? (replay.finalTrace.combatStatus ?? 'active') : 'active';
+
+    if (this.combatState) {
+      this.combatState = this.cloneCombatState(this.combatState);
+      this.combatState.logs = [...this.combatLogs];
+      this.combatState.round = Math.max(1, Math.ceil(nextStep / 2));
+      this.combatState.turn = nextStep % 2 === 0 ? 'player' : 'enemy';
+      const resolvedStatus = this.combatStatus;
+      this.combatState.status =
+        resolvedStatus === 'active' ||
+        resolvedStatus === 'won' ||
+        resolvedStatus === 'lost' ||
+        resolvedStatus === 'fled'
+          ? resolvedStatus
+          : 'active';
+    }
+
+    this.debugQaStatus = 'success';
+    this.debugQaError = null;
+    this.debugQaMessage = `Replay step ${nextStep}/${replay.totalSteps}`;
+    this.updateHud();
+  }
+
+  private stopDebugQaStepReplay(restoreBaseline: boolean): void {
+    const replay = this.debugQaStepReplayState;
+    this.debugQaStepReplayState = null;
+
+    if (!replay) {
+      return;
+    }
+
+    if (restoreBaseline) {
+      this.restoreDebugQaReplayBaseline(replay.baseline);
+      this.debugQaStatus = 'success';
+      this.debugQaError = null;
+      this.debugQaMessage = 'Replay pas a pas stoppe (etat precedent restaure).';
+      this.updateHud();
+    }
+  }
+
+  private captureDebugQaReplayBaseline(): DebugQaReplayBaseline {
+    return {
+      isAuthenticated: this.isAuthenticated,
+      authStatus: this.authStatus,
+      hudState: { ...this.hudState },
+      combatEncounterId: this.combatEncounterId,
+      combatStatus: this.combatStatus,
+      combatState: this.combatState ? this.cloneCombatState(this.combatState) : null,
+      combatLogs: [...this.combatLogs],
+      combatMessage: this.combatMessage,
+      combatError: this.combatError,
+    };
+  }
+
+  private restoreDebugQaReplayBaseline(baseline: DebugQaReplayBaseline): void {
+    this.isAuthenticated = baseline.isAuthenticated;
+    this.authStatus = baseline.authStatus;
+    this.hudState = { ...baseline.hudState };
+    this.combatEncounterId = baseline.combatEncounterId;
+    this.combatStatus = baseline.combatStatus;
+    this.combatState = baseline.combatState ? this.cloneCombatState(baseline.combatState) : null;
+    this.combatLogs = [...baseline.combatLogs];
+    this.combatMessage = baseline.combatMessage;
+    this.combatError = baseline.combatError;
+  }
+
   private async handleDebugQaImportFileChange(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement | null;
     const file = input?.files?.[0];
     if (!file || !this.debugQaEnabled) {
       return;
+    }
+
+    if (this.debugQaStepReplayState) {
+      this.stopDebugQaStepReplay(true);
     }
 
     this.debugQaStatus = 'loading';
