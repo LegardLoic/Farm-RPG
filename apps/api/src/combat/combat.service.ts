@@ -74,6 +74,7 @@ import type {
   CombatDebugReference,
   CombatDefeatPenaltyItem,
   CombatEnemyDefinition,
+  CombatEncounterRecap,
   CombatEncounterState,
   CombatEncounterSummary,
   CombatLootDropDefinition,
@@ -473,6 +474,7 @@ export class CombatService {
       }
 
       const withPenalty = await this.applyDefeatPenaltyIfNeeded(tx, userId, finalizedState);
+      this.finalizeCombatRecapIfEnded(withPenalty);
       await this.persistPostCombatVitalsIfEnded(tx, userId, withPenalty);
 
       const savedRow = await this.saveEncounter(tx, withPenalty);
@@ -506,6 +508,7 @@ export class CombatService {
       this.clearEnemyTelegraph(forfeited);
       forfeited.updatedAt = forfeited.endedAt;
       forfeited.defeatPenalty = null;
+      this.finalizeCombatRecapIfEnded(forfeited);
 
       await this.persistPostCombatVitalsIfEnded(tx, userId, forfeited);
 
@@ -549,6 +552,7 @@ export class CombatService {
       lastAction: null,
       rewards: null,
       defeatPenalty: null,
+      recap: null,
       rewardsGranted: false,
       createdAt: now,
       updatedAt: now,
@@ -573,6 +577,7 @@ export class CombatService {
     switch (action) {
       case 'attack': {
         if (this.rollPlayerBlindMiss(next, action)) {
+          this.incrementTelemetryCounter(next, 'telemetryRecapBlindMisses');
           this.pushLog(next, 'You miss your attack because of Cecite.');
           break;
         }
@@ -584,6 +589,7 @@ export class CombatService {
           this.getEnemyDefensePenalty(next),
         );
         next.enemy.currentHp = Math.max(0, next.enemy.currentHp - damage);
+        this.incrementTelemetryCounter(next, 'telemetryRecapDamageDealt', damage);
         this.pushLog(next, `You attack ${next.enemy.name} for ${damage} damage.`);
         break;
       }
@@ -598,6 +604,7 @@ export class CombatService {
         }
 
         next.player.mp -= FIREBALL_MANA_COST;
+        this.incrementTelemetryCounter(next, 'telemetryRecapMpSpent', FIREBALL_MANA_COST);
         const damage = this.calculateMagicDamage(
           next.player,
           next.enemy,
@@ -605,6 +612,7 @@ export class CombatService {
           this.getEnemyDefensePenalty(next),
         );
         next.enemy.currentHp = Math.max(0, next.enemy.currentHp - damage);
+        this.incrementTelemetryCounter(next, 'telemetryRecapDamageDealt', damage);
         this.pushLog(next, `You cast Fireball on ${next.enemy.name} for ${damage} damage.`);
         break;
       }
@@ -614,6 +622,7 @@ export class CombatService {
         }
 
         next.player.mp -= RALLY_MANA_COST;
+        this.incrementTelemetryCounter(next, 'telemetryRecapMpSpent', RALLY_MANA_COST);
         this.setPlayerRallyTurns(next, RALLY_DURATION_TURNS);
         this.pushLog(next, `You cast Rally. Attack and magic are boosted for ${RALLY_DURATION_TURNS} turns.`);
         break;
@@ -624,7 +633,9 @@ export class CombatService {
         }
 
         next.player.mp -= SUNDER_MANA_COST;
+        this.incrementTelemetryCounter(next, 'telemetryRecapMpSpent', SUNDER_MANA_COST);
         if (this.rollPlayerBlindMiss(next, action)) {
+          this.incrementTelemetryCounter(next, 'telemetryRecapBlindMisses');
           this.pushLog(next, 'Cecite disrupts Sunder. The strike misses.');
           break;
         }
@@ -635,6 +646,7 @@ export class CombatService {
           this.calculatePhysicalDamage(next.player, next.enemy, this.getPlayerAttackBonus(next), 0) - 1,
         );
         next.enemy.currentHp = Math.max(0, next.enemy.currentHp - damage);
+        this.incrementTelemetryCounter(next, 'telemetryRecapDamageDealt', damage);
         this.pushLog(
           next,
           `You use Sunder for ${damage} damage and reduce ${next.enemy.name} defense for ${SUNDER_DURATION_TURNS} turns.`,
@@ -650,6 +662,7 @@ export class CombatService {
         }
 
         next.player.mp -= MEND_MANA_COST;
+        this.incrementTelemetryCounter(next, 'telemetryRecapMpSpent', MEND_MANA_COST);
         const recovered = Math.max(
           1,
           Math.min(
@@ -658,6 +671,7 @@ export class CombatService {
           ),
         );
         next.player.hp = Math.min(next.player.maxHp, next.player.hp + recovered);
+        this.incrementTelemetryCounter(next, 'telemetryRecapHealingDone', recovered);
         this.pushLog(next, `You cast Mend and recover ${recovered} HP.`);
         break;
       }
@@ -674,6 +688,7 @@ export class CombatService {
         }
 
         next.player.mp -= CLEANSE_MANA_COST;
+        this.incrementTelemetryCounter(next, 'telemetryRecapMpSpent', CLEANSE_MANA_COST);
         this.setPlayerPoisonedTurns(next, 0);
         this.setPlayerBlindedTurns(next, 0);
         this.setPlayerDarkenedTurns(next, 0);
@@ -693,9 +708,13 @@ export class CombatService {
         this.pushLog(next, `You cast Cleanse and remove ${removed.join(' + ')}.`);
 
         const removedCount = Number(hadPoison) + Number(hadBlind) + Number(hadDarkness);
+        if (removedCount > 0) {
+          this.incrementTelemetryCounter(next, 'telemetryRecapDebuffsCleansed', removedCount);
+        }
         const recoveredMp = removedCount >= 2 ? Math.min(1, next.player.maxMp - next.player.mp) : 0;
         if (recoveredMp > 0) {
           next.player.mp += recoveredMp;
+          this.incrementTelemetryCounter(next, 'telemetryRecapMpRecovered', recoveredMp);
           this.pushLog(next, `Cleanse restores ${recoveredMp} MP through purified focus.`);
         }
         break;
@@ -711,6 +730,7 @@ export class CombatService {
         }
 
         next.player.mp -= INTERRUPT_MANA_COST;
+        this.incrementTelemetryCounter(next, 'telemetryRecapMpSpent', INTERRUPT_MANA_COST);
         this.setEnemyInterruptedTurns(next, 1);
         this.setPlayerInterruptReactionWindow(next, INTERRUPT_REACTION_WINDOW_TURNS);
         this.incrementTelemetryCounter(next, 'telemetryInterruptUses');
@@ -719,6 +739,7 @@ export class CombatService {
           this.calculateMagicDamage(next.player, next.enemy, this.getPlayerMagicAttackBonus(next), 0) - 3,
         );
         next.enemy.currentHp = Math.max(0, next.enemy.currentHp - damage);
+        this.incrementTelemetryCounter(next, 'telemetryRecapDamageDealt', damage);
         this.pushLog(next, `You cast Interrupt for ${damage} damage and disrupt ${next.enemy.name}.`);
         this.setEnemyShatterTurns(next, Math.max(this.getEnemyShatterTurns(next), 1));
         this.pushLog(next, `${next.enemy.name} is exposed by the interruption.`);
@@ -1349,6 +1370,7 @@ export class CombatService {
           encounter,
           Math.max(this.getPlayerBlindedTurns(encounter), PLAYER_BLINDED_DURATION_TURNS),
         );
+        this.incrementTelemetryCounter(encounter, 'telemetryRecapCeciteApplied');
         this.pushLog(encounter, `You are afflicted by Cecite for ${PLAYER_BLINDED_DURATION_TURNS} turns.`);
         break;
       case 'opening_punish':
@@ -1363,6 +1385,7 @@ export class CombatService {
           encounter,
           Math.max(this.getPlayerPoisonedTurns(encounter), PLAYER_POISON_DURATION_TURNS),
         );
+        this.incrementTelemetryCounter(encounter, 'telemetryRecapPoisonApplied');
         this.pushLog(encounter, `You are afflicted by Poison for ${PLAYER_POISON_DURATION_TURNS} turns.`);
         break;
       case 'molten_shell':
@@ -1394,6 +1417,7 @@ export class CombatService {
           encounter,
           Math.max(this.getPlayerDarkenedTurns(encounter), PLAYER_DARKENED_DURATION_TURNS),
         );
+        this.incrementTelemetryCounter(encounter, 'telemetryRecapObscuriteApplied');
         damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + (enraged ? 3 : 2);
         label = `${encounter.enemy.name} casts Null Sigil`;
         this.pushLog(
@@ -1425,6 +1449,7 @@ export class CombatService {
     }
 
     encounter.player.hp = Math.max(0, encounter.player.hp - mitigatedDamage);
+    this.incrementTelemetryCounter(encounter, 'telemetryRecapDamageTaken', mitigatedDamage);
     encounter.player.defending = false;
     encounter.updatedAt = new Date().toISOString();
     this.pushLog(encounter, `${label} for ${mitigatedDamage} damage.`);
@@ -1835,6 +1860,79 @@ export class CombatService {
     this.incrementTelemetryCounter(encounter, `telemetryBossSpecialCast_${intent}`);
   }
 
+  private finalizeCombatRecapIfEnded(encounter: CombatEncounterState): void {
+    if (encounter.status === 'active') {
+      return;
+    }
+
+    const recap = this.buildCombatRecap(encounter);
+    encounter.recap = recap;
+
+    if (encounter.scriptState?.telemetryRecapLogged === 1) {
+      return;
+    }
+
+    this.pushLog(
+      encounter,
+      `Recap: dealt ${recap.damageDealt} | taken ${recap.damageTaken} | healed ${recap.healingDone}.`,
+    );
+    this.pushLog(
+      encounter,
+      `Recap: MP spent ${recap.mpSpent}, MP recovered ${recap.mpRecovered}, rounds ${recap.rounds}.`,
+    );
+    this.pushLog(
+      encounter,
+      `Recap: statuses +Poison ${recap.poisonApplied}, +Cecite ${recap.ceciteApplied}, +Obscurite ${recap.obscuriteApplied}, cleansed ${recap.debuffsCleansed}.`,
+    );
+
+    if (recap.rewards.experience > 0 || recap.rewards.gold > 0 || recap.rewards.lootItems > 0) {
+      this.pushLog(
+        encounter,
+        `Recap rewards: +${recap.rewards.experience} XP, +${recap.rewards.gold} gold, loot x${recap.rewards.lootItems}.`,
+      );
+    }
+
+    if (recap.penalties.goldLost > 0 || recap.penalties.itemsLost > 0) {
+      this.pushLog(
+        encounter,
+        `Recap penalties: -${recap.penalties.goldLost} gold, items lost x${recap.penalties.itemsLost}.`,
+      );
+    }
+
+    encounter.scriptState = {
+      ...(encounter.scriptState ?? {}),
+      telemetryRecapLogged: 1,
+    };
+  }
+
+  private buildCombatRecap(encounter: CombatEncounterState): CombatEncounterRecap {
+    const lootItems = encounter.rewards?.items.reduce((total, item) => total + Math.max(0, item.quantity), 0) ?? 0;
+
+    return {
+      outcome: encounter.status,
+      rounds: Math.max(1, Math.floor(encounter.round)),
+      damageDealt: this.getTelemetryCounter(encounter, 'telemetryRecapDamageDealt'),
+      damageTaken: this.getTelemetryCounter(encounter, 'telemetryRecapDamageTaken'),
+      healingDone: this.getTelemetryCounter(encounter, 'telemetryRecapHealingDone'),
+      mpSpent: this.getTelemetryCounter(encounter, 'telemetryRecapMpSpent'),
+      mpRecovered: this.getTelemetryCounter(encounter, 'telemetryRecapMpRecovered'),
+      poisonApplied: this.getTelemetryCounter(encounter, 'telemetryRecapPoisonApplied'),
+      ceciteApplied: this.getTelemetryCounter(encounter, 'telemetryRecapCeciteApplied'),
+      obscuriteApplied: this.getTelemetryCounter(encounter, 'telemetryRecapObscuriteApplied'),
+      debuffsCleansed: this.getTelemetryCounter(encounter, 'telemetryRecapDebuffsCleansed'),
+      blindMisses: this.getTelemetryCounter(encounter, 'telemetryRecapBlindMisses'),
+      rewards: {
+        experience: Math.max(0, encounter.rewards?.experience ?? 0),
+        gold: Math.max(0, encounter.rewards?.gold ?? 0),
+        lootItems,
+      },
+      penalties: {
+        goldLost: Math.max(0, encounter.defeatPenalty?.goldLost ?? 0),
+        itemsLost: encounter.defeatPenalty?.itemsLost.reduce((total, item) => total + Math.max(0, item.quantity), 0) ?? 0,
+      },
+    };
+  }
+
   private getPlayerAttackBonus(encounter: CombatEncounterState): number {
     return this.getPlayerRallyTurns(encounter) > 0 ? 3 : 0;
   }
@@ -1869,6 +1967,7 @@ export class CombatService {
     const poisonedTurns = this.getPlayerPoisonedTurns(encounter);
     if (poisonedTurns > 0) {
       encounter.player.hp = Math.max(0, encounter.player.hp - PLAYER_POISON_DAMAGE);
+      this.incrementTelemetryCounter(encounter, 'telemetryRecapDamageTaken', PLAYER_POISON_DAMAGE);
       this.pushLog(encounter, `Poison deals ${PLAYER_POISON_DAMAGE} damage to you.`);
       const nextTurns = poisonedTurns - 1;
       this.setPlayerPoisonedTurns(encounter, nextTurns);
@@ -2272,6 +2371,10 @@ export class CombatService {
         parsed.defeatPenalty && typeof parsed.defeatPenalty === 'object'
           ? parsed.defeatPenalty
           : null,
+      recap:
+        parsed.recap && typeof parsed.recap === 'object'
+          ? (parsed.recap as CombatEncounterRecap)
+          : null,
       rewardsGranted: Boolean(parsed.rewardsGranted),
       lastAction:
         typeof parsed.lastAction === 'string' && COMBAT_ACTIONS.includes(parsed.lastAction as CombatActionName)
@@ -2314,6 +2417,10 @@ export class CombatService {
   }
 
   private toActionResult(encounter: CombatEncounterState): CombatActionResult {
+    if (encounter.status !== 'active' && !encounter.recap) {
+      encounter.recap = this.buildCombatRecap(encounter);
+    }
+
     const normalized = this.normalizeEncounter(encounter);
 
     return {

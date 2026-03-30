@@ -128,6 +128,54 @@ type CombatEnemyState = {
   speed: number;
 };
 
+type CombatRewardItem = {
+  itemKey: string;
+  quantity: number;
+  rarity: string;
+  source: string;
+};
+
+type CombatRewardSummary = {
+  experience: number;
+  gold: number;
+  items: CombatRewardItem[];
+  levelBefore: number;
+  levelAfter: number;
+};
+
+type CombatDefeatPenaltySummary = {
+  goldLossPercent: number;
+  goldLost: number;
+  itemsLost: Array<{ itemKey: string; quantity: number }>;
+  respawnZone: string;
+  respawnDay: number;
+  playerHpAfterDefeat: number;
+};
+
+type CombatEncounterRecap = {
+  outcome: CombatStatus;
+  rounds: number;
+  damageDealt: number;
+  damageTaken: number;
+  healingDone: number;
+  mpSpent: number;
+  mpRecovered: number;
+  poisonApplied: number;
+  ceciteApplied: number;
+  obscuriteApplied: number;
+  debuffsCleansed: number;
+  blindMisses: number;
+  rewards: {
+    experience: number;
+    gold: number;
+    lootItems: number;
+  };
+  penalties: {
+    goldLost: number;
+    itemsLost: number;
+  };
+};
+
 type CombatEncounterState = {
   id: string;
   status: CombatStatus;
@@ -138,6 +186,9 @@ type CombatEncounterState = {
   player: CombatUnitState;
   enemy: CombatEnemyState;
   lastAction: string | null;
+  rewards?: CombatRewardSummary | null;
+  defeatPenalty?: CombatDefeatPenaltySummary | null;
+  recap?: CombatEncounterRecap | null;
   createdAt: string | undefined;
   updatedAt: string | undefined;
   endedAt: string | null | undefined;
@@ -918,6 +969,7 @@ export class GameScene extends Phaser.Scene {
             <div class="hud-combat-stat"><span>Round</span><strong data-hud="combatRound">-</strong></div>
             <div class="hud-combat-stat"><span>Resultat</span><strong data-hud="combatResult">Aucun combat actif.</strong></div>
           </div>
+          <div class="hud-combat-recap" data-hud="combatRecap">Recap: -</div>
           <div class="hud-combat-grid">
             <div class="combat-card">
               <span>Player</span>
@@ -1368,6 +1420,7 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('combatTurn', this.getCombatTurnLabel());
     this.setHudText('combatRound', this.combatState ? `${this.combatState.round}` : '-');
     this.setHudText('combatResult', this.combatMessage);
+    this.setHudText('combatRecap', this.getCombatRecapLabel());
     this.setHudText('combatPlayerHp', this.getCombatUnitValue(this.hudState.hp, this.hudState.maxHp));
     this.setHudText('combatPlayerMp', this.getCombatUnitValue(this.hudState.mp, this.hudState.maxMp));
     this.renderCombatEffectChips('combatPlayerEffects', this.getCombatPlayerEffectChips());
@@ -3653,6 +3706,19 @@ export class GameScene extends Phaser.Scene {
     return 'Combat termine.';
   }
 
+  private getCombatRecapLabel(): string {
+    if (!this.combatState || this.combatState.status === 'active') {
+      return 'Recap: -';
+    }
+
+    const recap = this.combatState.recap;
+    if (!recap) {
+      return 'Recap: pending';
+    }
+
+    return `Recap: DMG ${recap.damageDealt}/${recap.damageTaken} | Heal ${recap.healingDone} | MP ${recap.mpSpent}/${recap.mpRecovered} | Status +P${recap.poisonApplied}/+C${recap.ceciteApplied}/+O${recap.obscuriteApplied} cleansed ${recap.debuffsCleansed} | Loot x${recap.rewards.lootItems}`;
+  }
+
   private getCombatName(): string {
     if (!this.combatState) {
       return this.isAuthenticated ? 'Aucun combat actif' : 'Connecte toi pour combattre';
@@ -5565,6 +5631,9 @@ export class GameScene extends Phaser.Scene {
       player,
       enemy,
       lastAction: this.asString(value.lastAction),
+      rewards: this.normalizeCombatRewardSummary(value.rewards),
+      defeatPenalty: this.normalizeCombatDefeatPenalty(value.defeatPenalty),
+      recap: this.normalizeCombatRecap(value.recap),
       createdAt: this.asString(value.createdAt) ?? undefined,
       updatedAt: this.asString(value.updatedAt) ?? undefined,
       endedAt: this.asString(value.endedAt) ?? null,
@@ -5634,6 +5703,106 @@ export class GameScene extends Phaser.Scene {
       defense: this.asNumber(value.defense) ?? 0,
       magicAttack: this.asNumber(value.magicAttack) ?? 0,
       speed: this.asNumber(value.speed) ?? 0,
+    };
+  }
+
+  private normalizeCombatRewardSummary(value: unknown): CombatRewardSummary | null {
+    if (!this.isRecord(value)) {
+      return null;
+    }
+
+    return {
+      experience: Math.max(0, Math.round(this.asNumber(value.experience) ?? 0)),
+      gold: Math.max(0, Math.round(this.asNumber(value.gold) ?? 0)),
+      items: this.normalizeCombatRewardItems(value.items),
+      levelBefore: Math.max(1, Math.round(this.asNumber(value.levelBefore) ?? 1)),
+      levelAfter: Math.max(1, Math.round(this.asNumber(value.levelAfter) ?? 1)),
+    };
+  }
+
+  private normalizeCombatRewardItems(value: unknown): CombatRewardItem[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    const items: CombatRewardItem[] = [];
+    for (const entry of value) {
+      if (!this.isRecord(entry)) {
+        continue;
+      }
+
+      const itemKey = this.asString(entry.itemKey);
+      const quantity = this.asNumber(entry.quantity);
+      if (!itemKey || quantity === null) {
+        continue;
+      }
+
+      items.push({
+        itemKey,
+        quantity: Math.max(0, Math.round(quantity)),
+        rarity: this.asString(entry.rarity) ?? 'common',
+        source: this.asString(entry.source) ?? 'enemy',
+      });
+    }
+
+    return items;
+  }
+
+  private normalizeCombatDefeatPenalty(value: unknown): CombatDefeatPenaltySummary | null {
+    if (!this.isRecord(value)) {
+      return null;
+    }
+
+    const itemsLost = Array.isArray(value.itemsLost)
+      ? value.itemsLost
+          .filter((entry): entry is Record<string, unknown> => this.isRecord(entry))
+          .map((entry) => ({
+            itemKey: this.asString(entry.itemKey) ?? 'item',
+            quantity: Math.max(0, Math.round(this.asNumber(entry.quantity) ?? 0)),
+          }))
+      : [];
+
+    return {
+      goldLossPercent: Math.max(0, Math.round(this.asNumber(value.goldLossPercent) ?? 0)),
+      goldLost: Math.max(0, Math.round(this.asNumber(value.goldLost) ?? 0)),
+      itemsLost,
+      respawnZone: this.asString(value.respawnZone) ?? 'Ferme',
+      respawnDay: Math.max(1, Math.round(this.asNumber(value.respawnDay) ?? 1)),
+      playerHpAfterDefeat: Math.max(0, Math.round(this.asNumber(value.playerHpAfterDefeat) ?? 1)),
+    };
+  }
+
+  private normalizeCombatRecap(value: unknown): CombatEncounterRecap | null {
+    if (!this.isRecord(value)) {
+      return null;
+    }
+
+    const rewardsRecord = this.asRecord(value.rewards);
+    const penaltiesRecord = this.asRecord(value.penalties);
+    const outcome = this.asCombatStatus(value.outcome) ?? this.combatState?.status ?? 'active';
+
+    return {
+      outcome,
+      rounds: Math.max(1, Math.round(this.asNumber(value.rounds) ?? 1)),
+      damageDealt: Math.max(0, Math.round(this.asNumber(value.damageDealt) ?? 0)),
+      damageTaken: Math.max(0, Math.round(this.asNumber(value.damageTaken) ?? 0)),
+      healingDone: Math.max(0, Math.round(this.asNumber(value.healingDone) ?? 0)),
+      mpSpent: Math.max(0, Math.round(this.asNumber(value.mpSpent) ?? 0)),
+      mpRecovered: Math.max(0, Math.round(this.asNumber(value.mpRecovered) ?? 0)),
+      poisonApplied: Math.max(0, Math.round(this.asNumber(value.poisonApplied) ?? 0)),
+      ceciteApplied: Math.max(0, Math.round(this.asNumber(value.ceciteApplied) ?? 0)),
+      obscuriteApplied: Math.max(0, Math.round(this.asNumber(value.obscuriteApplied) ?? 0)),
+      debuffsCleansed: Math.max(0, Math.round(this.asNumber(value.debuffsCleansed) ?? 0)),
+      blindMisses: Math.max(0, Math.round(this.asNumber(value.blindMisses) ?? 0)),
+      rewards: {
+        experience: Math.max(0, Math.round(this.asNumber(rewardsRecord?.experience) ?? 0)),
+        gold: Math.max(0, Math.round(this.asNumber(rewardsRecord?.gold) ?? 0)),
+        lootItems: Math.max(0, Math.round(this.asNumber(rewardsRecord?.lootItems) ?? 0)),
+      },
+      penalties: {
+        goldLost: Math.max(0, Math.round(this.asNumber(penaltiesRecord?.goldLost) ?? 0)),
+        itemsLost: Math.max(0, Math.round(this.asNumber(penaltiesRecord?.itemsLost) ?? 0)),
+      },
     };
   }
 

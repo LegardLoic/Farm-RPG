@@ -52,6 +52,7 @@ function createEncounter(overrides = {}) {
     lastAction: overrides.lastAction ?? null,
     rewards: overrides.rewards ?? null,
     defeatPenalty: overrides.defeatPenalty ?? null,
+    recap: overrides.recap ?? null,
     rewardsGranted: overrides.rewardsGranted ?? false,
     createdAt: overrides.createdAt ?? now,
     updatedAt: overrides.updatedAt ?? now,
@@ -246,4 +247,59 @@ test('non-scripted encounters scale with floor tiers while scripted bosses keep 
   const scriptedBoss = service.createEncounter('user-test', boss, 3, progression, true);
   assert.equal(scriptedBoss.enemy.hp, boss.hp);
   assert.equal(scriptedBoss.enemy.rewards.experience, boss.rewards.experience);
+});
+
+test('finalizeCombatRecapIfEnded builds and logs a detailed recap once', () => {
+  const service = createCombatService();
+  const encounter = createEncounter({
+    status: 'won',
+    round: 4,
+    logs: ['Combat ended.'],
+    scriptState: {
+      telemetryRecapDamageDealt: 58,
+      telemetryRecapDamageTaken: 21,
+      telemetryRecapHealingDone: 11,
+      telemetryRecapMpSpent: 14,
+      telemetryRecapMpRecovered: 1,
+      telemetryRecapPoisonApplied: 2,
+      telemetryRecapCeciteApplied: 1,
+      telemetryRecapObscuriteApplied: 1,
+      telemetryRecapDebuffsCleansed: 3,
+      telemetryRecapBlindMisses: 1,
+    },
+    rewards: {
+      experience: 87,
+      gold: 33,
+      items: [
+        { itemKey: 'ember_dust', quantity: 2, rarity: 'uncommon', source: 'enemy' },
+        { itemKey: 'mana_tonic', quantity: 1, rarity: 'rare', source: 'floor' },
+      ],
+      levelBefore: 4,
+      levelAfter: 5,
+    },
+  });
+
+  service.finalizeCombatRecapIfEnded(encounter);
+
+  assert.ok(encounter.recap);
+  assert.equal(encounter.recap.outcome, 'won');
+  assert.equal(encounter.recap.damageDealt, 58);
+  assert.equal(encounter.recap.damageTaken, 21);
+  assert.equal(encounter.recap.healingDone, 11);
+  assert.equal(encounter.recap.mpSpent, 14);
+  assert.equal(encounter.recap.mpRecovered, 1);
+  assert.equal(encounter.recap.poisonApplied, 2);
+  assert.equal(encounter.recap.ceciteApplied, 1);
+  assert.equal(encounter.recap.obscuriteApplied, 1);
+  assert.equal(encounter.recap.debuffsCleansed, 3);
+  assert.equal(encounter.recap.blindMisses, 1);
+  assert.equal(encounter.recap.rewards.lootItems, 3);
+  assert.equal(
+    encounter.logs.some((entry) => entry.startsWith('Recap:')),
+    true,
+  );
+
+  const logCount = encounter.logs.length;
+  service.finalizeCombatRecapIfEnded(encounter);
+  assert.equal(encounter.logs.length, logCount);
 });
