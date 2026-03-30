@@ -1,6 +1,6 @@
 ﻿# Journal de bord - Farm RPG
 
-Derniere mise a jour: 30 mars 2026
+Derniere mise a jour: 31 mars 2026
 
 ## 1) Objectif du journal
 Ce document garde une trace claire de ce qui a ete construit, valide et deploie jusqu'a present sur le prototype.
@@ -1083,6 +1083,27 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - test backend dedie pour valider la generation recap et la non-duplication des logs.
   - regression web test mise a jour pour verifier le wiring HUD recap.
 
+### Lot 81 - Debug QA: filtres + export markdown recaps/scripts
+- Frontend Debug QA:
+  - ajout de filtres locaux recap:
+    - `Recap outcome filter` (`all/won/lost/fled/active`)
+    - `Recap enemy filter` (key/nom ennemi).
+  - ajout de filtres locaux scripted intents:
+    - `Script enemy filter`
+    - `Script intent filter` (key/label/trigger).
+  - ajout d'un export `Export Markdown recap` qui genere un fichier `.md` avec:
+    - filtres actifs
+    - recap combat courant + logs (si match filtres)
+    - reference scripts intents filtree.
+  - chargement reference scripts intents ajuste:
+    - stockage d'une reference structuree cote scene
+    - rendu du panneau reference aligne sur les filtres actifs.
+- QA:
+  - extension du test de regression web pour verifier:
+    - wiring des nouveaux champs filtres
+    - wiring export markdown
+    - styles dedies (`reference filters` + bouton markdown export).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1142,6 +1163,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - ligne telemetry combat (compteurs skills/boss scripts) pour lecture rapide en test
   - panneau `Debug QA` pour piloter les endpoints debug sans quitter le jeu (DEV/staging), incluant world flags, presets de scenario, set quest status et recaps detaillees
   - export local JSON des traces QA depuis le panneau `Debug QA`
+  - export local Markdown des recaps/scripts QA avec filtres actifs
   - import/replay local JSON des traces QA pour rejouer un contexte de debug
   - replay pas a pas des traces JSON (avance tour/log par tour) avec restauration d'etat
   - replay pas a pas avec auto-play (slow/normal/fast) + pause
@@ -1235,25 +1257,24 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 81 - Debug QA: filtres + export markdown des recaps et scripts intents.
-2. Lot 82 - CI QA: smoke auth etendu avec assertion `Debug QA reference loaded` + alerte nightly sur 2 fails consecutifs.
-3. Lot 83 - Personnage: ecran creation hero minimal (nom, apparence de base) + persistence profil.
-4. Lot 84 - Input: premiere passe support manette (navigation HUD + actions combat principales).
-5. Lot 85 - Narration: sequence d'intro MVP (arrivee village, maire, attribution ferme) en mode textuel/cinematique simple.
-6. Lot 86 - PNJ: systeme d'etats PNJ (maire, forgeron, marchand) pilote par flags monde.
-7. Lot 87 - Village economy: boutique graines + rachat recoltes (API + HUD) pour demarrer la boucle ferme.
-8. Lot 88 - Ferme data model: parcelles, cultures plantees, etats arrose/non arrose, timers de croissance.
-9. Lot 89 - Ferme backend: endpoints `plant`, `water`, `harvest` avec validations metier serveur.
-10. Lot 90 - Ferme frontend: panneau ferme jouable (selection graine, plantation, arrosage, recolte).
-11. Lot 91 - Temps: cycle jour/nuit MVP + action `sleep` qui avance le jour et fait pousser les cultures.
-12. Lot 92 - Crafting ferme: recettes basiques (consommables combat) basees sur recoltes.
-13. Lot 93 - Quetes ferme/village: quetes secondaires simples liees aux recoltes et livraisons.
-14. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
-15. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
-16. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
-17. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
-18. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
-19. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
-20. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
+1. Lot 82 - CI QA: smoke auth etendu avec assertion `Debug QA reference loaded` + alerte nightly sur 2 fails consecutifs.
+2. Lot 83 - Personnage: ecran creation hero minimal (nom, apparence de base) + persistence profil.
+3. Lot 84 - Input: premiere passe support manette (navigation HUD + actions combat principales).
+4. Lot 85 - Narration: sequence d'intro MVP (arrivee village, maire, attribution ferme) en mode textuel/cinematique simple.
+5. Lot 86 - PNJ: systeme d'etats PNJ (maire, forgeron, marchand) pilote par flags monde.
+6. Lot 87 - Village economy: boutique graines + rachat recoltes (API + HUD) pour demarrer la boucle ferme.
+7. Lot 88 - Ferme data model: parcelles, cultures plantees, etats arrose/non arrose, timers de croissance.
+8. Lot 89 - Ferme backend: endpoints `plant`, `water`, `harvest` avec validations metier serveur.
+9. Lot 90 - Ferme frontend: panneau ferme jouable (selection graine, plantation, arrosage, recolte).
+10. Lot 91 - Temps: cycle jour/nuit MVP + action `sleep` qui avance le jour et fait pousser les cultures.
+11. Lot 92 - Crafting ferme: recettes basiques (consommables combat) basees sur recoltes.
+12. Lot 93 - Quetes ferme/village: quetes secondaires simples liees aux recoltes et livraisons.
+13. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
+14. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
+15. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
+16. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
+17. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
+18. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
+19. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
 
 

@@ -44,6 +44,7 @@ type DebugQaActionName =
 type DebugLoadoutPresetKey = 'starter' | 'tower_mid' | 'boss_trial';
 type DebugStatePresetKey = 'village_open' | 'mid_tower' | 'act1_done';
 type DebugQaStatus = 'idle' | 'loading' | 'success' | 'error';
+type DebugQaRecapOutcomeFilter = 'all' | CombatStatus;
 type CombatEffectTone = 'neutral' | 'calm' | 'warning' | 'danger' | 'utility';
 type DebugQaReplayAutoPlaySpeedKey = 'slow' | 'normal' | 'fast';
 type StripCalibrationPresetKey = 'manifest' | 'snappy' | 'cinematic';
@@ -352,6 +353,16 @@ type DebugQaTracePayload = {
     busyAction: DebugQaActionName | null;
     message: string | null;
     error: string | null;
+    filters: {
+      recapOutcome: DebugQaRecapOutcomeFilter;
+      recapEnemyQuery: string;
+      scriptedEnemyQuery: string;
+      scriptedIntentQuery: string;
+    };
+    scriptedIntentsReference: {
+      loaded: boolean;
+      enemyProfiles: number;
+    };
     replayAutoPlay: {
       active: boolean;
       speed: DebugQaReplayAutoPlaySpeedKey;
@@ -431,6 +442,14 @@ const DEBUG_QA_QUEST_STATUS_OPTIONS: Array<{ key: QuestStatus; label: string }> 
   { key: 'active', label: 'Active' },
   { key: 'completed', label: 'Completed' },
   { key: 'claimed', label: 'Claimed' },
+];
+
+const DEBUG_QA_RECAP_OUTCOME_FILTER_OPTIONS: Array<{ key: DebugQaRecapOutcomeFilter; label: string }> = [
+  { key: 'all', label: 'All outcomes' },
+  { key: 'won', label: 'Won' },
+  { key: 'lost', label: 'Lost' },
+  { key: 'fled', label: 'Fled' },
+  { key: 'active', label: 'Active' },
 ];
 
 const DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS: Array<{
@@ -593,6 +612,10 @@ export class GameScene extends Phaser.Scene {
   private debugQaWorldFlagsInput: HTMLTextAreaElement | null = null;
   private debugQaWorldFlagsRemoveInput: HTMLTextAreaElement | null = null;
   private debugQaWorldFlagsReplaceInput: HTMLInputElement | null = null;
+  private debugQaRecapOutcomeFilterSelect: HTMLSelectElement | null = null;
+  private debugQaRecapEnemyFilterInput: HTMLInputElement | null = null;
+  private debugQaScriptEnemyFilterInput: HTMLInputElement | null = null;
+  private debugQaScriptIntentFilterInput: HTMLInputElement | null = null;
   private debugQaGrantButton: HTMLButtonElement | null = null;
   private debugQaTowerFloorButton: HTMLButtonElement | null = null;
   private debugQaStatePresetButton: HTMLButtonElement | null = null;
@@ -613,6 +636,7 @@ export class GameScene extends Phaser.Scene {
   private debugQaScriptedIntentsOutput: HTMLElement | null = null;
   private debugQaImportFileInput: HTMLInputElement | null = null;
   private debugQaExportButton: HTMLButtonElement | null = null;
+  private debugQaExportMarkdownButton: HTMLButtonElement | null = null;
   private debugQaBusyAction: DebugQaActionName | null = null;
   private debugQaStatus: DebugQaStatus = 'idle';
   private debugQaMessage: string | null = null;
@@ -622,6 +646,11 @@ export class GameScene extends Phaser.Scene {
   private debugQaReplayAutoPlaySpeed: DebugQaReplayAutoPlaySpeedKey = 'normal';
   private debugQaReplayAutoPlayIntervalId: number | null = null;
   private stripCalibrationPreset: StripCalibrationPresetKey = 'manifest';
+  private debugQaRecapOutcomeFilter: DebugQaRecapOutcomeFilter = 'all';
+  private debugQaRecapEnemyFilter = '';
+  private debugQaScriptEnemyFilter = '';
+  private debugQaScriptIntentFilter = '';
+  private debugQaScriptedIntentsReference: CombatDebugReference | null = null;
   private debugQaScriptedIntentsText = 'Click "Load reference" to inspect the combat script QA payload.';
   private readonly debugQaEnabled = import.meta.env.DEV || import.meta.env.MODE === 'staging';
   private readonly stripCalibrationEnabled = import.meta.env.MODE === 'staging';
@@ -635,6 +664,10 @@ export class GameScene extends Phaser.Scene {
     const nextPreset = this.readStripCalibrationPresetFromUi();
     this.stripCalibrationPreset = nextPreset;
     this.persistStripCalibrationPreset(nextPreset);
+    this.updateHud();
+  };
+  private readonly onDebugQaFilterInputChange = () => {
+    this.syncDebugQaFiltersFromInputs();
     this.updateHud();
   };
 
@@ -745,6 +778,11 @@ export class GameScene extends Phaser.Scene {
 
     if (debugAction === 'export-trace') {
       void this.exportDebugQaTrace();
+      return;
+    }
+
+    if (debugAction === 'export-markdown') {
+      void this.exportDebugQaMarkdownReport();
       return;
     }
 
@@ -1136,6 +1174,16 @@ export class GameScene extends Phaser.Scene {
                 ${DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS.map((option) => `<option value="${option.key}">${option.label}</option>`).join('')}
               </select>
             </label>
+            <label class="hud-debug-qa-field">
+              <span>Recap outcome filter</span>
+              <select data-hud="debugQaRecapOutcomeFilter">
+                ${DEBUG_QA_RECAP_OUTCOME_FILTER_OPTIONS.map((option) => `<option value="${option.key}">${option.label}</option>`).join('')}
+              </select>
+            </label>
+            <label class="hud-debug-qa-field debug-qa-field-wide">
+              <span>Recap enemy filter</span>
+              <input data-hud="debugQaRecapEnemyFilter" type="text" placeholder="enemy key or enemy name" />
+            </label>
             ${
               this.stripCalibrationEnabled
                 ? `
@@ -1153,6 +1201,16 @@ export class GameScene extends Phaser.Scene {
             <div class="hud-debug-qa-reference-header">
               <span>Combat scripted intents</span>
               <button class="hud-debug-qa-button secondary" data-debug-action="load-scripted-intents">Load reference</button>
+            </div>
+            <div class="hud-debug-qa-reference-filters">
+              <label class="hud-debug-qa-field">
+                <span>Script enemy filter</span>
+                <input data-hud="debugQaScriptEnemyFilter" type="text" placeholder="enemy key or enemy name" />
+              </label>
+              <label class="hud-debug-qa-field">
+                <span>Script intent filter</span>
+                <input data-hud="debugQaScriptIntentFilter" type="text" placeholder="intent key, label or trigger" />
+              </label>
             </div>
             <pre class="hud-debug-qa-reference-output" data-hud="debugQaScriptedIntents">Click "Load reference" to inspect the combat script QA payload.</pre>
           </div>
@@ -1179,6 +1237,9 @@ export class GameScene extends Phaser.Scene {
             }
             <button class="hud-debug-qa-button export" data-debug-action="export-trace" title="Export a local JSON trace of the current QA state">
               Export JSON trace
+            </button>
+            <button class="hud-debug-qa-button export markdown" data-debug-action="export-markdown" title="Export markdown recap + scripted intents using active filters">
+              Export Markdown recap
             </button>
             <input data-hud="debugQaImportFile" type="file" accept=".json,application/json" hidden />
           </div>
@@ -1236,9 +1297,15 @@ export class GameScene extends Phaser.Scene {
     this.debugQaWorldFlagsRemoveInput = this.hudRoot.querySelector<HTMLTextAreaElement>('[data-hud="debugQaWorldFlagsRemove"]');
     this.debugQaWorldFlagsReplaceInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaWorldFlagsReplace"]');
     this.debugQaReplayAutoPlaySpeedSelect = this.hudRoot.querySelector<HTMLSelectElement>('[data-hud="debugQaReplayAutoPlaySpeed"]');
+    this.debugQaRecapOutcomeFilterSelect = this.hudRoot.querySelector<HTMLSelectElement>(
+      '[data-hud="debugQaRecapOutcomeFilter"]',
+    );
+    this.debugQaRecapEnemyFilterInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaRecapEnemyFilter"]');
     this.debugQaStripCalibrationSelect = this.hudRoot.querySelector<HTMLSelectElement>('[data-hud="debugQaStripCalibrationPreset"]');
     this.debugQaScriptedIntentsButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="load-scripted-intents"]');
     this.debugQaScriptedIntentsOutput = this.hudRoot.querySelector<HTMLElement>('[data-hud="debugQaScriptedIntents"]');
+    this.debugQaScriptEnemyFilterInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaScriptEnemyFilter"]');
+    this.debugQaScriptIntentFilterInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaScriptIntentFilter"]');
     this.debugQaGrantButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="grant-resources"]');
     this.debugQaTowerFloorButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="set-tower-floor"]');
     this.debugQaStatePresetButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="apply-state-preset"]');
@@ -1255,6 +1322,7 @@ export class GameScene extends Phaser.Scene {
     this.debugQaStripCalibrationButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="apply-strip-calibration"]');
     this.debugQaImportFileInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="debugQaImportFile"]');
     this.debugQaExportButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="export-trace"]');
+    this.debugQaExportMarkdownButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="export-markdown"]');
     this.debugQaReplayAutoPlaySpeed = this.readStoredDebugQaReplayAutoPlaySpeed();
     this.stripCalibrationPreset = this.readStoredStripCalibrationPreset();
     if (this.debugQaReplayAutoPlaySpeedSelect) {
@@ -1263,11 +1331,24 @@ export class GameScene extends Phaser.Scene {
     if (this.debugQaStripCalibrationSelect) {
       this.debugQaStripCalibrationSelect.value = this.stripCalibrationPreset;
     }
+    this.syncDebugQaFiltersToInputs();
     if (this.debugQaReplayAutoPlaySpeedSelect) {
       this.debugQaReplayAutoPlaySpeedSelect.addEventListener('change', this.onDebugQaReplayAutoPlaySpeedChange);
     }
     if (this.debugQaStripCalibrationSelect) {
       this.debugQaStripCalibrationSelect.addEventListener('change', this.onDebugQaStripCalibrationChange);
+    }
+    if (this.debugQaRecapOutcomeFilterSelect) {
+      this.debugQaRecapOutcomeFilterSelect.addEventListener('change', this.onDebugQaFilterInputChange);
+    }
+    if (this.debugQaRecapEnemyFilterInput) {
+      this.debugQaRecapEnemyFilterInput.addEventListener('input', this.onDebugQaFilterInputChange);
+    }
+    if (this.debugQaScriptEnemyFilterInput) {
+      this.debugQaScriptEnemyFilterInput.addEventListener('input', this.onDebugQaFilterInputChange);
+    }
+    if (this.debugQaScriptIntentFilterInput) {
+      this.debugQaScriptIntentFilterInput.addEventListener('input', this.onDebugQaFilterInputChange);
     }
     if (this.debugQaImportFileInput) {
       this.debugQaImportFileInput.addEventListener('change', this.onDebugQaImportFileChange);
@@ -1294,6 +1375,18 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.debugQaStripCalibrationSelect) {
       this.debugQaStripCalibrationSelect.removeEventListener('change', this.onDebugQaStripCalibrationChange);
+    }
+    if (this.debugQaRecapOutcomeFilterSelect) {
+      this.debugQaRecapOutcomeFilterSelect.removeEventListener('change', this.onDebugQaFilterInputChange);
+    }
+    if (this.debugQaRecapEnemyFilterInput) {
+      this.debugQaRecapEnemyFilterInput.removeEventListener('input', this.onDebugQaFilterInputChange);
+    }
+    if (this.debugQaScriptEnemyFilterInput) {
+      this.debugQaScriptEnemyFilterInput.removeEventListener('input', this.onDebugQaFilterInputChange);
+    }
+    if (this.debugQaScriptIntentFilterInput) {
+      this.debugQaScriptIntentFilterInput.removeEventListener('input', this.onDebugQaFilterInputChange);
     }
 
     if (this.hudRoot) {
@@ -1344,6 +1437,8 @@ export class GameScene extends Phaser.Scene {
     this.debugQaWorldFlagsRemoveInput = null;
     this.debugQaWorldFlagsReplaceInput = null;
     this.debugQaReplayAutoPlaySpeedSelect = null;
+    this.debugQaRecapOutcomeFilterSelect = null;
+    this.debugQaRecapEnemyFilterInput = null;
     this.debugQaStripCalibrationSelect = null;
     this.debugQaGrantButton = null;
     this.debugQaTowerFloorButton = null;
@@ -1361,8 +1456,11 @@ export class GameScene extends Phaser.Scene {
     this.debugQaStripCalibrationButton = null;
     this.debugQaScriptedIntentsButton = null;
     this.debugQaScriptedIntentsOutput = null;
+    this.debugQaScriptEnemyFilterInput = null;
+    this.debugQaScriptIntentFilterInput = null;
     this.debugQaImportFileInput = null;
     this.debugQaExportButton = null;
+    this.debugQaExportMarkdownButton = null;
     this.questsRenderSignature = '';
     this.blacksmithRenderSignature = '';
     this.autosaveRenderSignature = '';
@@ -1376,6 +1474,11 @@ export class GameScene extends Phaser.Scene {
     this.debugQaReplayAutoPlayIntervalId = null;
     this.debugQaReplayAutoPlaySpeed = 'normal';
     this.stripCalibrationPreset = 'manifest';
+    this.debugQaRecapOutcomeFilter = 'all';
+    this.debugQaRecapEnemyFilter = '';
+    this.debugQaScriptEnemyFilter = '';
+    this.debugQaScriptIntentFilter = '';
+    this.debugQaScriptedIntentsReference = null;
     this.debugQaScriptedIntentsText = 'Click "Load reference" to inspect the combat script QA payload.';
     this.spriteManifest = null;
     this.playerUsesStripAnimation = false;
@@ -1519,7 +1622,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.debugQaScriptedIntentsOutput) {
-      this.debugQaScriptedIntentsOutput.textContent = this.debugQaScriptedIntentsText;
+      this.debugQaScriptedIntentsOutput.textContent = this.getDebugQaScriptedIntentsDisplayText();
     }
 
     const loading = this.debugQaStatus === 'loading';
@@ -1553,6 +1656,22 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.debugQaWorldFlagsReplaceInput) {
       this.debugQaWorldFlagsReplaceInput.disabled = requiresAuthDisabled;
+    }
+    if (this.debugQaRecapOutcomeFilterSelect) {
+      this.debugQaRecapOutcomeFilterSelect.disabled = loading;
+      this.debugQaRecapOutcomeFilterSelect.value = this.debugQaRecapOutcomeFilter;
+    }
+    if (this.debugQaRecapEnemyFilterInput) {
+      this.debugQaRecapEnemyFilterInput.disabled = loading;
+      this.debugQaRecapEnemyFilterInput.value = this.debugQaRecapEnemyFilter;
+    }
+    if (this.debugQaScriptEnemyFilterInput) {
+      this.debugQaScriptEnemyFilterInput.disabled = loading;
+      this.debugQaScriptEnemyFilterInput.value = this.debugQaScriptEnemyFilter;
+    }
+    if (this.debugQaScriptIntentFilterInput) {
+      this.debugQaScriptIntentFilterInput.disabled = loading;
+      this.debugQaScriptIntentFilterInput.value = this.debugQaScriptIntentFilter;
     }
 
     if (this.debugQaGrantButton) {
@@ -1656,6 +1775,10 @@ export class GameScene extends Phaser.Scene {
     if (this.debugQaExportButton) {
       this.debugQaExportButton.disabled = loading || replayActive;
       this.debugQaExportButton.textContent = 'Export JSON trace';
+    }
+    if (this.debugQaExportMarkdownButton) {
+      this.debugQaExportMarkdownButton.disabled = loading || replayActive;
+      this.debugQaExportMarkdownButton.textContent = 'Export Markdown recap';
     }
   }
 
@@ -4163,11 +4286,112 @@ export class GameScene extends Phaser.Scene {
     return 'Idle';
   }
 
+  private syncDebugQaFiltersFromInputs(): void {
+    const rawOutcome = this.debugQaRecapOutcomeFilterSelect?.value.trim() ?? this.debugQaRecapOutcomeFilter;
+    const isKnownOutcome = DEBUG_QA_RECAP_OUTCOME_FILTER_OPTIONS.some((option) => option.key === rawOutcome);
+    this.debugQaRecapOutcomeFilter = isKnownOutcome ? (rawOutcome as DebugQaRecapOutcomeFilter) : 'all';
+    this.debugQaRecapEnemyFilter = this.debugQaRecapEnemyFilterInput?.value ?? this.debugQaRecapEnemyFilter;
+    this.debugQaScriptEnemyFilter = this.debugQaScriptEnemyFilterInput?.value ?? this.debugQaScriptEnemyFilter;
+    this.debugQaScriptIntentFilter = this.debugQaScriptIntentFilterInput?.value ?? this.debugQaScriptIntentFilter;
+  }
+
+  private syncDebugQaFiltersToInputs(): void {
+    if (this.debugQaRecapOutcomeFilterSelect) {
+      this.debugQaRecapOutcomeFilterSelect.value = this.debugQaRecapOutcomeFilter;
+    }
+    if (this.debugQaRecapEnemyFilterInput) {
+      this.debugQaRecapEnemyFilterInput.value = this.debugQaRecapEnemyFilter;
+    }
+    if (this.debugQaScriptEnemyFilterInput) {
+      this.debugQaScriptEnemyFilterInput.value = this.debugQaScriptEnemyFilter;
+    }
+    if (this.debugQaScriptIntentFilterInput) {
+      this.debugQaScriptIntentFilterInput.value = this.debugQaScriptIntentFilter;
+    }
+  }
+
+  private normalizeDebugQaFilterQuery(value: string): string {
+    return value.trim().toLowerCase();
+  }
+
+  private isDebugQaQueryMatch(query: string, values: Array<string | null | undefined>): boolean {
+    if (!query) {
+      return true;
+    }
+
+    return values.some((value) => (value ?? '').toLowerCase().includes(query));
+  }
+
+  private doesCombatStateMatchRecapFilters(snapshot: CombatEncounterState | null): boolean {
+    if (!snapshot) {
+      return false;
+    }
+
+    if (this.debugQaRecapOutcomeFilter !== 'all' && snapshot.status !== this.debugQaRecapOutcomeFilter) {
+      return false;
+    }
+
+    const enemyQuery = this.normalizeDebugQaFilterQuery(this.debugQaRecapEnemyFilter);
+    if (!enemyQuery) {
+      return true;
+    }
+
+    return this.isDebugQaQueryMatch(enemyQuery, [snapshot.enemy.key, snapshot.enemy.name]);
+  }
+
+  private filterCombatDebugReference(reference: CombatDebugReference): CombatDebugReference {
+    const enemyQuery = this.normalizeDebugQaFilterQuery(this.debugQaScriptEnemyFilter);
+    const intentQuery = this.normalizeDebugQaFilterQuery(this.debugQaScriptIntentFilter);
+    if (!enemyQuery && !intentQuery) {
+      return reference;
+    }
+
+    const scriptedIntents = reference.scriptedIntents
+      .filter((enemy) => this.isDebugQaQueryMatch(enemyQuery, [enemy.enemyKey, enemy.enemyName]))
+      .map((enemy) => {
+        const filteredIntents = enemy.intents.filter((intent) =>
+          this.isDebugQaQueryMatch(intentQuery, [intent.key, intent.label, intent.trigger]),
+        );
+        return {
+          ...enemy,
+          intents: filteredIntents,
+        };
+      })
+      .filter((enemy) => intentQuery.length === 0 || enemy.intents.length > 0);
+
+    const allowedEnemyKeys = new Set(scriptedIntents.map((enemy) => enemy.enemyKey));
+    const scriptedFloors = reference.scriptedFloors.filter((floor) => allowedEnemyKeys.has(floor.enemyKey));
+    const enemies = reference.enemies.filter((enemy) => allowedEnemyKeys.has(enemy.key));
+
+    return {
+      playerSkills: reference.playerSkills,
+      enemies,
+      scriptedFloors,
+      scriptedIntents,
+    };
+  }
+
+  private getDebugQaScriptedIntentsDisplayText(): string {
+    if (!this.debugQaScriptedIntentsReference) {
+      return this.debugQaScriptedIntentsText;
+    }
+
+    const filteredReference = this.filterCombatDebugReference(this.debugQaScriptedIntentsReference);
+    const enemyFilterLabel = this.debugQaScriptEnemyFilter.trim() || '-';
+    const intentFilterLabel = this.debugQaScriptIntentFilter.trim() || '-';
+    return [
+      `Filters => enemy: "${enemyFilterLabel}" | intent: "${intentFilterLabel}"`,
+      '',
+      this.formatCombatDebugScriptedIntentsReference(filteredReference),
+    ].join('\n');
+  }
+
   private async exportDebugQaTrace(): Promise<void> {
     if (!this.debugQaEnabled || !this.debugQaPanelRoot) {
       return;
     }
 
+    this.syncDebugQaFiltersFromInputs();
     const payload = this.buildDebugQaTracePayload();
     const filename = this.buildDebugQaTraceFilename(payload.timestamp);
     this.downloadJsonFile(filename, payload);
@@ -4175,6 +4399,23 @@ export class GameScene extends Phaser.Scene {
     this.debugQaStatus = 'success';
     this.debugQaError = null;
     this.debugQaMessage = `Exported local QA trace to ${filename}.`;
+    this.updateHud();
+  }
+
+  private async exportDebugQaMarkdownReport(): Promise<void> {
+    if (!this.debugQaEnabled || !this.debugQaPanelRoot) {
+      return;
+    }
+
+    this.syncDebugQaFiltersFromInputs();
+    const timestamp = new Date().toISOString();
+    const markdown = this.buildDebugQaMarkdownReport(timestamp);
+    const filename = this.buildDebugQaMarkdownFilename(timestamp);
+    this.downloadTextFile(filename, markdown, 'text/markdown;charset=utf-8');
+
+    this.debugQaStatus = 'success';
+    this.debugQaError = null;
+    this.debugQaMessage = `Exported markdown QA report to ${filename}.`;
     this.updateHud();
   }
 
@@ -4186,11 +4427,13 @@ export class GameScene extends Phaser.Scene {
     this.debugQaStatus = 'loading';
     this.debugQaError = null;
     this.debugQaMessage = 'Loading combat scripted intents reference...';
+    this.debugQaScriptedIntentsReference = null;
     this.debugQaScriptedIntentsText = 'Loading combat scripted intents reference...';
     this.updateHud();
 
     try {
       const reference = await this.fetchJson<CombatDebugReference>('/combat/debug/scripted-intents');
+      this.debugQaScriptedIntentsReference = reference;
       this.debugQaScriptedIntentsText = this.formatCombatDebugScriptedIntentsReference(reference);
 
       this.debugQaStatus = 'success';
@@ -4200,6 +4443,7 @@ export class GameScene extends Phaser.Scene {
       this.debugQaStatus = 'error';
       this.debugQaError = this.getErrorMessage(error, 'Unable to load combat scripted intents reference.');
       this.debugQaMessage = null;
+      this.debugQaScriptedIntentsReference = null;
       this.debugQaScriptedIntentsText =
         'Unable to load the combat scripted intents reference. Check the error message above and retry.';
     } finally {
@@ -4820,6 +5064,16 @@ export class GameScene extends Phaser.Scene {
         busyAction: this.debugQaBusyAction,
         message: this.debugQaMessage,
         error: this.debugQaError,
+        filters: {
+          recapOutcome: this.debugQaRecapOutcomeFilter,
+          recapEnemyQuery: this.debugQaRecapEnemyFilter,
+          scriptedEnemyQuery: this.debugQaScriptEnemyFilter,
+          scriptedIntentQuery: this.debugQaScriptIntentFilter,
+        },
+        scriptedIntentsReference: {
+          loaded: this.debugQaScriptedIntentsReference !== null,
+          enemyProfiles: this.debugQaScriptedIntentsReference?.scriptedIntents.length ?? 0,
+        },
         replayAutoPlay: {
           active: this.debugQaReplayAutoPlayIntervalId !== null,
           speed: this.debugQaReplayAutoPlaySpeed,
@@ -4867,13 +5121,103 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  private buildDebugQaMarkdownReport(timestamp: string): string {
+    const lines: string[] = [];
+    const recapEnemyFilter = this.debugQaRecapEnemyFilter.trim();
+    const scriptEnemyFilter = this.debugQaScriptEnemyFilter.trim();
+    const scriptIntentFilter = this.debugQaScriptIntentFilter.trim();
+    const recapMatchesFilters = this.doesCombatStateMatchRecapFilters(this.combatState);
+
+    lines.push('# Farm RPG QA Recap');
+    lines.push('');
+    lines.push(`Generated at: ${timestamp}`);
+    lines.push(`Mode: ${import.meta.env.MODE}`);
+    lines.push(`URL: ${window.location.href}`);
+    lines.push('');
+    lines.push('## Active Filters');
+    lines.push(`- Recap outcome: ${this.debugQaRecapOutcomeFilter}`);
+    lines.push(`- Recap enemy query: ${recapEnemyFilter || '(none)'}`);
+    lines.push(`- Script enemy query: ${scriptEnemyFilter || '(none)'}`);
+    lines.push(`- Script intent query: ${scriptIntentFilter || '(none)'}`);
+    lines.push('');
+    lines.push('## Combat Recap');
+
+    if (!this.combatState) {
+      lines.push('- No encounter available in HUD.');
+    } else if (!recapMatchesFilters) {
+      lines.push('- Current encounter is filtered out by recap filters.');
+      lines.push(`- Current enemy: ${this.combatState.enemy.name} [${this.combatState.enemy.key}]`);
+      lines.push(`- Current status: ${this.combatState.status}`);
+    } else {
+      lines.push(`- Encounter: ${this.combatState.id}`);
+      lines.push(`- Enemy: ${this.combatState.enemy.name} [${this.combatState.enemy.key}]`);
+      lines.push(`- Outcome: ${this.combatState.status}`);
+      lines.push(`- Round: ${this.combatState.round}`);
+
+      if (this.combatState.recap) {
+        const recap = this.combatState.recap;
+        lines.push(`- Damage dealt/taken: ${recap.damageDealt}/${recap.damageTaken}`);
+        lines.push(`- Healing done: ${recap.healingDone}`);
+        lines.push(`- MP spent/recovered: ${recap.mpSpent}/${recap.mpRecovered}`);
+        lines.push(
+          `- Status applied: Poison ${recap.poisonApplied}, Cecite ${recap.ceciteApplied}, Obscurite ${recap.obscuriteApplied}`,
+        );
+        lines.push(`- Debuffs cleansed: ${recap.debuffsCleansed}`);
+        lines.push(`- Blind misses: ${recap.blindMisses}`);
+        lines.push(
+          `- Rewards: XP ${recap.rewards.experience}, Gold ${recap.rewards.gold}, Loot items ${recap.rewards.lootItems}`,
+        );
+        lines.push(`- Penalties: Gold lost ${recap.penalties.goldLost}, Items lost ${recap.penalties.itemsLost}`);
+      } else {
+        lines.push('- Recap payload unavailable (encounter still active or recap pending).');
+      }
+    }
+
+    lines.push('');
+    lines.push('### Combat Logs (last 20)');
+    if (this.combatLogs.length === 0) {
+      lines.push('- No logs captured.');
+    } else {
+      for (const logLine of this.combatLogs.slice(-20)) {
+        lines.push(`- ${logLine}`);
+      }
+    }
+
+    lines.push('');
+    lines.push('## Combat Scripted Intents');
+    if (!this.debugQaScriptedIntentsReference) {
+      lines.push('- Scripted intents reference is not loaded yet.');
+      lines.push('- Use "Load reference" in Debug QA then export again for detailed scripted intents.');
+      return lines.join('\n');
+    }
+
+    const filteredReference = this.filterCombatDebugReference(this.debugQaScriptedIntentsReference);
+    lines.push(
+      `- Filtered scripted profiles: ${filteredReference.scriptedIntents.length}/${this.debugQaScriptedIntentsReference.scriptedIntents.length}`,
+    );
+    lines.push('');
+    lines.push('```text');
+    lines.push(this.formatCombatDebugScriptedIntentsReference(filteredReference));
+    lines.push('```');
+    return lines.join('\n');
+  }
+
   private buildDebugQaTraceFilename(timestamp: string): string {
     const safeTimestamp = timestamp.replace(/[:.]/g, '-');
     return `farm-rpg-qa-trace-${safeTimestamp}.json`;
   }
 
+  private buildDebugQaMarkdownFilename(timestamp: string): string {
+    const safeTimestamp = timestamp.replace(/[:.]/g, '-');
+    return `farm-rpg-qa-recap-${safeTimestamp}.md`;
+  }
+
   private downloadJsonFile(filename: string, payload: unknown): void {
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    this.downloadTextFile(filename, JSON.stringify(payload, null, 2), 'application/json;charset=utf-8');
+  }
+
+  private downloadTextFile(filename: string, contents: string, contentType = 'text/plain;charset=utf-8'): void {
+    const blob = new Blob([contents], { type: contentType });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

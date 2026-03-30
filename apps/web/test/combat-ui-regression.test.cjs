@@ -63,9 +63,33 @@ test('combat HUD exposes enemy sprite visual wiring', () => {
 
 test('debug QA exposes local JSON trace export wiring', () => {
   assert.equal(gameSceneSource.includes('data-debug-action="export-trace"'), true);
+  assert.equal(gameSceneSource.includes('data-debug-action="export-markdown"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="debugQaRecapOutcomeFilter"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="debugQaRecapEnemyFilter"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="debugQaScriptEnemyFilter"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="debugQaScriptIntentFilter"'), true);
   assert.equal(gameSceneSource.includes('async exportDebugQaTrace(): Promise<void>'), true);
+  assert.equal(gameSceneSource.includes('private async exportDebugQaMarkdownReport(): Promise<void>'), true);
   assert.equal(gameSceneSource.includes('private buildDebugQaTracePayload(): DebugQaTracePayload'), true);
+  assert.equal(gameSceneSource.includes('private buildDebugQaMarkdownReport(timestamp: string): string'), true);
+  assert.equal(gameSceneSource.includes('private buildDebugQaMarkdownFilename(timestamp: string): string'), true);
+  assert.equal(gameSceneSource.includes('private syncDebugQaFiltersFromInputs(): void'), true);
+  assert.equal(gameSceneSource.includes('private syncDebugQaFiltersToInputs(): void'), true);
+  assert.equal(
+    gameSceneSource.includes('private doesCombatStateMatchRecapFilters(snapshot: CombatEncounterState | null): boolean'),
+    true,
+  );
+  assert.equal(
+    gameSceneSource.includes('private filterCombatDebugReference(reference: CombatDebugReference): CombatDebugReference'),
+    true,
+  );
   assert.equal(gameSceneSource.includes('private downloadJsonFile(filename: string, payload: unknown): void'), true);
+  assert.equal(
+    gameSceneSource.includes(
+      "private downloadTextFile(filename: string, contents: string, contentType = 'text/plain;charset=utf-8'): void",
+    ),
+    true,
+  );
 });
 
 test('debug QA exposes trace import and replay wiring', () => {
@@ -134,6 +158,8 @@ test('combat effect chip styles keep tone variants', () => {
 
 test('debug QA export button keeps dedicated styling', () => {
   assert.equal(stylesSource.includes('.hud-debug-qa-button.export'), true);
+  assert.equal(stylesSource.includes('.hud-debug-qa-button.export.markdown'), true);
   assert.equal(stylesSource.includes('.hud-debug-qa-reference'), true);
+  assert.equal(stylesSource.includes('.hud-debug-qa-reference-filters'), true);
   assert.equal(stylesSource.includes('.hud-debug-qa-reference-output'), true);
 });
