@@ -32,6 +32,50 @@ function hasWindowText(text, fragments) {
   return fragments.some((fragment) => normalized.includes(fragment.toLowerCase()));
 }
 
+async function readCurrentCombatId(request, apiBaseUrl) {
+  const response = await request.get(new URL('/combat/current', apiBaseUrl).toString());
+  if (!response.ok()) {
+    throw new Error(`Failed to read current combat status during cleanup (HTTP ${response.status()}).`);
+  }
+
+  const payload = await response.json();
+  return normalize(payload?.encounter?.id);
+}
+
+async function cleanupAuthCombat(context, apiBaseUrl, encounterId) {
+  const request = context.request;
+  const forfeitUrl = new URL(`/combat/${encounterId}/forfeit`, apiBaseUrl).toString();
+
+  const response = await request.post(forfeitUrl, {
+    headers: {
+      Accept: 'application/json',
+    },
+    data: {},
+  });
+
+  if (!response.ok()) {
+    throw new Error(`Combat forfeit failed during cleanup (HTTP ${response.status()}).`);
+  }
+
+  const payload = await response.json();
+  const forfeitedStatus = normalize(payload?.encounter?.status);
+  if (forfeitedStatus && forfeitedStatus !== 'fled') {
+    throw new Error(`Unexpected combat status after cleanup forfeit: "${forfeitedStatus}".`);
+  }
+
+  const deadline = Date.now() + Math.max(2000, timeoutMs / 2);
+  let lastObservedCombatId = '';
+  while (Date.now() < deadline) {
+    lastObservedCombatId = await readCurrentCombatId(request, apiBaseUrl);
+    if (!lastObservedCombatId) {
+      return { forfeitedStatus, cleaned: true };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+
+  throw new Error(`Combat cleanup did not clear the active encounter (current=${lastObservedCombatId || 'none'}).`);
+}
+
 async function prepareAuthFixture(context) {
   if (!authToken) {
     return false;
@@ -61,6 +105,9 @@ async function main() {
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   const authFixtureApplied = await prepareAuthFixture(context);
   const page = await context.newPage();
+  let combatEncounterId = '';
+  let cleanupError = null;
+  let primaryError = null;
 
   let combatStartRequestCount = 0;
   page.on('request', (request) => {
@@ -167,7 +214,7 @@ async function main() {
       { timeout: timeoutMs },
     );
 
-    const combatEncounterId = normalize(await page.textContent('[data-hud="combatEncounterId"]'));
+    combatEncounterId = normalize(await page.textContent('[data-hud="combatEncounterId"]'));
     const combatStatus = normalize(await page.textContent('[data-hud="combatStatus"]'));
     const combatResult = normalize(await page.textContent('[data-hud="combatResult"]'));
     const combatError = normalize(await page.textContent('[data-hud="combatError"]'));
@@ -202,9 +249,31 @@ async function main() {
       result: 'passed',
     };
     console.log(JSON.stringify(summary, null, 2));
+  } catch (error) {
+    primaryError = error;
+    throw error;
   } finally {
+    if (smokeMode === 'auth' && combatEncounterId) {
+      try {
+        const cleanupResult = await cleanupAuthCombat(context, apiBaseUrl, combatEncounterId);
+        console.log(JSON.stringify({
+          cleanup: {
+            encounterId: combatEncounterId,
+            status: cleanupResult.forfeitedStatus,
+            cleaned: cleanupResult.cleaned,
+          },
+        }));
+      } catch (error) {
+        cleanupError = error;
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`Auth combat cleanup warning: ${message}`);
+      }
+    }
     await context.close();
     await browser.close();
+    if (cleanupError && !primaryError) {
+      throw cleanupError;
+    }
   }
 }
 

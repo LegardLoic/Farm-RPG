@@ -967,6 +967,42 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - run `web smoke auth`
     - logs/summary separes (`guest` vs `auth`).
 
+### Lot 73 - Nettoyage automatique du combat apres smoke auth
+- Frontend QA + CI:
+  - le smoke `auth` cloture maintenant automatiquement le combat ouvert en fin de run via `POST /combat/:id/forfeit`.
+  - verification de nettoyage sur `GET /combat/current` pour eviter les encounters orphelins en staging.
+  - comportement robuste: le cleanup est tente sans masquer une erreur de test preexistante.
+
+### Lot 74 - Dashboard nightly historique 7 jours
+- CI nightly:
+  - generation d'un `summary.json` enrichi avec `runNumber` et `runUrl`.
+  - production d'un `history.json` et d'un `dashboard.md` dans `artifacts/nightly/`.
+  - historique construit sur les 7 derniers runs pour suivre les tendances:
+    - `seed`
+    - `API E2E`
+    - `web smoke guest`
+    - `web smoke auth`.
+
+### Lot 75 - Debug QA: reference scripts combat + preferences locales
+- Frontend Debug QA:
+  - bouton `Load scripted intents` dans le panneau pour charger `GET /combat/debug/scripted-intents`.
+  - rendu lisible in-game des skills joueur, floors scripts et intents ennemis.
+  - gestion d'erreur dediee si endpoint indisponible.
+  - persistance `localStorage` de:
+    - la vitesse auto-play replay
+    - le preset strip calibration.
+
+### Lot 76 - Portraits fallback avec variantes d'etat
+- Assets + manifest:
+  - extension `manifest.portraits` avec etats `normal/hit/cast` pour les ennemis non-boss frequents.
+  - ajout des variantes SVG `hit` et `cast` pour:
+    - `default`
+    - `forest_goblin`
+    - `training_dummy`
+    - `ash_scout`.
+- Frontend combat:
+  - consommation runtime des variantes de portrait selon l'etat HUD (`normal/hit/cast`) quand aucun strip n'est disponible.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1029,9 +1065,12 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - import/replay local JSON des traces QA pour rejouer un contexte de debug
   - replay pas a pas des traces JSON (avance tour/log par tour) avec restauration d'etat
   - replay pas a pas avec auto-play (slow/normal/fast) + pause
+  - persistance locale des preferences QA (vitesse auto-play + preset calibration strips)
   - preset de calibration strips (staging only) pour iteration visuelle rapide
+  - reference live des scripts combat (endpoint debug) chargeable directement dans le panneau `Debug QA`
   - carte ennemi enrichie avec sprite resolu via `enemy.key`
   - portraits fallback dedies pour ennemis non-boss (`manifest.portraits`)
+  - portraits fallback avec variantes d'etat (`normal/hit/cast`) pour ennemis non-boss frequents
   - strips runtime actifs (`idle/hit/cast`) pour player et bosses, avec animation HUD cote ennemi
   - tuning animation centralise dans le manifest (sequences + timings par strip)
 - Chargement web optimise:
@@ -1108,14 +1147,16 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Nightly staging CI instrumentee avec artefacts exploitables pour diagnostics rapides.
 - Nightly staging CI completee avec smoke web Playwright (auth guard + non emission `combat/start` hors session).
 - Nightly staging CI couvre maintenant aussi un smoke web authentifie avec fixture auto (token/cookie).
+- Nightly smoke auth nettoie automatiquement le combat ouvert (`forfeit`) pour eviter l'accumulation d'encounters actifs.
+- Nightly staging publie un dashboard historique 7 jours (`history.json` + `dashboard.md`) pour suivre la tendance smoke/e2e.
 - Endpoint debug readonly disponible pour auditer scripts combat sans lancer un combat complet.
 - Tuning animation hero/boss configurable via manifest sans toucher au code runtime.
 
 ## 9) Prochaines priorites recommandees
-1. Brancher `GET /combat/debug/scripted-intents` dans le panneau `Debug QA` (frontend) pour inspection live in-game.
-2. Ajouter un nettoyage automatique du combat ouvert apres smoke web auth (forfeit) pour eviter l'accumulation d'encounters actifs en staging.
-3. Etendre le mapping portraits fallback a des variantes d'etat (normal/hit/cast) pour les ennemis non-boss les plus frequents.
-4. Ajouter une persistance locale (`localStorage`) du preset strip calibration et de la vitesse auto-play.
-5. Ajouter un mini tableau de bord nightly (history sur 7 jours) pour suivre la tendance guest/auth smoke + API e2e.
+1. Ameliorer le panneau `Debug QA` avec des filtres de recherche sur les intents scripts et un export texte/markdown dedie.
+2. Ajouter des assertions smoke web sur le panneau `Debug QA` (chargement reference + affichage non vide) en mode auth.
+3. Ajouter une alerte simple dans le dashboard nightly quand 2 runs consecutifs passent en `failed`.
+4. Raffiner les variantes visuelles portraits `hit/cast` (palette/contraste) et harmoniser avec les strips boss.
+5. Ajouter un mini mode comparaison de presets strip calibration (A/B rapide) dans `staging`.
 
 

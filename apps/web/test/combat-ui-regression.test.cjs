@@ -41,9 +41,18 @@ test('combat HUD exposes enemy sprite visual wiring', () => {
   assert.equal(gameSceneSource.includes('data-hud="combatEnemySprite"'), true);
   assert.equal(gameSceneSource.includes('data-hud="combatEnemySpriteFallback"'), true);
   assert.equal(gameSceneSource.includes('private renderCombatEnemySprite(): void'), true);
-  assert.equal(gameSceneSource.includes('private getCombatEnemyPortraitPath(enemyKey: string): string | null'), true);
+  assert.equal(
+    gameSceneSource.includes('private getCombatEnemyPortraitPath(enemyKey: string, animation: StripAnimationName): string | null'),
+    true,
+  );
+  assert.equal(gameSceneSource.includes('private resolvePortraitEntryPath('), true);
+  assert.equal(
+    gameSceneSource.includes("private toPortraitStateKey(animation: StripAnimationName): SpriteManifestPortraitState"),
+    true,
+  );
   assert.equal(gameSceneSource.includes('private startEnemyHudStripPlayback('), true);
   assert.equal(gameSceneSource.includes('private getEnemyHudStripPreferredAnimation(): StripAnimationName'), true);
+  assert.equal(gameSceneSource.includes("image.dataset.visualState = ''"), true);
   assert.equal(stylesSource.includes('.combat-enemy-visual'), true);
   assert.equal(stylesSource.includes('.combat-enemy-strip'), true);
   assert.equal(stylesSource.includes('.combat-enemy-visual img[data-visual-type="portrait"]'), true);
@@ -63,6 +72,8 @@ test('debug QA exposes trace import and replay wiring', () => {
   assert.equal(gameSceneSource.includes('data-debug-action="replay-trace-step-next"'), true);
   assert.equal(gameSceneSource.includes('data-debug-action="replay-trace-step-autoplay"'), true);
   assert.equal(gameSceneSource.includes('data-debug-action="replay-trace-step-stop"'), true);
+  assert.equal(gameSceneSource.includes('data-debug-action="load-scripted-intents"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="debugQaScriptedIntents"'), true);
   assert.equal(gameSceneSource.includes('data-hud="debugQaReplayAutoPlaySpeed"'), true);
   assert.equal(gameSceneSource.includes('data-hud="debugQaImportFile"'), true);
   assert.equal(gameSceneSource.includes('private triggerDebugQaTraceImport(): void'), true);
@@ -72,6 +83,11 @@ test('debug QA exposes trace import and replay wiring', () => {
   assert.equal(gameSceneSource.includes('private toggleDebugQaStepReplayAutoPlay(): void'), true);
   assert.equal(gameSceneSource.includes('private stopDebugQaStepReplayAutoPlay(updateHud: boolean): void'), true);
   assert.equal(gameSceneSource.includes('private stopDebugQaStepReplay(restoreBaseline: boolean): void'), true);
+  assert.equal(gameSceneSource.includes('private async loadCombatDebugScriptedIntents(): Promise<void>'), true);
+  assert.equal(gameSceneSource.includes('private formatCombatDebugScriptedIntentsReference(reference: CombatDebugReference): string'), true);
+  assert.equal(gameSceneSource.includes('private readStoredDebugQaReplayAutoPlaySpeed(): DebugQaReplayAutoPlaySpeedKey'), true);
+  assert.equal(gameSceneSource.includes('private persistDebugQaReplayAutoPlaySpeed(speed: DebugQaReplayAutoPlaySpeedKey): void'), true);
+  assert.equal(gameSceneSource.includes('DEBUG_QA_REPLAY_AUTOPLAY_SPEED_STORAGE_KEY'), true);
 });
 
 test('staging strip calibration preset wiring exists', () => {
@@ -80,6 +96,8 @@ test('staging strip calibration preset wiring exists', () => {
   assert.equal(gameSceneSource.includes('private applyStripCalibrationPreset(): void'), true);
   assert.equal(gameSceneSource.includes('private getActiveStripCalibrationPreset(): StripCalibrationPreset | null'), true);
   assert.equal(gameSceneSource.includes('private refreshStripCalibrationRuntime(): void'), true);
+  assert.equal(gameSceneSource.includes('private readStoredStripCalibrationPreset(): StripCalibrationPresetKey'), true);
+  assert.equal(gameSceneSource.includes('private persistStripCalibrationPreset(preset: StripCalibrationPresetKey): void'), true);
 });
 
 test('strip runtime animation wiring exists for player and boss assets', () => {
@@ -113,4 +131,6 @@ test('combat effect chip styles keep tone variants', () => {
 
 test('debug QA export button keeps dedicated styling', () => {
   assert.equal(stylesSource.includes('.hud-debug-qa-button.export'), true);
+  assert.equal(stylesSource.includes('.hud-debug-qa-reference'), true);
+  assert.equal(stylesSource.includes('.hud-debug-qa-reference-output'), true);
 });
