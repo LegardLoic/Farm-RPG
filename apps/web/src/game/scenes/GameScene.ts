@@ -239,6 +239,17 @@ type ImportedDebugQaTrace = {
   combatState: CombatEncounterState | null;
 };
 
+type StripAnimationName = 'idle' | 'hit' | 'cast';
+
+type HudStripPlaybackState = {
+  enemyKey: string;
+  stripKey: string;
+  animation: StripAnimationName;
+  frames: number[];
+  frameCount: number;
+  frameCursor: number;
+};
+
 const DEBUG_QA_PRESET_OPTIONS: DebugQaPresetOption[] = [
   { key: 'starter', label: 'Starter' },
   { key: 'tower_mid', label: 'Tower mid' },
@@ -357,6 +368,12 @@ export class GameScene extends Phaser.Scene {
   private saveSlotsError: string | null = null;
   private saveSlotsRenderSignature = '';
   private spriteManifest: SpriteManifest | null = null;
+  private playerUsesStripAnimation = false;
+  private playerStripActionTimer: Phaser.Time.TimerEvent | null = null;
+  private enemyHudStripPlayback: HudStripPlaybackState | null = null;
+  private enemyHudStripIntervalId: number | null = null;
+  private enemyHudStripOverrideAnimation: StripAnimationName | null = null;
+  private enemyHudStripOverrideTimeoutId: number | null = null;
 
   private debugQaPanelRoot: HTMLElement | null = null;
   private debugQaStatusValue: HTMLElement | null = null;
@@ -571,6 +588,10 @@ export class GameScene extends Phaser.Scene {
       this.hudState.stamina = Math.max(0, this.hudState.stamina - 0.01);
     }
 
+    if (this.playerUsesStripAnimation && !this.playerStripActionTimer) {
+      this.playPlayerStripAnimation('idle');
+    }
+
     this.player.setTint(velocityX !== 0 || velocityY !== 0 ? 0xd8f1ff : 0xffffff);
     this.updateHud();
   }
@@ -587,16 +608,35 @@ export class GameScene extends Phaser.Scene {
       throw new Error('Player sprite manifest entry is missing');
     }
 
-    if (!this.textures.exists(playerSprite.key)) {
-      throw new Error(`Player sprite texture not loaded: ${playerSprite.key}`);
-    }
+    const playerStrip = this.getStripManifestEntry('player-hero');
+    const canUsePlayerStrip = Boolean(playerStrip && this.textures.exists(playerStrip.key));
 
-    this.player = this.physics.add.sprite(240, 220, playerSprite.key);
-    this.player.setOrigin(playerSprite.origin.x, playerSprite.origin.y);
-    this.player.setScale(playerSprite.scale.x, playerSprite.scale.y);
-    this.player.setCollideWorldBounds(true);
-    this.player.setSize(playerSprite.physics.width, playerSprite.physics.height);
-    this.player.setOffset(playerSprite.physics.offsetX, playerSprite.physics.offsetY);
+    if (canUsePlayerStrip && playerStrip) {
+      this.ensureStripAnimations(playerStrip);
+      const idleFrames = this.getStripFrames(playerStrip, 'idle');
+      const firstFrame = idleFrames[0] ?? 0;
+
+      this.player = this.physics.add.sprite(240, 220, playerStrip.key, firstFrame);
+      this.player.setOrigin(playerStrip.origin?.x ?? playerSprite.origin.x, playerStrip.origin?.y ?? playerSprite.origin.y);
+      this.player.setScale(playerStrip.scale?.x ?? playerSprite.scale.x, playerStrip.scale?.y ?? playerSprite.scale.y);
+      this.player.setCollideWorldBounds(true);
+      this.player.setSize(playerStrip.physics?.width ?? playerSprite.physics.width, playerStrip.physics?.height ?? playerSprite.physics.height);
+      this.player.setOffset(playerStrip.physics?.offsetX ?? playerSprite.physics.offsetX, playerStrip.physics?.offsetY ?? playerSprite.physics.offsetY);
+      this.playerUsesStripAnimation = true;
+      this.playPlayerStripAnimation('idle', true);
+    } else {
+      if (!this.textures.exists(playerSprite.key)) {
+        throw new Error(`Player sprite texture not loaded: ${playerSprite.key}`);
+      }
+
+      this.player = this.physics.add.sprite(240, 220, playerSprite.key);
+      this.player.setOrigin(playerSprite.origin.x, playerSprite.origin.y);
+      this.player.setScale(playerSprite.scale.x, playerSprite.scale.y);
+      this.player.setCollideWorldBounds(true);
+      this.player.setSize(playerSprite.physics.width, playerSprite.physics.height);
+      this.player.setOffset(playerSprite.physics.offsetX, playerSprite.physics.offsetY);
+      this.playerUsesStripAnimation = false;
+    }
 
     const obstacles = [
       this.createObstacle(360, 220, 84, 28),
@@ -677,6 +717,7 @@ export class GameScene extends Phaser.Scene {
             <div class="combat-card enemy">
               <span>Enemy</span>
               <div class="combat-enemy-visual">
+                <div class="combat-enemy-strip" data-hud="combatEnemyStrip" hidden></div>
                 <img data-hud="combatEnemySprite" alt="Enemy sprite" hidden />
                 <span data-hud="combatEnemySpriteFallback">No enemy</span>
               </div>
@@ -914,6 +955,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private teardownHud(): void {
+    if (this.playerStripActionTimer) {
+      this.playerStripActionTimer.remove(false);
+      this.playerStripActionTimer = null;
+    }
+    this.stopEnemyHudStripPlayback();
+    this.clearEnemyHudStripOverride();
+
     if (this.debugQaImportFileInput) {
       this.debugQaImportFileInput.removeEventListener('change', this.onDebugQaImportFileChange);
     }
@@ -986,6 +1034,7 @@ export class GameScene extends Phaser.Scene {
     this.debugQaError = null;
     this.debugQaImportedTrace = null;
     this.spriteManifest = null;
+    this.playerUsesStripAnimation = false;
   }
   private updateHud(): void {
     if (!this.hudRoot) {
@@ -1888,14 +1937,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   private renderCombatEnemySprite(): void {
+    const stripElement = this.hudRoot?.querySelector<HTMLElement>('[data-hud="combatEnemyStrip"]');
     const image = this.hudRoot?.querySelector<HTMLImageElement>('[data-hud="combatEnemySprite"]');
     const fallback = this.hudRoot?.querySelector<HTMLElement>('[data-hud="combatEnemySpriteFallback"]');
-    if (!image || !fallback) {
+    if (!stripElement || !image || !fallback) {
       return;
     }
 
     const enemy = this.combatState?.enemy;
     if (!enemy) {
+      this.stopEnemyHudStripPlayback();
+      stripElement.hidden = true;
+      stripElement.style.removeProperty('background-image');
       image.hidden = true;
       image.removeAttribute('src');
       image.dataset.enemyKey = '';
@@ -1903,6 +1956,23 @@ export class GameScene extends Phaser.Scene {
       fallback.textContent = 'No enemy';
       return;
     }
+
+    const enemyStrip = this.getStripManifestEntry(enemy.key);
+    if (enemyStrip?.path) {
+      const preferredAnimation = this.getEnemyHudStripPreferredAnimation();
+      this.startEnemyHudStripPlayback(stripElement, enemy.key, enemyStrip, preferredAnimation);
+      stripElement.hidden = false;
+      image.hidden = true;
+      image.removeAttribute('src');
+      image.dataset.enemyKey = '';
+      fallback.hidden = true;
+      fallback.textContent = '';
+      return;
+    }
+
+    this.stopEnemyHudStripPlayback();
+    stripElement.hidden = true;
+    stripElement.style.removeProperty('background-image');
 
     const spritePath = this.getCombatEnemySpritePath(enemy.key);
     if (!spritePath) {
@@ -1922,6 +1992,212 @@ export class GameScene extends Phaser.Scene {
     image.hidden = false;
     fallback.hidden = true;
     fallback.textContent = '';
+  }
+
+  private getEnemyHudStripPreferredAnimation(): StripAnimationName {
+    if (this.enemyHudStripOverrideAnimation) {
+      return this.enemyHudStripOverrideAnimation;
+    }
+
+    if (!this.combatState || this.combatState.status !== 'active') {
+      return 'idle';
+    }
+
+    return this.combatState.turn === 'enemy' ? 'cast' : 'idle';
+  }
+
+  private startEnemyHudStripPlayback(
+    element: HTMLElement,
+    enemyKey: string,
+    strip: SpriteManifestStripEntry,
+    animation: StripAnimationName,
+  ): void {
+    const frames = this.getStripFrames(strip, animation);
+    if (frames.length === 0) {
+      this.stopEnemyHudStripPlayback();
+      return;
+    }
+
+    const shouldKeepCurrent =
+      this.enemyHudStripPlayback?.enemyKey === enemyKey &&
+      this.enemyHudStripPlayback?.stripKey === strip.key &&
+      this.enemyHudStripPlayback?.animation === animation;
+
+    if (shouldKeepCurrent) {
+      return;
+    }
+
+    this.stopEnemyHudStripPlayback();
+
+    const frameCount = Math.max(1, strip.frameCount);
+    element.style.backgroundImage = `url("${this.resolveSpriteAssetPath(strip.path)}")`;
+    element.style.backgroundRepeat = 'no-repeat';
+    element.style.backgroundSize = `${frameCount * 100}% 100%`;
+    this.applyEnemyHudStripFrame(element, frames[0] ?? 0, frameCount);
+
+    this.enemyHudStripPlayback = {
+      enemyKey,
+      stripKey: strip.key,
+      animation,
+      frames,
+      frameCount,
+      frameCursor: 0,
+    };
+    element.dataset.enemyKey = enemyKey;
+    element.dataset.stripAnimation = animation;
+
+    if (frames.length <= 1) {
+      return;
+    }
+
+    this.enemyHudStripIntervalId = window.setInterval(() => {
+      if (!this.enemyHudStripPlayback) {
+        return;
+      }
+
+      this.enemyHudStripPlayback.frameCursor =
+        (this.enemyHudStripPlayback.frameCursor + 1) % this.enemyHudStripPlayback.frames.length;
+      const frameIndex = this.enemyHudStripPlayback.frames[this.enemyHudStripPlayback.frameCursor] ?? 0;
+      this.applyEnemyHudStripFrame(element, frameIndex, this.enemyHudStripPlayback.frameCount);
+    }, 240);
+  }
+
+  private applyEnemyHudStripFrame(element: HTMLElement, frameIndex: number, frameCount: number): void {
+    const safeFrameCount = Math.max(1, frameCount);
+    const clampedIndex = Phaser.Math.Clamp(frameIndex, 0, safeFrameCount - 1);
+    const ratio = safeFrameCount === 1 ? 0 : clampedIndex / (safeFrameCount - 1);
+    element.style.backgroundPosition = `${ratio * 100}% 0%`;
+  }
+
+  private stopEnemyHudStripPlayback(): void {
+    if (this.enemyHudStripIntervalId !== null) {
+      window.clearInterval(this.enemyHudStripIntervalId);
+      this.enemyHudStripIntervalId = null;
+    }
+    this.enemyHudStripPlayback = null;
+  }
+
+  private triggerEnemyHudStripOverride(animation: StripAnimationName, durationMs: number): void {
+    this.enemyHudStripOverrideAnimation = animation;
+
+    if (this.enemyHudStripOverrideTimeoutId !== null) {
+      window.clearTimeout(this.enemyHudStripOverrideTimeoutId);
+      this.enemyHudStripOverrideTimeoutId = null;
+    }
+
+    this.enemyHudStripOverrideTimeoutId = window.setTimeout(() => {
+      this.enemyHudStripOverrideAnimation = null;
+      this.enemyHudStripOverrideTimeoutId = null;
+      this.updateHud();
+    }, durationMs);
+  }
+
+  private clearEnemyHudStripOverride(): void {
+    if (this.enemyHudStripOverrideTimeoutId !== null) {
+      window.clearTimeout(this.enemyHudStripOverrideTimeoutId);
+      this.enemyHudStripOverrideTimeoutId = null;
+    }
+    this.enemyHudStripOverrideAnimation = null;
+  }
+
+  private getStripManifestEntry(entityKey: string): SpriteManifestStripEntry | null {
+    const manifest = this.getSpriteManifest();
+    if (!manifest.strips) {
+      return null;
+    }
+
+    const directEntry = manifest.strips[entityKey];
+    if (directEntry) {
+      return directEntry;
+    }
+
+    for (const entry of Object.values(manifest.strips)) {
+      if (entry.key === entityKey) {
+        return entry;
+      }
+    }
+
+    return null;
+  }
+
+  private getStripFrames(strip: SpriteManifestStripEntry, animation: StripAnimationName): number[] {
+    const maxFrame = Math.max(0, strip.frameCount - 1);
+    const configured = strip.animations?.[animation];
+    const sanitized = Array.isArray(configured)
+      ? configured.filter((frame): frame is number => Number.isInteger(frame) && frame >= 0 && frame <= maxFrame)
+      : [];
+
+    if (sanitized.length > 0) {
+      return sanitized;
+    }
+
+    if (animation === 'hit') {
+      return [Math.min(1, maxFrame), maxFrame];
+    }
+    if (animation === 'cast') {
+      return [0, maxFrame];
+    }
+    if (maxFrame <= 0) {
+      return [0];
+    }
+    return [0, Math.min(1, maxFrame)];
+  }
+
+  private ensureStripAnimations(strip: SpriteManifestStripEntry): void {
+    for (const animation of ['idle', 'hit', 'cast'] as const) {
+      const animationKey = `${strip.key}-${animation}`;
+      if (this.anims.exists(animationKey)) {
+        continue;
+      }
+
+      const frames = this.getStripFrames(strip, animation);
+      this.anims.create({
+        key: animationKey,
+        frames: this.anims.generateFrameNumbers(strip.key, { frames }),
+        frameRate: animation === 'idle' ? 4 : 8,
+        repeat: animation === 'idle' ? -1 : 0,
+      });
+    }
+  }
+
+  private playPlayerStripAnimation(animation: StripAnimationName, force = false): void {
+    if (!this.playerUsesStripAnimation || !this.player) {
+      return;
+    }
+
+    const playerStrip = this.getStripManifestEntry('player-hero');
+    if (!playerStrip) {
+      return;
+    }
+
+    const animationKey = `${playerStrip.key}-${animation}`;
+    if (!this.anims.exists(animationKey)) {
+      return;
+    }
+
+    const currentKey = this.player.anims.currentAnim?.key;
+    if (!force && currentKey === animationKey) {
+      return;
+    }
+
+    this.player.play(animationKey, true);
+  }
+
+  private triggerPlayerStripAction(animation: Exclude<StripAnimationName, 'idle'>, durationMs = 360): void {
+    if (!this.playerUsesStripAnimation) {
+      return;
+    }
+
+    if (this.playerStripActionTimer) {
+      this.playerStripActionTimer.remove(false);
+      this.playerStripActionTimer = null;
+    }
+
+    this.playPlayerStripAnimation(animation, true);
+    this.playerStripActionTimer = this.time.delayedCall(durationMs, () => {
+      this.playerStripActionTimer = null;
+      this.playPlayerStripAnimation('idle', true);
+    });
   }
 
   private getCombatEnemySpritePath(enemyKey: string): string | null {
@@ -2368,6 +2644,7 @@ export class GameScene extends Phaser.Scene {
         throw new Error('Combat action returned an empty payload.');
       }
 
+      this.playPlayerCombatActionAnimation(action);
       this.applyCombatSnapshot(encounter);
       await this.refreshGameplayState();
       await this.refreshAutoSaveState();
@@ -2439,6 +2716,15 @@ export class GameScene extends Phaser.Scene {
       }
       this.updateHud();
     }
+  }
+
+  private playPlayerCombatActionAnimation(action: CombatActionName): void {
+    if (action === 'attack' || action === 'defend') {
+      this.triggerPlayerStripAction('hit');
+      return;
+    }
+
+    this.triggerPlayerStripAction('cast');
   }
 
   private async logout(): Promise<void> {
@@ -2787,6 +3073,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyCombatSnapshot(snapshot: CombatEncounterState): void {
+    const previousPlayerHp = this.combatState?.player.hp ?? this.hudState.hp;
+    const previousEnemyHp = this.combatState?.enemy.currentHp ?? null;
+
     this.combatEncounterId = snapshot.id;
     this.combatState = snapshot;
     this.combatStatus = snapshot.status;
@@ -2794,6 +3083,16 @@ export class GameScene extends Phaser.Scene {
     this.combatMessage = this.resolveCombatMessage(snapshot);
     this.combatError = null;
     this.syncHudStateFromCombat(snapshot);
+
+    if (snapshot.player.hp < previousPlayerHp) {
+      this.triggerPlayerStripAction('hit', 280);
+    }
+
+    if (previousEnemyHp !== null && snapshot.enemy.currentHp < previousEnemyHp) {
+      this.triggerEnemyHudStripOverride('hit', 460);
+    } else if (snapshot.status === 'active' && snapshot.turn === 'enemy') {
+      this.triggerEnemyHudStripOverride('cast', 420);
+    }
   }
 
   private resetCombatState(): void {
@@ -2804,6 +3103,8 @@ export class GameScene extends Phaser.Scene {
     this.combatMessage = this.isAuthenticated ? 'Aucun combat actif.' : 'Connecte toi pour lancer un combat.';
     this.combatError = null;
     this.syncHudStateFromCombat(null);
+    this.stopEnemyHudStripPlayback();
+    this.clearEnemyHudStripOverride();
   }
 
   private syncHudStateFromCombat(snapshot: CombatEncounterState | null): void {

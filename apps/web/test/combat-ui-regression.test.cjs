@@ -6,9 +6,11 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 
 const gameScenePath = join(__dirname, '..', 'src', 'game', 'scenes', 'GameScene.ts');
+const bootScenePath = join(__dirname, '..', 'src', 'game', 'scenes', 'BootScene.ts');
 const stylesPath = join(__dirname, '..', 'src', 'styles.css');
 
 const gameSceneSource = readFileSync(gameScenePath, 'utf8');
+const bootSceneSource = readFileSync(bootScenePath, 'utf8');
 const stylesSource = readFileSync(stylesPath, 'utf8');
 
 test('combat HUD keeps all expected action buttons', () => {
@@ -35,10 +37,14 @@ test('combat HUD exposes telemetry field and renderer hook', () => {
 });
 
 test('combat HUD exposes enemy sprite visual wiring', () => {
+  assert.equal(gameSceneSource.includes('data-hud="combatEnemyStrip"'), true);
   assert.equal(gameSceneSource.includes('data-hud="combatEnemySprite"'), true);
   assert.equal(gameSceneSource.includes('data-hud="combatEnemySpriteFallback"'), true);
   assert.equal(gameSceneSource.includes('private renderCombatEnemySprite(): void'), true);
+  assert.equal(gameSceneSource.includes('private startEnemyHudStripPlayback('), true);
+  assert.equal(gameSceneSource.includes('private getEnemyHudStripPreferredAnimation(): StripAnimationName'), true);
   assert.equal(stylesSource.includes('.combat-enemy-visual'), true);
+  assert.equal(stylesSource.includes('.combat-enemy-strip'), true);
 });
 
 test('debug QA exposes local JSON trace export wiring', () => {
@@ -54,6 +60,14 @@ test('debug QA exposes trace import and replay wiring', () => {
   assert.equal(gameSceneSource.includes('data-hud="debugQaImportFile"'), true);
   assert.equal(gameSceneSource.includes('private triggerDebugQaTraceImport(): void'), true);
   assert.equal(gameSceneSource.includes('private replayImportedDebugQaTrace(): void'), true);
+});
+
+test('strip runtime animation wiring exists for player and boss assets', () => {
+  assert.equal(bootSceneSource.includes("this.load.spritesheet('player-hero-strip'"), true);
+  assert.equal(bootSceneSource.includes("this.load.spritesheet('enemy-thorn-beast-alpha-strip'"), true);
+  assert.equal(gameSceneSource.includes('private ensureStripAnimations(strip: SpriteManifestStripEntry): void'), true);
+  assert.equal(gameSceneSource.includes('private playPlayerStripAnimation(animation: StripAnimationName, force = false): void'), true);
+  assert.equal(gameSceneSource.includes('private playPlayerCombatActionAnimation(action: CombatActionName): void'), true);
 });
 
 test('combat intent mapping still covers critical scripted intents', () => {

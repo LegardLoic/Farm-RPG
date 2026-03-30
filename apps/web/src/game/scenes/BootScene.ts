@@ -9,7 +9,11 @@ export class BootScene extends Phaser.Scene {
     this.load.setPath('/assets/sprites');
     this.load.json('sprite-manifest', 'manifest.json');
     this.load.svg('player-hero', 'characters/player-hero.svg');
-    this.load.svg('player-hero-strip', 'strips/characters/player-hero-strip.svg');
+    this.load.spritesheet('player-hero-strip', 'strips/characters/player-hero-strip.svg', {
+      frameWidth: 64,
+      frameHeight: 64,
+      endFrame: 2,
+    });
     this.load.svg('enemy-forest-goblin', 'characters/enemy-forest-goblin.svg');
     this.load.svg('enemy-training-dummy', 'characters/enemy-training-dummy.svg');
     this.load.svg('enemy-ash-scout', 'characters/enemy-ash-scout.svg');
@@ -17,10 +21,26 @@ export class BootScene extends Phaser.Scene {
     this.load.svg('enemy-cinder-warden', 'characters/enemy-cinder-warden.svg');
     this.load.svg('enemy-ash-vanguard-captain', 'characters/enemy-ash-vanguard-captain.svg');
     this.load.svg('enemy-curse-heart-avatar', 'characters/enemy-curse-heart-avatar.svg');
-    this.load.svg('enemy-thorn-beast-alpha-strip', 'strips/characters/enemy-thorn-beast-alpha-strip.svg');
-    this.load.svg('enemy-cinder-warden-strip', 'strips/characters/enemy-cinder-warden-strip.svg');
-    this.load.svg('enemy-ash-vanguard-captain-strip', 'strips/characters/enemy-ash-vanguard-captain-strip.svg');
-    this.load.svg('enemy-curse-heart-avatar-strip', 'strips/characters/enemy-curse-heart-avatar-strip.svg');
+    this.load.spritesheet('enemy-thorn-beast-alpha-strip', 'strips/characters/enemy-thorn-beast-alpha-strip.svg', {
+      frameWidth: 64,
+      frameHeight: 64,
+      endFrame: 2,
+    });
+    this.load.spritesheet('enemy-cinder-warden-strip', 'strips/characters/enemy-cinder-warden-strip.svg', {
+      frameWidth: 64,
+      frameHeight: 64,
+      endFrame: 2,
+    });
+    this.load.spritesheet('enemy-ash-vanguard-captain-strip', 'strips/characters/enemy-ash-vanguard-captain-strip.svg', {
+      frameWidth: 64,
+      frameHeight: 64,
+      endFrame: 2,
+    });
+    this.load.spritesheet('enemy-curse-heart-avatar-strip', 'strips/characters/enemy-curse-heart-avatar-strip.svg', {
+      frameWidth: 64,
+      frameHeight: 64,
+      endFrame: 2,
+    });
   }
 
   create(): void {

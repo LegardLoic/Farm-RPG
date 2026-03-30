@@ -838,6 +838,22 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Qualite:
   - non-regression web etendue pour verifier le wiring import/replay + sprite ennemi HUD.
 
+### Lot 63 - Runtime strips: animations player + boss dans le HUD combat
+- Frontend Phaser:
+  - `BootScene` charge maintenant les strips player/boss en `spritesheet` (frames exploitables en runtime).
+  - `GameScene` cree les animations `idle/hit/cast` a partir du `manifest.strips`.
+  - player hero passe sur le strip runtime avec:
+    - `idle` en boucle
+    - `hit/cast` declenchees sur actions combat et impacts recus.
+- HUD combat:
+  - carte ennemi upgradee avec un rendu strip anime quand un strip existe pour `enemy.key`.
+  - fallback automatique vers sprite statique puis fallback texte si aucun asset disponible.
+  - transitions d'animation ennemie:
+    - `cast` sur tour ennemi
+    - `hit` quand les HP ennemis baissent.
+- Qualite:
+  - tests web de non-regression etendus sur le wiring strips runtime (BootScene + GameScene + styles).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -899,6 +915,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - export local JSON des traces QA depuis le panneau `Debug QA`
   - import/replay local JSON des traces QA pour rejouer un contexte de debug
   - carte ennemi enrichie avec sprite resolu via `enemy.key`
+  - strips runtime actifs (`idle/hit/cast`) pour player et bosses, avec animation HUD cote ennemi
 - Chargement web optimise:
   - entree legere
   - bootstrap asynchrone
@@ -967,12 +984,13 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Suite e2e dediee auth/combat/save-load pour validation black-box sur API locale ou distante.
 - Workflow nightly staging e2e pour verification continue des routes critiques avec seed fixtures.
 - Manifest sprites etendu avec metadata `strips` pour preparer l'animation runtime.
+- Runtime strips Phaser branche pour player + bosses (animation declenchee selon etat combat).
 
 ## 9) Prochaines priorites recommandees
-1. Brancher les strips en runtime Phaser (animations `idle/hit/cast`) pour player et boss, au-dela du preload.
-2. Ajouter un mode replay "pas a pas" des traces QA (avance de logs/tours) au lieu d'un apply snapshot direct.
-3. Etendre la nightly CI staging avec publication d'un resume (artefact JSON + statut lisible en sortie workflow).
-4. Ajouter une smoke QA web automatisee (boot + auth state + start combat) pour completer la couverture API e2e.
-5. Ajouter un mapping de portraits fallback (spritesheets ou miniatures dediees) pour tous les ennemis non-boss.
+1. Ajouter un mode replay "pas a pas" des traces QA (avance de logs/tours) au lieu d'un apply snapshot direct.
+2. Etendre la nightly CI staging avec publication d'un resume (artefact JSON + statut lisible en sortie workflow).
+3. Ajouter une smoke QA web automatisee (boot + auth state + start combat) pour completer la couverture API e2e.
+4. Ajouter un mapping de portraits fallback (spritesheets ou miniatures dediees) pour tous les ennemis non-boss.
+5. Ajouter un endpoint API de lecture des intents/skills scriptes (debug readonly) pour valider les telegraphes cote QA sans jouer un combat complet.
 
 
