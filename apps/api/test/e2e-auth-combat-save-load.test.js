@@ -10,6 +10,9 @@ const ACCESS_TOKEN_SECRET = process.env.E2E_ACCESS_TOKEN_SECRET ?? process.env.A
 const USER_ID = process.env.E2E_USER_ID;
 const SAVE_SLOT = Number(process.env.E2E_SAVE_SLOT ?? '3');
 const ACCESS_TOKEN_TTL = process.env.E2E_ACCESS_TOKEN_TTL ?? '15m';
+const QUEST_KEY = 'story_floor_8';
+const SHOP_OFFER_KEY = 'iron_sword_basic';
+const AUTO_RESTORE_SLOT = 2;
 
 function requireEnv(value, name) {
   if (typeof value === 'string' && value.trim().length > 0) {
@@ -116,4 +119,86 @@ test('e2e auth/me, combat/start, save capture, and save load all work together',
   const combatAfterLoad = await requestJson('/combat/current');
   assert.equal(combatAfterLoad.status, 'ok');
   assert.equal(combatAfterLoad.encounter, null);
+
+  const questListBeforeClaim = await requestJson('/quests');
+  assert.equal(questListBeforeClaim.status, 'ok');
+  assert.equal(Array.isArray(questListBeforeClaim.quests), true, 'GET /quests should return a quests array');
+
+  const questBeforeClaim = findByKey(
+    questListBeforeClaim.quests,
+    QUEST_KEY,
+    'claimable quest missing from GET /quests response',
+  );
+  assert.equal(questBeforeClaim.status, 'completed', 'fixture quest should be completed before claim');
+  assert.equal(questBeforeClaim.canClaim, true, 'fixture quest should be claimable before claim');
+
+  const claimResult = await requestJson(`/quests/${QUEST_KEY}/claim`, { method: 'POST' });
+  assert.equal(claimResult.status, 'ok');
+  assert.equal(claimResult.quest.key, QUEST_KEY);
+  assert.equal(claimResult.quest.status, 'claimed', 'quest claim should return claimed status');
+  assert.equal(claimResult.quest.canClaim, false, 'quest claim should clear claimability');
+  assert.equal(claimResult.quest.rewards.experience > 0, true, 'quest claim should return rewards');
+
+  const questListAfterClaim = await requestJson('/quests');
+  assert.equal(questListAfterClaim.status, 'ok');
+  const claimedQuest = findByKey(
+    questListAfterClaim.quests,
+    QUEST_KEY,
+    'claimed quest missing from GET /quests response',
+  );
+  assert.equal(claimedQuest.status, 'claimed', 'GET /quests should reflect the claimed quest');
+  assert.equal(claimedQuest.canClaim, false, 'claimed quest should no longer be claimable');
+
+  const blacksmithShop = await requestJson('/shops/blacksmith');
+  assert.equal(blacksmithShop.status, 'ok');
+  assert.equal(blacksmithShop.shop.unlocked, true, 'blacksmith shop should be unlocked in the fixture');
+  assert.equal(Array.isArray(blacksmithShop.shop.offers), true, 'blacksmith shop should expose offers');
+
+  const blacksmithOffer = findByKey(
+    blacksmithShop.shop.offers,
+    SHOP_OFFER_KEY,
+    'expected blacksmith offer missing from GET /shops/blacksmith response',
+    'offerKey',
+  );
+
+  const purchaseResult = await requestJson('/shops/blacksmith/buy', {
+    method: 'POST',
+    body: {
+      offerKey: SHOP_OFFER_KEY,
+      quantity: 1,
+    },
+  });
+
+  assert.equal(purchaseResult.status, 'ok');
+  assert.equal(purchaseResult.purchase.offer.offerKey, SHOP_OFFER_KEY);
+  assert.equal(purchaseResult.purchase.offer.itemKey, blacksmithOffer.itemKey);
+  assert.equal(purchaseResult.purchase.quantity, 1);
+  assert.equal(purchaseResult.purchase.totalCost, blacksmithOffer.goldPrice);
+  assert.equal(purchaseResult.purchase.inventoryItem.itemKey, blacksmithOffer.itemKey);
+  assert.equal(purchaseResult.purchase.inventoryItem.quantityAdded, 1);
+  assert.equal(purchaseResult.purchase.inventoryItem.totalQuantity, 1);
+  assert.equal(typeof purchaseResult.purchase.newGold, 'number');
+  assert.equal(purchaseResult.purchase.newGold >= 0, true, 'purchase should return a non-negative gold total');
+
+  const autosaveRestore = await requestJson(`/saves/auto/restore/${AUTO_RESTORE_SLOT}`, {
+    method: 'POST',
+    body: {},
+  });
+
+  assert.equal(autosaveRestore.status, 'ok');
+  assert.equal(autosaveRestore.save.slot, AUTO_RESTORE_SLOT);
+  assert.equal(
+    autosaveRestore.save.label.includes('AUTO'),
+    true,
+    'autosave restore label should include AUTO',
+  );
 });
+
+function findByKey(items, key, failureMessage, property = 'key') {
+  const entry = Array.isArray(items)
+    ? items.find((item) => item && typeof item === 'object' && item[property] === key)
+    : undefined;
+
+  assert.ok(entry, failureMessage);
+  return entry;
+}

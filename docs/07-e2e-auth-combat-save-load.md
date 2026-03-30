@@ -6,7 +6,8 @@ Ce test e2e valide le flux complet suivant sur une API deployee ou locale:
 2. demarrage de combat avec `POST /combat/start`
 3. capture d'un slot de sauvegarde avec `POST /saves/:slot/capture`
 4. chargement du slot avec `POST /saves/:slot/load`
-5. verification finale que le combat actif est bien cloture apres le `load`
+5. verification du claim d'une quete, d'un achat au forgeron et d'une restauration autosave
+6. verification finale que le combat actif est bien cloture apres le `load`
 
 ## Preconditions
 
@@ -14,6 +15,10 @@ Ce test e2e valide le flux complet suivant sur une API deployee ou locale:
 - Une API demarree et pointee vers cette base.
 - Un token JWT signe avec le meme `ACCESS_TOKEN_SECRET` que l'API.
 - Un `userId` present dans la base de fixtures.
+- Le scenario `03-active-combat-save-state.sql` doit aussi fournir:
+  - le flag `blacksmith_shop_tier_1_unlocked`
+  - une quete `story_floor_8` en statut `completed`
+  - un autosave existant pour la restauration vers un slot manuel.
 
 ## Fixtures recommandees
 
@@ -30,6 +35,7 @@ Le fichier `03-active-combat-save-state.sql` fournit:
 - un combat actif existant
 - un slot de sauvegarde initial
 - un autosave de reference
+- des donnees de progression suffisantes pour tester `GET /quests`, `POST /quests/story_floor_8/claim`, `GET /shops/blacksmith`, `POST /shops/blacksmith/buy`, et `POST /saves/auto/restore/2`
 
 ## Variables d'environnement
 
@@ -67,6 +73,10 @@ npm run test:e2e --workspace @farm-rpg/api
 - `POST /combat/start` retourne un combat actif.
 - `POST /saves/:slot/capture` cree ou met a jour le slot choisi.
 - `POST /saves/:slot/load` applique le snapshot et cloture le combat actif.
+- `GET /quests` expose au moins une quete claimable.
+- `POST /quests/story_floor_8/claim` retourne la quete au statut `claimed`.
+- `GET /shops/blacksmith` expose le shop ouvert et `POST /shops/blacksmith/buy` consomme l'offre `iron_sword_basic`.
+- `POST /saves/auto/restore/2` retourne un slot manuel restaure avec une etiquette contenant `AUTO`.
 - `GET /combat/current` retourne `null` apres le chargement du slot.
 
 ## Notes

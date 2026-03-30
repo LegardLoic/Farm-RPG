@@ -58,6 +58,26 @@ INSERT INTO tower_progression (
   '2026-03-30T08:20:00Z'
 );
 
+INSERT INTO world_flags (user_id, flag_key, unlocked_at) VALUES
+  ('33333333-3333-3333-3333-333333333333', 'blacksmith_shop_tier_1_unlocked', '2026-03-30T08:20:05Z'),
+  ('33333333-3333-3333-3333-333333333333', 'story_floor_8_cleared', '2026-03-30T08:20:05Z');
+
+INSERT INTO quest_states (
+  user_id,
+  quest_key,
+  status,
+  progress_json,
+  created_at,
+  updated_at
+) VALUES (
+  '33333333-3333-3333-3333-333333333333',
+  'story_floor_8',
+  'completed',
+  '{"victoriesTotal":8,"enemyVictories":{"ash_vanguard_captain":1},"towerHighestFloor":8,"lastVictoryAt":"2026-03-30T08:19:30Z","completedAt":"2026-03-30T08:19:40Z","claimedAt":null}'::jsonb,
+  '2026-03-30T08:19:40Z',
+  '2026-03-30T08:19:40Z'
+);
+
 INSERT INTO combat_encounters (
   id,
   user_id,
