@@ -1,0 +1,40 @@
+name: Fixtures Integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenarios:
+        description: "Comma-separated fixture scenarios: baseline-authenticated-user, mid-tower-progression, active-combat-save-state, all"
+        required: true
+        default: "all"
+      reset_first:
+        description: "Run 00-reset.sql before the selected scenarios"
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  fixtures:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL || vars.DATABASE_URL }}
+      FIXTURE_SCENARIOS: ${{ inputs.scenarios }}
+      FIXTURE_RESET_FIRST: ${{ inputs.reset_first }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Validate configuration
+        run: |
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "DATABASE_URL is required. Set it as a repository secret or variable."
+            exit 1
+          fi
+
+      - name: Apply fixtures
+        run: bash apps/api/test/fixtures/run-fixtures.sh

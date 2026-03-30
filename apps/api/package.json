@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "node -e \"console.log('lint placeholder')\"",
     "pretest": "npm run build",
-    "test": "node --test ./test/index.test.js"
+    "test": "node --test ./test/index.test.js",
+    "test:e2e": "node --test ./test/e2e-auth-combat-save-load.test.js"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",

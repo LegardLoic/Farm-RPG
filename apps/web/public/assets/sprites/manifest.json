@@ -16,6 +16,27 @@
       "origin": { "x": 0.5, "y": 0.84 },
       "physics": { "width": 16, "height": 20, "offsetX": 2, "offsetY": 2 }
     },
+    "enemy-training-dummy": {
+      "key": "enemy-training-dummy",
+      "path": "characters/enemy-training-dummy.svg",
+      "scale": { "x": 0.3125, "y": 0.34375 },
+      "origin": { "x": 0.5, "y": 0.84 },
+      "physics": { "width": 16, "height": 20, "offsetX": 2, "offsetY": 2 }
+    },
+    "enemy-ash-scout": {
+      "key": "enemy-ash-scout",
+      "path": "characters/enemy-ash-scout.svg",
+      "scale": { "x": 0.328125, "y": 0.359375 },
+      "origin": { "x": 0.5, "y": 0.84 },
+      "physics": { "width": 17, "height": 21, "offsetX": 2, "offsetY": 2 }
+    },
+    "enemy-thorn-beast-alpha": {
+      "key": "enemy-thorn-beast-alpha",
+      "path": "characters/enemy-thorn-beast-alpha.svg",
+      "scale": { "x": 0.359375, "y": 0.390625 },
+      "origin": { "x": 0.5, "y": 0.84 },
+      "physics": { "width": 19, "height": 21, "offsetX": 2, "offsetY": 2 }
+    },
     "enemy-cinder-warden": {
       "key": "enemy-cinder-warden",
       "path": "characters/enemy-cinder-warden.svg",

@@ -168,6 +168,52 @@ type DebugQaPresetOption = {
   label: string;
 };
 
+type DebugQaTracePayload = {
+  timestamp: string;
+  frontend: {
+    mode: string;
+    dev: boolean;
+    prod: boolean;
+    apiBaseUrl: string;
+    locationHref: string;
+    userAgent: string;
+    viewport: {
+      width: number;
+      height: number;
+    };
+  };
+  auth: {
+    authenticated: boolean;
+    status: string;
+  };
+  hud: {
+    state: HudState;
+    summaries: {
+      combat: string;
+      quests: string;
+      blacksmith: string;
+      autosave: string;
+      saveSlots: string;
+    };
+  };
+  combat: {
+    encounterId: string | null;
+    status: CombatUiStatus;
+    message: string;
+    error: string | null;
+    telemetry: string;
+    logs: string[];
+    state: CombatEncounterState | null;
+  };
+  debugQa: {
+    enabled: boolean;
+    status: DebugQaStatus;
+    busyAction: DebugQaActionName | null;
+    message: string | null;
+    error: string | null;
+  };
+};
+
 const DEBUG_QA_PRESET_OPTIONS: DebugQaPresetOption[] = [
   { key: 'starter', label: 'Starter' },
   { key: 'tower_mid', label: 'Tower mid' },
@@ -306,6 +352,7 @@ export class GameScene extends Phaser.Scene {
   private debugQaLoadoutButton: HTMLButtonElement | null = null;
   private debugQaCompleteQuestsButton: HTMLButtonElement | null = null;
   private debugQaSetWorldFlagsButton: HTMLButtonElement | null = null;
+  private debugQaExportButton: HTMLButtonElement | null = null;
   private debugQaBusyAction: DebugQaActionName | null = null;
   private debugQaStatus: DebugQaStatus = 'idle';
   private debugQaMessage: string | null = null;
@@ -411,6 +458,11 @@ export class GameScene extends Phaser.Scene {
       if (saveAction === 'delete') {
         void this.deleteSaveSlot(slot);
       }
+    }
+
+    if (debugAction === 'export-trace') {
+      void this.exportDebugQaTrace();
+      return;
     }
 
     if (debugAction && isDebugQaActionName(debugAction)) {
@@ -735,6 +787,9 @@ export class GameScene extends Phaser.Scene {
             <button class="hud-debug-qa-button secondary" data-debug-action="complete-quests">Complete quests</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="set-world-flags">Set world flags</button>
             <button class="hud-debug-qa-button secondary" data-debug-action="set-quest-status">Set quest status</button>
+            <button class="hud-debug-qa-button export" data-debug-action="export-trace" title="Export a local JSON trace of the current QA state">
+              Export JSON trace
+            </button>
           </div>
         </div>
             `
@@ -796,6 +851,7 @@ export class GameScene extends Phaser.Scene {
     this.debugQaLoadoutButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="apply-loadout-preset"]');
     this.debugQaCompleteQuestsButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="complete-quests"]');
     this.debugQaSetWorldFlagsButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="set-world-flags"]');
+    this.debugQaExportButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-debug-action="export-trace"]');
     this.hudRoot.addEventListener('click', this.onHudClick);
     this.updateHud();
   }
@@ -855,6 +911,7 @@ export class GameScene extends Phaser.Scene {
     this.debugQaLoadoutButton = null;
     this.debugQaCompleteQuestsButton = null;
     this.debugQaSetWorldFlagsButton = null;
+    this.debugQaExportButton = null;
     this.questsRenderSignature = '';
     this.blacksmithRenderSignature = '';
     this.autosaveRenderSignature = '';
@@ -1066,6 +1123,11 @@ export class GameScene extends Phaser.Scene {
       this.debugQaSetWorldFlagsButton.disabled = disabled;
       this.debugQaSetWorldFlagsButton.textContent =
         this.debugQaBusyAction === 'set-world-flags' ? 'Applying...' : 'Set world flags';
+    }
+
+    if (this.debugQaExportButton) {
+      this.debugQaExportButton.disabled = this.debugQaStatus === 'loading';
+      this.debugQaExportButton.textContent = 'Export JSON trace';
     }
   }
 
@@ -3046,6 +3108,120 @@ export class GameScene extends Phaser.Scene {
     }
 
     return 'Idle';
+  }
+
+  private async exportDebugQaTrace(): Promise<void> {
+    if (!this.debugQaEnabled || !this.debugQaPanelRoot) {
+      return;
+    }
+
+    const payload = this.buildDebugQaTracePayload();
+    const filename = this.buildDebugQaTraceFilename(payload.timestamp);
+    this.downloadJsonFile(filename, payload);
+
+    this.debugQaStatus = 'success';
+    this.debugQaError = null;
+    this.debugQaMessage = `Exported local QA trace to ${filename}.`;
+    this.updateHud();
+  }
+
+  private buildDebugQaTracePayload(): DebugQaTracePayload {
+    const timestamp = new Date().toISOString();
+    return {
+      timestamp,
+      frontend: {
+        mode: import.meta.env.MODE,
+        dev: import.meta.env.DEV,
+        prod: import.meta.env.PROD,
+        apiBaseUrl: API_BASE_URL,
+        locationHref: window.location.href,
+        userAgent: navigator.userAgent,
+        viewport: {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        },
+      },
+      auth: {
+        authenticated: this.isAuthenticated,
+        status: this.authStatus,
+      },
+      hud: {
+        state: { ...this.hudState },
+        summaries: {
+          combat: this.getCombatStatusLabel(),
+          quests: this.getQuestSummaryLabel(),
+          blacksmith: this.getBlacksmithShopSummaryLabel(),
+          autosave: this.getAutoSaveSummaryLabel(),
+          saveSlots: this.getSaveSlotsSummaryLabel(),
+        },
+      },
+      combat: this.buildCombatTraceSnapshot(),
+      debugQa: {
+        enabled: this.debugQaEnabled,
+        status: this.debugQaStatus,
+        busyAction: this.debugQaBusyAction,
+        message: this.debugQaMessage,
+        error: this.debugQaError,
+      },
+    };
+  }
+
+  private buildCombatTraceSnapshot(): DebugQaTracePayload['combat'] {
+    if (!this.combatState) {
+      return {
+        encounterId: this.combatEncounterId,
+        status: this.combatStatus,
+        message: this.combatMessage,
+        error: this.combatError,
+        telemetry: this.getCombatTelemetryLabel(),
+        logs: [...this.combatLogs],
+        state: null,
+      };
+    }
+
+    return {
+      encounterId: this.combatEncounterId,
+      status: this.combatStatus,
+      message: this.combatMessage,
+      error: this.combatError,
+      telemetry: this.getCombatTelemetryLabel(),
+      logs: [...this.combatLogs],
+      state: (() => {
+        const state: CombatEncounterState = {
+          ...this.combatState,
+          logs: [...this.combatState.logs],
+          player: { ...this.combatState.player },
+          enemy: { ...this.combatState.enemy },
+        };
+
+        if (this.combatState.scriptState) {
+          state.scriptState = { ...this.combatState.scriptState };
+        }
+
+        return state;
+      })(),
+    };
+  }
+
+  private buildDebugQaTraceFilename(timestamp: string): string {
+    const safeTimestamp = timestamp.replace(/[:.]/g, '-');
+    return `farm-rpg-qa-trace-${safeTimestamp}.json`;
+  }
+
+  private downloadJsonFile(filename: string, payload: unknown): void {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.rel = 'noopener';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 0);
   }
 
   private async handleDebugQaAction(action: DebugQaActionName): Promise<void> {

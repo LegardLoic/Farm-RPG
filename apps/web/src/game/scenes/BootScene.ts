@@ -10,6 +10,9 @@ export class BootScene extends Phaser.Scene {
     this.load.json('sprite-manifest', 'manifest.json');
     this.load.svg('player-hero', 'characters/player-hero.svg');
     this.load.svg('enemy-forest-goblin', 'characters/enemy-forest-goblin.svg');
+    this.load.svg('enemy-training-dummy', 'characters/enemy-training-dummy.svg');
+    this.load.svg('enemy-ash-scout', 'characters/enemy-ash-scout.svg');
+    this.load.svg('enemy-thorn-beast-alpha', 'characters/enemy-thorn-beast-alpha.svg');
     this.load.svg('enemy-cinder-warden', 'characters/enemy-cinder-warden.svg');
     this.load.svg('enemy-ash-vanguard-captain', 'characters/enemy-ash-vanguard-captain.svg');
     this.load.svg('enemy-curse-heart-avatar', 'characters/enemy-curse-heart-avatar.svg');
