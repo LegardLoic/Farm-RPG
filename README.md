@@ -62,6 +62,13 @@ Create local env files before starting:
 - `POST /equipment/equip`
 - `POST /equipment/unequip`
 - `GET /gameplay/state`
+- `POST /gameplay/intro/advance`
+- `POST /gameplay/sleep`
+- `GET /gameplay/crafting`
+- `POST /gameplay/crafting/craft`
+- `POST /gameplay/farm/plant`
+- `POST /gameplay/farm/water`
+- `POST /gameplay/farm/harvest`
 - `GET /tower/state`
 - `POST /combat/start`
 - `GET /combat/current`
@@ -72,6 +79,9 @@ Create local env files before starting:
 - `POST /quests/:questKey/claim`
 - `GET /shops/blacksmith`
 - `POST /shops/blacksmith/buy`
+- `GET /shops/village-market`
+- `POST /shops/village-market/buy-seed`
+- `POST /shops/village-market/sell-crop`
 - `GET /saves`
 - `GET /saves/auto/latest`
 - `POST /saves/auto/restore/:slot`

@@ -229,6 +229,7 @@ body::before {
 .hud-blacksmith,
 .hud-village-market,
 .hud-farm,
+.hud-farm-crafting,
 .hud-autosave,
 .hud-saves {
   margin-top: 10px;
@@ -347,6 +348,12 @@ body::before {
 }
 
 .hud-farm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hud-farm-crafting {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -852,6 +859,13 @@ body::before {
   gap: 12px;
 }
 
+.hud-farm-crafting-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
 .hud-autosave-header {
   display: flex;
   justify-content: space-between;
@@ -894,6 +908,13 @@ body::before {
   color: var(--muted);
 }
 
+.hud-farm-crafting-header span {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
 .hud-autosave-header span {
   font-size: 0.76rem;
   text-transform: uppercase;
@@ -926,6 +947,11 @@ body::before {
 .hud-farm-header strong {
   font-size: 0.75rem;
   color: var(--accent);
+}
+
+.hud-farm-crafting-header strong {
+  font-size: 0.75rem;
+  color: var(--accent-2);
 }
 
 .hud-autosave-header strong {
@@ -969,6 +995,16 @@ body::before {
 }
 
 .hud-farm-error {
+  border: 1px solid rgba(242, 111, 111, 0.4);
+  background: rgba(242, 111, 111, 0.14);
+  color: #ffd1d1;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.hud-farm-crafting-error {
   border: 1px solid rgba(242, 111, 111, 0.4);
   background: rgba(242, 111, 111, 0.14);
   color: #ffd1d1;
@@ -1111,6 +1147,17 @@ body::before {
   overflow: auto;
 }
 
+.hud-farm-crafting-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 190px;
+  overflow: auto;
+}
+
 .hud-saves-list {
   margin: 0;
   padding: 0;
@@ -1243,6 +1290,13 @@ body::before {
 }
 
 .farm-plot-status {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #bec9d8;
+}
+
+.farm-crafting-ingredients {
   margin: 0;
   font-size: 0.75rem;
   line-height: 1.4;

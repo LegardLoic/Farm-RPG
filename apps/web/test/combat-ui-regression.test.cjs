@@ -268,3 +268,19 @@ test('day-night cycle and sleep action wiring exists for lot 91', () => {
   assert.equal(stylesSource.includes('.hud-farm-actions'), true);
   assert.equal(stylesSource.includes('.hud-farm-action.sleep'), true);
 });
+
+test('farm crafting panel wiring exists for lot 92', () => {
+  assert.equal(gameSceneSource.includes('data-hud="farmCraftingSummary"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="farmCraftingRecipes"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="farmCraftingError"'), true);
+  assert.equal(gameSceneSource.includes("craftButton.dataset.farmCraftAction = 'craft'"), true);
+  assert.equal(gameSceneSource.includes('private updateFarmCraftingHud(): void'), true);
+  assert.equal(gameSceneSource.includes('private renderFarmCraftingRecipes(): void'), true);
+  assert.equal(gameSceneSource.includes('private getFarmCraftingSummaryLabel(): string'), true);
+  assert.equal(gameSceneSource.includes('private normalizeGameplayCraftingPayload(payload: unknown): FarmCraftingState | null'), true);
+  assert.equal(gameSceneSource.includes('private async craftFarmRecipe(recipeKey: string): Promise<void>'), true);
+  assert.equal(gameSceneSource.includes("await this.fetchJson('/gameplay/crafting/craft'"), true);
+  assert.equal(stylesSource.includes('.hud-farm-crafting'), true);
+  assert.equal(stylesSource.includes('.hud-farm-crafting-list'), true);
+  assert.equal(stylesSource.includes('.farm-crafting-ingredients'), true);
+});

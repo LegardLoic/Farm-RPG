@@ -339,6 +339,30 @@ type FarmState = {
   plots: FarmPlotState[];
 };
 
+type FarmCraftIngredientState = {
+  itemKey: string;
+  requiredQuantity: number;
+  ownedQuantity: number;
+};
+
+type FarmCraftRecipeState = {
+  recipeKey: string;
+  name: string;
+  description: string;
+  outputItemKey: string;
+  outputQuantity: number;
+  requiredFlags: string[];
+  unlocked: boolean;
+  ingredients: FarmCraftIngredientState[];
+  maxCraftable: number;
+};
+
+type FarmCraftingState = {
+  unlocked: boolean;
+  recipes: FarmCraftRecipeState[];
+  craftableRecipes: number;
+};
+
 type AutoSaveState = {
   version: number;
   reason: string;
@@ -654,6 +678,9 @@ export class GameScene extends Phaser.Scene {
   private farmSleepButton: HTMLButtonElement | null = null;
   private farmPlotsRoot: HTMLElement | null = null;
   private farmErrorValue: HTMLElement | null = null;
+  private farmCraftingSummaryValue: HTMLElement | null = null;
+  private farmCraftingListRoot: HTMLElement | null = null;
+  private farmCraftingErrorValue: HTMLElement | null = null;
   private villageNpcSummaryValue: HTMLElement | null = null;
   private villageNpcMayorValue: HTMLElement | null = null;
   private villageNpcBlacksmithValue: HTMLElement | null = null;
@@ -725,6 +752,10 @@ export class GameScene extends Phaser.Scene {
   private farmError: string | null = null;
   private farmSelectedSeedItemKey = '';
   private farmRenderSignature = '';
+  private farmCraftingState: FarmCraftingState | null = null;
+  private farmCraftingBusy = false;
+  private farmCraftingError: string | null = null;
+  private farmCraftingRenderSignature = '';
   private villageNpcState: VillageNpcHudState = {
     mayor: { stateKey: 'offscreen', available: false },
     blacksmith: { stateKey: 'cursed', available: false },
@@ -867,6 +898,7 @@ export class GameScene extends Phaser.Scene {
     const shopAction = button.dataset.shopAction;
     const marketAction = button.dataset.marketAction;
     const farmAction = button.dataset.farmAction;
+    const farmCraftAction = button.dataset.farmCraftAction;
     const saveAction = button.dataset.saveAction;
     const profileAction = button.dataset.profileAction;
     const introAction = button.dataset.introAction;
@@ -958,6 +990,14 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       void this.harvestFarmPlot(plotKey);
+      return;
+    }
+
+    if (farmCraftAction === 'craft') {
+      const recipeKey = button.dataset.recipeKey;
+      if (recipeKey) {
+        void this.craftFarmRecipe(recipeKey);
+      }
       return;
     }
 
@@ -1403,6 +1443,14 @@ export class GameScene extends Phaser.Scene {
           <div class="hud-farm-error" data-hud="farmError" hidden></div>
           <ul class="hud-farm-plots" data-hud="farmPlots"></ul>
         </div>
+        <div class="hud-farm-crafting">
+          <div class="hud-farm-crafting-header">
+            <span>Farm Crafting</span>
+            <strong data-hud="farmCraftingSummary">Locked</strong>
+          </div>
+          <div class="hud-farm-crafting-error" data-hud="farmCraftingError" hidden></div>
+          <ul class="hud-farm-crafting-list" data-hud="farmCraftingRecipes"></ul>
+        </div>
         <div class="hud-autosave">
           <div class="hud-autosave-header">
             <span>Autosave</span>
@@ -1603,6 +1651,9 @@ export class GameScene extends Phaser.Scene {
     this.farmSleepButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-farm-action="sleep"]');
     this.farmPlotsRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmPlots"]');
     this.farmErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmError"]');
+    this.farmCraftingSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmCraftingSummary"]');
+    this.farmCraftingListRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmCraftingRecipes"]');
+    this.farmCraftingErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmCraftingError"]');
     this.villageNpcSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcSummary"]');
     this.villageNpcMayorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcMayor"]');
     this.villageNpcBlacksmithValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcBlacksmith"]');
@@ -1787,6 +1838,9 @@ export class GameScene extends Phaser.Scene {
     this.farmSleepButton = null;
     this.farmPlotsRoot = null;
     this.farmErrorValue = null;
+    this.farmCraftingSummaryValue = null;
+    this.farmCraftingListRoot = null;
+    this.farmCraftingErrorValue = null;
     this.villageNpcSummaryValue = null;
     this.villageNpcMayorValue = null;
     this.villageNpcBlacksmithValue = null;
@@ -1861,6 +1915,10 @@ export class GameScene extends Phaser.Scene {
     this.farmBusy = false;
     this.farmError = null;
     this.farmSelectedSeedItemKey = '';
+    this.farmCraftingState = null;
+    this.farmCraftingBusy = false;
+    this.farmCraftingError = null;
+    this.farmCraftingRenderSignature = '';
     this.villageNpcState = {
       mayor: { stateKey: 'offscreen', available: false },
       blacksmith: { stateKey: 'cursed', available: false },
@@ -1921,6 +1979,7 @@ export class GameScene extends Phaser.Scene {
     this.updateBlacksmithHud();
     this.updateVillageMarketHud();
     this.updateFarmHud();
+    this.updateFarmCraftingHud();
     this.updateAutoSaveHud();
     this.updateSaveSlotsHud();
     this.updateDebugQaHud();
@@ -2041,6 +2100,19 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.renderFarmPanel();
+  }
+
+  private updateFarmCraftingHud(): void {
+    if (this.farmCraftingSummaryValue) {
+      this.farmCraftingSummaryValue.textContent = this.getFarmCraftingSummaryLabel();
+    }
+
+    if (this.farmCraftingErrorValue) {
+      this.farmCraftingErrorValue.hidden = !this.farmCraftingError;
+      this.farmCraftingErrorValue.textContent = this.farmCraftingError ?? '';
+    }
+
+    this.renderFarmCraftingRecipes();
   }
 
   private updateAutoSaveHud(): void {
@@ -3188,6 +3260,103 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private renderFarmCraftingRecipes(): void {
+    const craftingRoot = this.farmCraftingListRoot;
+    if (!craftingRoot) {
+      return;
+    }
+
+    const signature = this.computeFarmCraftingRenderSignature();
+    if (signature === this.farmCraftingRenderSignature) {
+      return;
+    }
+    this.farmCraftingRenderSignature = signature;
+
+    craftingRoot.replaceChildren();
+
+    if (!this.isAuthenticated) {
+      const item = document.createElement('li');
+      item.classList.add('shop-item', 'empty');
+      item.textContent = 'Connect to access farm crafting.';
+      craftingRoot.appendChild(item);
+      return;
+    }
+
+    if (this.farmCraftingBusy && !this.farmCraftingState) {
+      const item = document.createElement('li');
+      item.classList.add('shop-item', 'empty');
+      item.textContent = 'Loading recipes...';
+      craftingRoot.appendChild(item);
+      return;
+    }
+
+    const crafting = this.farmCraftingState;
+    if (!crafting) {
+      const item = document.createElement('li');
+      item.classList.add('shop-item', 'empty');
+      item.textContent = 'No crafting data.';
+      craftingRoot.appendChild(item);
+      return;
+    }
+
+    if (!crafting.unlocked) {
+      const item = document.createElement('li');
+      item.classList.add('shop-item', 'empty');
+      item.textContent = 'Farm crafting locked. Complete farm assignment first.';
+      craftingRoot.appendChild(item);
+      return;
+    }
+
+    const unlockedRecipes = crafting.recipes.filter((recipe) => recipe.unlocked);
+    if (unlockedRecipes.length === 0) {
+      const item = document.createElement('li');
+      item.classList.add('shop-item', 'empty');
+      item.textContent = this.farmCraftingBusy ? 'Refreshing recipes...' : 'No recipes unlocked yet.';
+      craftingRoot.appendChild(item);
+      return;
+    }
+
+    for (const recipe of unlockedRecipes) {
+      const item = document.createElement('li');
+      item.classList.add('shop-item', 'farm-crafting-item');
+
+      const header = document.createElement('div');
+      header.classList.add('shop-item-header');
+
+      const name = document.createElement('strong');
+      name.textContent = recipe.name;
+      header.appendChild(name);
+
+      const output = document.createElement('span');
+      output.classList.add('shop-price');
+      output.textContent = `+${recipe.outputQuantity} ${this.formatFarmLabel(recipe.outputItemKey)}`;
+      header.appendChild(output);
+      item.appendChild(header);
+
+      const description = document.createElement('p');
+      description.classList.add('shop-description');
+      description.textContent = recipe.description;
+      item.appendChild(description);
+
+      const ingredients = document.createElement('p');
+      ingredients.classList.add('farm-crafting-ingredients');
+      ingredients.textContent = `Needs: ${recipe.ingredients
+        .map((entry) => `${this.formatFarmLabel(entry.itemKey)} ${entry.ownedQuantity}/${entry.requiredQuantity}`)
+        .join(' | ')}`;
+      item.appendChild(ingredients);
+
+      const craftButton = document.createElement('button');
+      craftButton.classList.add('hud-shop-buy');
+      craftButton.textContent = `Craft x1 (max ${recipe.maxCraftable})`;
+      craftButton.dataset.farmCraftAction = 'craft';
+      craftButton.dataset.recipeKey = recipe.recipeKey;
+      craftButton.disabled = this.farmCraftingBusy || this.farmBusy || recipe.maxCraftable < 1;
+      item.appendChild(craftButton);
+
+      craftingRoot.appendChild(item);
+    }
+  }
+
   private renderQuestList(): void {
     if (!this.questsListRoot) {
       return;
@@ -3330,6 +3499,29 @@ export class GameScene extends Phaser.Scene {
     return this.farmBusy
       ? 'Refreshing...'
       : `Ready ${this.farmState.readyPlots} | Planted ${this.farmState.plantedPlots}/${this.farmState.totalPlots}`;
+  }
+
+  private getFarmCraftingSummaryLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Login required';
+    }
+
+    if (this.farmCraftingBusy && !this.farmCraftingState) {
+      return 'Loading...';
+    }
+
+    if (!this.farmCraftingState) {
+      return 'No data';
+    }
+
+    if (!this.farmCraftingState.unlocked) {
+      return this.farmCraftingBusy ? 'Checking unlock...' : 'Locked';
+    }
+
+    const unlockedRecipes = this.farmCraftingState.recipes.filter((recipe) => recipe.unlocked).length;
+    return this.farmCraftingBusy
+      ? 'Refreshing...'
+      : `${this.farmCraftingState.craftableRecipes} craftable | ${unlockedRecipes} recipes`;
   }
 
   private getFarmPlotStatusLabel(plot: FarmPlotState): string {
@@ -3555,6 +3747,24 @@ export class GameScene extends Phaser.Scene {
         : 'none',
       cropParts.join(';'),
       plotParts.join(';'),
+    ].join('|');
+  }
+
+  private computeFarmCraftingRenderSignature(): string {
+    const crafting = this.farmCraftingState;
+    const recipeParts = crafting
+      ? crafting.recipes.map((recipe) => (
+          `${recipe.recipeKey}:${recipe.unlocked ? '1' : '0'}:${recipe.maxCraftable}:${recipe.outputItemKey}:${recipe.outputQuantity}:${recipe.ingredients.map((entry) => `${entry.itemKey}:${entry.ownedQuantity}/${entry.requiredQuantity}`).join(',')}`
+        ))
+      : [];
+
+    return [
+      this.isAuthenticated ? '1' : '0',
+      this.farmCraftingBusy ? '1' : '0',
+      this.farmBusy ? '1' : '0',
+      this.farmCraftingError ?? '',
+      crafting ? `${crafting.unlocked ? '1' : '0'}:${crafting.craftableRecipes}` : 'none',
+      recipeParts.join(';'),
     ].join('|');
   }
 
@@ -4246,6 +4456,7 @@ export class GameScene extends Phaser.Scene {
         method: 'GET',
       });
       this.applyGameplaySnapshot(payload);
+      this.farmCraftingError = null;
     } catch {
       // Keep previous HUD progression values if gameplay refresh fails.
     } finally {
@@ -4912,6 +5123,55 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private async craftFarmRecipe(recipeKey: string): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.farmCraftingError = 'Login required to craft farm consumables.';
+      this.updateHud();
+      return;
+    }
+
+    const crafting = this.farmCraftingState;
+    if (!crafting?.unlocked) {
+      this.farmCraftingError = 'Farm crafting is locked.';
+      this.updateHud();
+      return;
+    }
+
+    const recipe = crafting.recipes.find((entry) => entry.recipeKey === recipeKey);
+    if (!recipe || !recipe.unlocked) {
+      this.farmCraftingError = 'Recipe is locked.';
+      this.updateHud();
+      return;
+    }
+
+    if (recipe.maxCraftable < 1) {
+      this.farmCraftingError = 'Not enough farm ingredients for this recipe.';
+      this.updateHud();
+      return;
+    }
+
+    this.farmCraftingBusy = true;
+    this.farmCraftingError = null;
+    this.updateHud();
+
+    try {
+      await this.fetchJson('/gameplay/crafting/craft', {
+        method: 'POST',
+        body: JSON.stringify({
+          recipeKey,
+          quantity: 1,
+        }),
+      });
+      await this.refreshGameplayState();
+      await this.refreshVillageMarketState();
+    } catch (error) {
+      this.farmCraftingError = this.getErrorMessage(error, 'Unable to craft this recipe.');
+    } finally {
+      this.farmCraftingBusy = false;
+      this.updateHud();
+    }
+  }
+
   private async plantFarmPlot(plotKey: string): Promise<void> {
     if (!this.isAuthenticated) {
       this.farmError = 'Login required to plant crops.';
@@ -5298,6 +5558,11 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    const crafting = this.normalizeGameplayCraftingPayload(payload);
+    if (crafting) {
+      this.farmCraftingState = crafting;
+    }
+
     const progression = this.asRecord(payload.progression);
     if (!progression) {
       return;
@@ -5407,6 +5672,10 @@ export class GameScene extends Phaser.Scene {
     this.farmError = null;
     this.farmSelectedSeedItemKey = '';
     this.farmRenderSignature = '';
+    this.farmCraftingState = null;
+    this.farmCraftingBusy = false;
+    this.farmCraftingError = null;
+    this.farmCraftingRenderSignature = '';
   }
 
   private resetHeroProfileState(): void {
@@ -7528,6 +7797,98 @@ export class GameScene extends Phaser.Scene {
       readyPlots: Math.max(0, Math.round(readyPlots)),
       cropCatalog,
       plots,
+    };
+  }
+
+  private normalizeGameplayCraftingPayload(payload: unknown): FarmCraftingState | null {
+    const root = this.asRecord(payload);
+    if (!root) {
+      return null;
+    }
+
+    const craftingRecord = this.asRecord(root.crafting) ?? root;
+    const recipesRaw = Array.isArray(craftingRecord.recipes) ? craftingRecord.recipes : null;
+    const craftableRecipes = this.asNumber(craftingRecord.craftableRecipes);
+    if (!recipesRaw || craftableRecipes === null) {
+      return null;
+    }
+
+    const recipes = recipesRaw
+      .map((entry) => this.normalizeFarmCraftRecipeState(entry))
+      .filter((entry): entry is FarmCraftRecipeState => entry !== null);
+
+    return {
+      unlocked: Boolean(craftingRecord.unlocked),
+      craftableRecipes: Math.max(0, Math.round(craftableRecipes)),
+      recipes,
+    };
+  }
+
+  private normalizeFarmCraftRecipeState(payload: unknown): FarmCraftRecipeState | null {
+    const record = this.asRecord(payload);
+    if (!record) {
+      return null;
+    }
+
+    const recipeKey = this.asString(record.recipeKey);
+    const name = this.asString(record.name);
+    const description = this.asString(record.description);
+    const outputItemKey = this.asString(record.outputItemKey);
+    const outputQuantity = this.asNumber(record.outputQuantity);
+    const maxCraftable = this.asNumber(record.maxCraftable);
+    const requiredFlags = Array.isArray(record.requiredFlags)
+      ? record.requiredFlags
+          .map((entry) => this.asString(entry))
+          .filter((entry): entry is string => entry !== null)
+      : [];
+    const ingredientsRaw = Array.isArray(record.ingredients) ? record.ingredients : null;
+
+    if (
+      !recipeKey ||
+      !name ||
+      !description ||
+      !outputItemKey ||
+      outputQuantity === null ||
+      maxCraftable === null ||
+      !ingredientsRaw
+    ) {
+      return null;
+    }
+
+    const ingredients = ingredientsRaw
+      .map((entry) => this.normalizeFarmCraftIngredientState(entry))
+      .filter((entry): entry is FarmCraftIngredientState => entry !== null);
+
+    return {
+      recipeKey,
+      name,
+      description,
+      outputItemKey,
+      outputQuantity: Math.max(1, Math.round(outputQuantity)),
+      requiredFlags,
+      unlocked: Boolean(record.unlocked),
+      ingredients,
+      maxCraftable: Math.max(0, Math.round(maxCraftable)),
+    };
+  }
+
+  private normalizeFarmCraftIngredientState(payload: unknown): FarmCraftIngredientState | null {
+    const record = this.asRecord(payload);
+    if (!record) {
+      return null;
+    }
+
+    const itemKey = this.asString(record.itemKey);
+    const requiredQuantity = this.asNumber(record.requiredQuantity);
+    const ownedQuantity = this.asNumber(record.ownedQuantity);
+    if (!itemKey || requiredQuantity === null || ownedQuantity === null) {
+      return null;
+    }
+
+    return {
+      itemKey,
+      requiredQuantity: Math.max(1, Math.round(requiredQuantity)),
+      ownedQuantity: Math.max(0, Math.round(ownedQuantity)),
     };
   }
 

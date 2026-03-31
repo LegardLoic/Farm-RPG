@@ -430,6 +430,24 @@ function createGameplayDatabaseStub(initialFlags = [], initialFarmPlots = [], in
       };
     }
 
+    if (text.includes('SELECT item_key, quantity') && text.includes('FROM inventory_items') && text.includes('item_key = ANY($2::text[])')) {
+      const itemKeys = Array.isArray(values[1]) ? values[1] : [];
+      const rows = itemKeys
+        .map((itemKey) => {
+          const quantity = state.inventory.get(itemKey);
+          if (typeof quantity !== 'number') {
+            return null;
+          }
+
+          return {
+            item_key: itemKey,
+            quantity,
+          };
+        })
+        .filter((row) => row !== null);
+      return { rows };
+    }
+
     if (text.includes('UPDATE inventory_items') && text.includes('SET quantity = $3')) {
       const itemKey = values[1];
       const quantity = values[2];
@@ -1276,4 +1294,71 @@ test('gameplay sleep advances day and resets watered farm plots', async () => {
   assert.equal(turnipPlot?.growthProgressDays, 2);
   assert.equal(carrotPlot?.wateredToday, false);
   assert.equal(carrotPlot?.growthProgressDays, 1);
+});
+
+test('gameplay crafting state exposes unlocked recipes and max craftable counts', async () => {
+  const db = createGameplayDatabaseStub(
+    ['intro_farm_assigned'],
+    [],
+    {
+      turnip: 5,
+      carrot: 3,
+      wheat: 1,
+    },
+  );
+  const service = new GameplayService(db);
+
+  const crafting = await service.getFarmCraftingState('user-1');
+  const fieldMedicine = crafting.recipes.find((recipe) => recipe.recipeKey === 'field_medicine');
+  const focusTonic = crafting.recipes.find((recipe) => recipe.recipeKey === 'focus_tonic');
+
+  assert.equal(crafting.unlocked, true);
+  assert.equal(fieldMedicine?.unlocked, true);
+  assert.equal(fieldMedicine?.maxCraftable, 2);
+  assert.deepEqual(
+    fieldMedicine?.ingredients.map((entry) => [entry.itemKey, entry.requiredQuantity, entry.ownedQuantity]),
+    [
+      ['turnip', 2, 5],
+      ['carrot', 1, 3],
+    ],
+  );
+  assert.equal(focusTonic?.unlocked, false);
+  assert.equal(focusTonic?.maxCraftable, 0);
+});
+
+test('gameplay crafting consumes crops and grants consumable combat items', async () => {
+  const db = createGameplayDatabaseStub(
+    ['intro_farm_assigned', 'story_floor_5_cleared'],
+    [],
+    {
+      turnip: 4,
+      carrot: 6,
+      wheat: 3,
+      mana_tonic: 1,
+    },
+  );
+  const service = new GameplayService(db);
+
+  const result = await service.craftFarmRecipe('user-1', 'focus_tonic', 2);
+
+  assert.equal(result.craft.recipeKey, 'focus_tonic');
+  assert.equal(result.craft.craftedQuantity, 2);
+  assert.equal(result.craft.outputItemKey, 'mana_tonic');
+  assert.equal(result.craft.outputQuantityPerCraft, 1);
+  assert.equal(result.craft.totalOutputQuantity, 2);
+  assert.equal(result.craft.totalOutputInventoryQuantity, 3);
+  assert.deepEqual(
+    result.craft.consumedIngredients.map((entry) => [entry.itemKey, entry.quantityConsumed, entry.remainingQuantity]),
+    [
+      ['carrot', 4, 2],
+      ['wheat', 2, 1],
+    ],
+  );
+
+  assert.equal(db.state.inventory.get('carrot'), 2);
+  assert.equal(db.state.inventory.get('wheat'), 1);
+  assert.equal(db.state.inventory.get('mana_tonic'), 3);
+
+  const refreshedRecipe = result.crafting.recipes.find((recipe) => recipe.recipeKey === 'focus_tonic');
+  assert.equal(refreshedRecipe?.maxCraftable, 1);
 });
