@@ -1,6 +1,6 @@
 ﻿# Payloads de test API (reference rapide)
 
-Derniere mise a jour: 30 mars 2026
+Derniere mise a jour: 31 mars 2026
 
 Ce document regroupe les payloads utilises pendant nos tests manuels (front + API).
 
@@ -31,6 +31,8 @@ Ce document regroupe les payloads utilises pendant nos tests manuels (front + AP
 | `/shops/blacksmith/buy` | `POST` | oui | `{ "offerKey": "steel_sword_advanced", "quantity": 1 }` | Acheter une offre tier 2 (requiert flag `story_floor_5_cleared`) |
 | `/shops/blacksmith/buy` | `POST` | oui | `{ "offerKey": "mithril_sword_masterwork", "quantity": 1 }` | Acheter une offre tier 3 (requiert flag `story_floor_8_cleared`) |
 | `/quests/:questKey/claim` | `POST` | oui | `{}` | Reclamer une quete completee |
+| `/profile` | `GET` | oui | `n/a` | Lire le profil hero courant (`null` si non cree) |
+| `/profile` | `PUT` | oui | `{ "heroName": "Arion", "appearanceKey": "forest" }` | Creer ou mettre a jour le profil hero MVP |
 | `/saves/auto/restore/:slot` | `POST` | oui | `{}` | Restaurer le dernier autosave vers slot `1..3` |
 | `/saves/:slot/capture` | `POST` | oui | `{}` | Capturer l'etat live dans slot `1..3` |
 | `/saves/:slot/load` | `POST` | oui | `{}` | Charger un slot `1..3` vers l'etat live |

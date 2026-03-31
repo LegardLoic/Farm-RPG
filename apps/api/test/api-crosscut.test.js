@@ -15,6 +15,7 @@ const {
   parseDebugForceCombatEnemyFlag,
 } = require('../dist/debug/debug-admin.constants.js');
 const { CombatService } = require('../dist/combat/combat.service.js');
+const { ProfileService } = require('../dist/profile/profile.service.js');
 const { SavesService } = require('../dist/saves/saves.service.js');
 const { BLACKSMITH_SHOP_UNLOCK_FLAG } = require('../dist/shops/shops.constants.js');
 const { ShopsService } = require('../dist/shops/shops.service.js');
@@ -142,6 +143,57 @@ function createSavesService() {
 
 function createCombatService() {
   return new CombatService({}, {}, {}, {});
+}
+
+function createProfileDatabaseStub(initialProfile = null) {
+  const state = {
+    profile: initialProfile,
+  };
+
+  return {
+    state,
+    async query(text, values = []) {
+      if (text.includes('SELECT hero_name, appearance_key, created_at, updated_at')) {
+        if (!state.profile) {
+          return { rows: [] };
+        }
+
+        return {
+          rows: [
+            {
+              hero_name: state.profile.hero_name,
+              appearance_key: state.profile.appearance_key,
+              created_at: state.profile.created_at,
+              updated_at: state.profile.updated_at,
+            },
+          ],
+        };
+      }
+
+      if (text.includes('INSERT INTO player_profiles')) {
+        const now = '2026-03-31T09:00:00.000Z';
+        state.profile = {
+          hero_name: values[1],
+          appearance_key: values[2],
+          created_at: state.profile?.created_at ?? now,
+          updated_at: now,
+        };
+
+        return {
+          rows: [
+            {
+              hero_name: state.profile.hero_name,
+              appearance_key: state.profile.appearance_key,
+              created_at: state.profile.created_at,
+              updated_at: state.profile.updated_at,
+            },
+          ],
+        };
+      }
+
+      throw new Error(`Unexpected profile query: ${text}`);
+    },
+  };
 }
 
 function createDefeatPenaltyExecutor() {
@@ -595,4 +647,26 @@ test('save slots reject invalid slot numbers before touching the database', asyn
 
   await assert.rejects(() => service.getSlot('user-1', 0), /Save slot must be between 1 and 3/);
   await assert.rejects(() => service.loadSlotToLiveState('user-1', 4), /Save slot must be between 1 and 3/);
+});
+
+test('profile service upserts and reads hero profile data', async () => {
+  const db = createProfileDatabaseStub();
+  const service = new ProfileService(db);
+
+  const created = await service.upsertProfile('user-1', '  Loic   Legard ', 'forest');
+  assert.deepEqual(created, {
+    heroName: 'Loic Legard',
+    appearanceKey: 'forest',
+    createdAt: '2026-03-31T09:00:00.000Z',
+    updatedAt: '2026-03-31T09:00:00.000Z',
+  });
+
+  const fetched = await service.getProfile('user-1');
+  assert.deepEqual(fetched, created);
+});
+
+test('profile service returns null when no profile exists', async () => {
+  const service = new ProfileService(createProfileDatabaseStub(null));
+  const profile = await service.getProfile('user-1');
+  assert.equal(profile, null);
 });

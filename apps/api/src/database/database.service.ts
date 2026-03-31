@@ -92,6 +92,29 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     `);
 
     await this.query(`
+      CREATE TABLE IF NOT EXISTS player_profiles (
+        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        hero_name TEXT NOT NULL,
+        appearance_key TEXT NOT NULL DEFAULT 'default' CHECK (
+          appearance_key IN ('default', 'ember', 'forest', 'night')
+        ),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await this.query(`
+      ALTER TABLE player_profiles
+      ADD COLUMN IF NOT EXISTS appearance_key TEXT NOT NULL DEFAULT 'default';
+    `);
+
+    await this.query(`
+      UPDATE player_profiles
+      SET appearance_key = 'default'
+      WHERE appearance_key IS NULL OR appearance_key NOT IN ('default', 'ember', 'forest', 'night');
+    `);
+
+    await this.query(`
       CREATE TABLE IF NOT EXISTS inventory_items (
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         item_key TEXT NOT NULL,
