@@ -22,6 +22,7 @@ export class GameplayController {
       this.gameplayService.getWorldState(req.authUser!.id),
       this.gameplayService.getIntroState(req.authUser!.id),
     ]);
+    const farm = await this.gameplayService.getFarmState(req.authUser!.id, world.day);
 
     return {
       status: 'ok',
@@ -31,6 +32,7 @@ export class GameplayController {
       village,
       tower,
       intro,
+      farm,
     };
   }
 

@@ -259,6 +259,63 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     `);
 
     await this.query(`
+      CREATE TABLE IF NOT EXISTS farm_plots (
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        plot_key TEXT NOT NULL,
+        row_index SMALLINT NOT NULL CHECK (row_index >= 1),
+        col_index SMALLINT NOT NULL CHECK (col_index >= 1),
+        crop_key TEXT,
+        planted_day INTEGER CHECK (planted_day IS NULL OR planted_day >= 1),
+        growth_days SMALLINT CHECK (growth_days IS NULL OR growth_days >= 1),
+        watered_today BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, plot_key)
+      );
+    `);
+
+    await this.query(`
+      CREATE INDEX IF NOT EXISTS farm_plots_user_id_idx
+      ON farm_plots(user_id);
+    `);
+
+    await this.query(`
+      ALTER TABLE farm_plots
+      ADD COLUMN IF NOT EXISTS row_index SMALLINT;
+    `);
+
+    await this.query(`
+      ALTER TABLE farm_plots
+      ADD COLUMN IF NOT EXISTS col_index SMALLINT;
+    `);
+
+    await this.query(`
+      ALTER TABLE farm_plots
+      ADD COLUMN IF NOT EXISTS crop_key TEXT;
+    `);
+
+    await this.query(`
+      ALTER TABLE farm_plots
+      ADD COLUMN IF NOT EXISTS planted_day INTEGER;
+    `);
+
+    await this.query(`
+      ALTER TABLE farm_plots
+      ADD COLUMN IF NOT EXISTS growth_days SMALLINT;
+    `);
+
+    await this.query(`
+      ALTER TABLE farm_plots
+      ADD COLUMN IF NOT EXISTS watered_today BOOLEAN NOT NULL DEFAULT FALSE;
+    `);
+
+    await this.query(`
+      UPDATE farm_plots
+      SET watered_today = FALSE
+      WHERE watered_today IS NULL;
+    `);
+
+    await this.query(`
       CREATE TABLE IF NOT EXISTS quest_states (
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         quest_key TEXT NOT NULL,
