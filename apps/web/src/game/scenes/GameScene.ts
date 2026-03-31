@@ -305,6 +305,15 @@ type SaveSlotPreview = {
   equippedCount: number;
 };
 
+type HeroAppearanceKey = 'default' | 'ember' | 'forest' | 'night';
+
+type HeroProfileState = {
+  heroName: string;
+  appearanceKey: HeroAppearanceKey;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type DebugQaPresetOption = {
   key: string;
   label: string;
@@ -432,6 +441,13 @@ const DEBUG_QA_PRESET_OPTIONS: DebugQaPresetOption[] = [
   { key: 'boss_trial', label: 'Boss trial' },
 ];
 
+const HERO_APPEARANCE_OPTIONS: Array<{ key: HeroAppearanceKey; label: string }> = [
+  { key: 'default', label: 'Fermier classique' },
+  { key: 'ember', label: 'Tenue braise' },
+  { key: 'forest', label: 'Tenue sylvestre' },
+  { key: 'night', label: 'Tenue nocturne' },
+];
+
 const DEBUG_QA_STATE_PRESET_OPTIONS: Array<{ key: DebugStatePresetKey; label: string }> = [
   { key: 'village_open', label: 'Village open' },
   { key: 'mid_tower', label: 'Mid tower' },
@@ -504,6 +520,10 @@ function isDebugQaActionName(value: string): value is DebugQaActionName {
   );
 }
 
+function isHeroAppearanceKey(value: string): value is HeroAppearanceKey {
+  return HERO_APPEARANCE_OPTIONS.some((option) => option.key === value);
+}
+
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -543,6 +563,12 @@ export class GameScene extends Phaser.Scene {
   private saveSlotsSummaryValue: HTMLElement | null = null;
   private saveSlotsListRoot: HTMLElement | null = null;
   private saveSlotsErrorValue: HTMLElement | null = null;
+  private heroProfileSummaryValue: HTMLElement | null = null;
+  private heroProfileNameInput: HTMLInputElement | null = null;
+  private heroProfileAppearanceSelect: HTMLSelectElement | null = null;
+  private heroProfileSaveButton: HTMLButtonElement | null = null;
+  private heroProfileMessageValue: HTMLElement | null = null;
+  private heroProfileErrorValue: HTMLElement | null = null;
 
   private authStatus = 'Verification...';
   private isAuthenticated = false;
@@ -591,6 +617,12 @@ export class GameScene extends Phaser.Scene {
   private saveSlotsLoadConfirmSlot: number | null = null;
   private saveSlotsError: string | null = null;
   private saveSlotsRenderSignature = '';
+  private heroProfile: HeroProfileState | null = null;
+  private heroProfileBusy = false;
+  private heroProfileError: string | null = null;
+  private heroProfileMessage: string | null = null;
+  private heroProfileNameDraft = '';
+  private heroProfileAppearanceDraft: HeroAppearanceKey = 'default';
   private spriteManifest: SpriteManifest | null = null;
   private playerUsesStripAnimation = false;
   private playerStripActionTimer: Phaser.Time.TimerEvent | null = null;
@@ -670,6 +702,18 @@ export class GameScene extends Phaser.Scene {
     this.syncDebugQaFiltersFromInputs();
     this.updateHud();
   };
+  private readonly onHeroProfileNameInput = () => {
+    if (!this.heroProfileNameInput) {
+      return;
+    }
+
+    this.heroProfileNameDraft = this.heroProfileNameInput.value;
+    this.heroProfileMessage = null;
+  };
+  private readonly onHeroProfileAppearanceChange = () => {
+    this.heroProfileAppearanceDraft = this.readHeroProfileAppearanceFromUi();
+    this.heroProfileMessage = null;
+  };
 
   private readonly onDebugQaImportFileChange = (event: Event) => {
     void this.handleDebugQaImportFileChange(event);
@@ -687,6 +731,7 @@ export class GameScene extends Phaser.Scene {
     const questAction = button.dataset.questAction;
     const shopAction = button.dataset.shopAction;
     const saveAction = button.dataset.saveAction;
+    const profileAction = button.dataset.profileAction;
     const debugAction = button.dataset.debugAction;
 
     if (hudAction === 'login') {
@@ -774,6 +819,11 @@ export class GameScene extends Phaser.Scene {
       if (saveAction === 'delete') {
         void this.deleteSaveSlot(slot);
       }
+    }
+
+    if (profileAction === 'save') {
+      void this.saveHeroProfile();
+      return;
     }
 
     if (debugAction === 'export-trace') {
@@ -992,6 +1042,27 @@ export class GameScene extends Phaser.Scene {
             <button class="hud-auth-button" data-hud-action="login">Connexion Google</button>
             <button class="hud-auth-button secondary" data-hud-action="logout" hidden>Se deconnecter</button>
           </div>
+        </div>
+        <div class="hud-hero-profile">
+          <div class="hud-hero-profile-header">
+            <span>Hero</span>
+            <strong data-hud="heroProfileSummary">Non cree</strong>
+          </div>
+          <label class="hud-hero-profile-field">
+            <span>Nom du heros</span>
+            <input data-hud="heroProfileName" type="text" maxlength="24" placeholder="Arion" autocomplete="off" />
+          </label>
+          <label class="hud-hero-profile-field">
+            <span>Apparence</span>
+            <select data-hud="heroProfileAppearance">
+              ${HERO_APPEARANCE_OPTIONS.map((option) => `<option value="${option.key}">${option.label}</option>`).join('')}
+            </select>
+          </label>
+          <div class="hud-hero-profile-actions">
+            <button class="hud-hero-profile-button" data-profile-action="save">Creer profil</button>
+          </div>
+          <div class="hud-hero-profile-message" data-hud="heroProfileMessage" hidden></div>
+          <div class="hud-hero-profile-error" data-hud="heroProfileError" hidden></div>
         </div>
         <div class="hud-combat">
           <div class="hud-combat-header">
@@ -1283,6 +1354,12 @@ export class GameScene extends Phaser.Scene {
     this.saveSlotsSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="savesSummary"]');
     this.saveSlotsListRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="savesList"]');
     this.saveSlotsErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="savesError"]');
+    this.heroProfileSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="heroProfileSummary"]');
+    this.heroProfileNameInput = this.hudRoot.querySelector<HTMLInputElement>('[data-hud="heroProfileName"]');
+    this.heroProfileAppearanceSelect = this.hudRoot.querySelector<HTMLSelectElement>('[data-hud="heroProfileAppearance"]');
+    this.heroProfileSaveButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-profile-action="save"]');
+    this.heroProfileMessageValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="heroProfileMessage"]');
+    this.heroProfileErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="heroProfileError"]');
     this.debugQaPanelRoot = this.hudRoot.querySelector<HTMLElement>('.hud-debug-qa');
     this.debugQaStatusValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="debugQaStatus"]');
     this.debugQaMessageValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="debugQaMessage"]');
@@ -1353,6 +1430,12 @@ export class GameScene extends Phaser.Scene {
     if (this.debugQaImportFileInput) {
       this.debugQaImportFileInput.addEventListener('change', this.onDebugQaImportFileChange);
     }
+    if (this.heroProfileNameInput) {
+      this.heroProfileNameInput.addEventListener('input', this.onHeroProfileNameInput);
+    }
+    if (this.heroProfileAppearanceSelect) {
+      this.heroProfileAppearanceSelect.addEventListener('change', this.onHeroProfileAppearanceChange);
+    }
     this.hudRoot.addEventListener('click', this.onHudClick);
     this.updateHud();
   }
@@ -1387,6 +1470,12 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.debugQaScriptIntentFilterInput) {
       this.debugQaScriptIntentFilterInput.removeEventListener('input', this.onDebugQaFilterInputChange);
+    }
+    if (this.heroProfileNameInput) {
+      this.heroProfileNameInput.removeEventListener('input', this.onHeroProfileNameInput);
+    }
+    if (this.heroProfileAppearanceSelect) {
+      this.heroProfileAppearanceSelect.removeEventListener('change', this.onHeroProfileAppearanceChange);
     }
 
     if (this.hudRoot) {
@@ -1423,6 +1512,12 @@ export class GameScene extends Phaser.Scene {
     this.saveSlotsSummaryValue = null;
     this.saveSlotsListRoot = null;
     this.saveSlotsErrorValue = null;
+    this.heroProfileSummaryValue = null;
+    this.heroProfileNameInput = null;
+    this.heroProfileAppearanceSelect = null;
+    this.heroProfileSaveButton = null;
+    this.heroProfileMessageValue = null;
+    this.heroProfileErrorValue = null;
     this.debugQaPanelRoot = null;
     this.debugQaStatusValue = null;
     this.debugQaMessageValue = null;
@@ -1465,6 +1560,12 @@ export class GameScene extends Phaser.Scene {
     this.blacksmithRenderSignature = '';
     this.autosaveRenderSignature = '';
     this.saveSlotsRenderSignature = '';
+    this.heroProfile = null;
+    this.heroProfileBusy = false;
+    this.heroProfileError = null;
+    this.heroProfileMessage = null;
+    this.heroProfileNameDraft = '';
+    this.heroProfileAppearanceDraft = 'default';
     this.debugQaBusyAction = null;
     this.debugQaStatus = 'idle';
     this.debugQaMessage = null;
@@ -1500,6 +1601,7 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('stamina', `${Math.max(0, Math.round(this.hudState.stamina))} / 8`);
     this.setHudText('area', this.hudState.area);
     this.setHudText('authStatus', this.authStatus);
+    this.updateHeroProfileHud();
     this.updateCombatHud();
     this.updateQuestHud();
     this.updateBlacksmithHud();
@@ -1602,6 +1704,48 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.renderSaveSlotsList();
+  }
+
+  private updateHeroProfileHud(): void {
+    const disabled = !this.isAuthenticated || this.heroProfileBusy;
+    const trimmedDraftName = this.heroProfileNameDraft.trim();
+
+    if (this.heroProfileSummaryValue) {
+      this.heroProfileSummaryValue.textContent = this.getHeroProfileSummaryLabel();
+    }
+
+    if (this.heroProfileNameInput) {
+      if (this.heroProfileNameInput.value !== this.heroProfileNameDraft) {
+        this.heroProfileNameInput.value = this.heroProfileNameDraft;
+      }
+      this.heroProfileNameInput.disabled = disabled;
+    }
+
+    if (this.heroProfileAppearanceSelect) {
+      if (this.heroProfileAppearanceSelect.value !== this.heroProfileAppearanceDraft) {
+        this.heroProfileAppearanceSelect.value = this.heroProfileAppearanceDraft;
+      }
+      this.heroProfileAppearanceSelect.disabled = disabled;
+    }
+
+    if (this.heroProfileSaveButton) {
+      this.heroProfileSaveButton.disabled = disabled || trimmedDraftName.length < 2;
+      this.heroProfileSaveButton.textContent = this.heroProfileBusy
+        ? 'Sauvegarde...'
+        : this.heroProfile
+          ? 'Mettre a jour profil'
+          : 'Creer profil';
+    }
+
+    if (this.heroProfileMessageValue) {
+      this.heroProfileMessageValue.hidden = !this.heroProfileMessage;
+      this.heroProfileMessageValue.textContent = this.heroProfileMessage ?? '';
+    }
+
+    if (this.heroProfileErrorValue) {
+      this.heroProfileErrorValue.hidden = !this.heroProfileError;
+      this.heroProfileErrorValue.textContent = this.heroProfileError ?? '';
+    }
   }
 
   private updateDebugQaHud(): void {
@@ -2922,6 +3066,7 @@ export class GameScene extends Phaser.Scene {
     const authenticated = await this.refreshAuthState();
     if (authenticated) {
       await this.refreshGameplayState();
+      await this.refreshHeroProfileState();
       await this.refreshAutoSaveState();
       await this.refreshSaveSlotsState();
       await this.refreshBlacksmithState();
@@ -2931,6 +3076,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.resetGameplayHudState();
+    this.resetHeroProfileState();
     this.resetAutoSaveState();
     this.resetSaveSlotsState();
     this.resetBlacksmithState();
@@ -2973,6 +3119,36 @@ export class GameScene extends Phaser.Scene {
     } catch {
       // Keep previous HUD progression values if gameplay refresh fails.
     } finally {
+      this.updateHud();
+    }
+  }
+
+  private async refreshHeroProfileState(): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.resetHeroProfileState();
+      this.updateHud();
+      return;
+    }
+
+    this.heroProfileBusy = true;
+    this.heroProfileError = null;
+    this.updateHud();
+
+    try {
+      const payload = await this.fetchJson<unknown>('/profile', {
+        method: 'GET',
+      });
+      this.heroProfile = this.normalizeHeroProfilePayload(payload);
+      this.heroProfileMessage = this.heroProfile
+        ? null
+        : 'Aucun profil hero. Cree ton personnage.';
+      this.heroProfileNameDraft = this.heroProfile?.heroName ?? '';
+      this.heroProfileAppearanceDraft = this.heroProfile?.appearanceKey ?? 'default';
+    } catch (error) {
+      this.heroProfileError = this.getErrorMessage(error, 'Unable to load hero profile.');
+      this.heroProfile = null;
+    } finally {
+      this.heroProfileBusy = false;
       this.updateHud();
     }
   }
@@ -3620,6 +3796,54 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private async saveHeroProfile(): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.heroProfileError = 'Login required to create hero profile.';
+      this.updateHud();
+      return;
+    }
+
+    if (this.heroProfileBusy) {
+      return;
+    }
+
+    const heroName = this.heroProfileNameDraft.trim();
+    if (heroName.length < 2 || heroName.length > 24) {
+      this.heroProfileError = 'Hero name must contain 2-24 characters.';
+      this.updateHud();
+      return;
+    }
+
+    this.heroProfileBusy = true;
+    this.heroProfileError = null;
+    this.heroProfileMessage = null;
+    this.updateHud();
+
+    try {
+      const payload = await this.fetchJson<unknown>('/profile', {
+        method: 'PUT',
+        body: JSON.stringify({
+          heroName,
+          appearanceKey: this.heroProfileAppearanceDraft,
+        }),
+      });
+      const profile = this.normalizeHeroProfilePayload(payload);
+      if (profile) {
+        this.heroProfile = profile;
+        this.heroProfileNameDraft = profile.heroName;
+        this.heroProfileAppearanceDraft = profile.appearanceKey;
+        this.heroProfileMessage = 'Profil hero sauvegarde.';
+      } else {
+        this.heroProfileError = 'Profile payload missing in response.';
+      }
+    } catch (error) {
+      this.heroProfileError = this.getErrorMessage(error, 'Unable to save hero profile.');
+    } finally {
+      this.heroProfileBusy = false;
+      this.updateHud();
+    }
+  }
+
   private applyGameplaySnapshot(payload: unknown): void {
     if (!this.isRecord(payload)) {
       return;
@@ -3721,6 +3945,15 @@ export class GameScene extends Phaser.Scene {
     this.hudState.towerBossFloor10Defeated = false;
     this.hudState.blacksmithUnlocked = false;
     this.hudState.blacksmithCurseLifted = false;
+  }
+
+  private resetHeroProfileState(): void {
+    this.heroProfile = null;
+    this.heroProfileBusy = false;
+    this.heroProfileError = null;
+    this.heroProfileMessage = null;
+    this.heroProfileNameDraft = '';
+    this.heroProfileAppearanceDraft = 'default';
   }
 
   private resetAutoSaveState(): void {
@@ -5506,6 +5739,15 @@ export class GameScene extends Phaser.Scene {
     return Math.max(0, rounded);
   }
 
+  private readHeroProfileAppearanceFromUi(): HeroAppearanceKey {
+    const raw = this.heroProfileAppearanceSelect?.value?.trim() ?? '';
+    if (isHeroAppearanceKey(raw)) {
+      return raw;
+    }
+
+    return 'default';
+  }
+
   private isQuestStatusValue(value: string): value is QuestStatus {
     return value === 'active' || value === 'completed' || value === 'claimed';
   }
@@ -5534,6 +5776,27 @@ export class GameScene extends Phaser.Scene {
     }
 
     return 'Unlocked';
+  }
+
+  private getHeroProfileSummaryLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Connexion requise';
+    }
+
+    if (this.heroProfileBusy && !this.heroProfile) {
+      return 'Chargement...';
+    }
+
+    if (!this.heroProfile) {
+      return 'Non cree';
+    }
+
+    return `${this.heroProfile.heroName} | ${this.getHeroAppearanceLabel(this.heroProfile.appearanceKey)}`;
+  }
+
+  private getHeroAppearanceLabel(key: HeroAppearanceKey): string {
+    const option = HERO_APPEARANCE_OPTIONS.find((entry) => entry.key === key);
+    return option ? option.label : 'Fermier classique';
   }
 
   private async fetchJson<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -5686,6 +5949,33 @@ export class GameScene extends Phaser.Scene {
     return {
       version: Math.max(1, Math.round(version)),
       reason,
+      updatedAt,
+    };
+  }
+
+  private normalizeHeroProfilePayload(payload: unknown): HeroProfileState | null {
+    if (!this.isRecord(payload)) {
+      return null;
+    }
+
+    const profile = this.asRecord(payload.profile);
+    if (!profile) {
+      return null;
+    }
+
+    const heroName = this.asString(profile.heroName);
+    const appearanceValue = this.asString(profile.appearanceKey);
+    const createdAt = this.asString(profile.createdAt);
+    const updatedAt = this.asString(profile.updatedAt);
+
+    if (!heroName || !appearanceValue || !createdAt || !updatedAt || !isHeroAppearanceKey(appearanceValue)) {
+      return null;
+    }
+
+    return {
+      heroName,
+      appearanceKey: appearanceValue,
+      createdAt,
       updatedAt,
     };
   }

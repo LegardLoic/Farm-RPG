@@ -216,6 +216,7 @@ body::before {
 }
 
 .hud-auth,
+.hud-hero-profile,
 .hud-combat,
 .hud-quests,
 .hud-blacksmith,
@@ -289,6 +290,12 @@ body::before {
 }
 
 .hud-quests {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hud-hero-profile {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -553,6 +560,103 @@ body::before {
 .hud-debug-qa-button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.hud-hero-profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.hud-hero-profile-header span {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.hud-hero-profile-header strong {
+  font-size: 0.75rem;
+  color: var(--accent-2);
+}
+
+.hud-hero-profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.hud-hero-profile-field span {
+  font-size: 0.71rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.hud-hero-profile-field input,
+.hud-hero-profile-field select {
+  width: 100%;
+  min-height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(185, 195, 212, 0.22);
+  background: rgba(6, 10, 16, 0.56);
+  color: var(--text);
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 0.84rem;
+}
+
+.hud-hero-profile-field input:focus,
+.hud-hero-profile-field select:focus {
+  outline: 2px solid rgba(127, 209, 199, 0.42);
+  outline-offset: 1px;
+}
+
+.hud-hero-profile-field input:disabled,
+.hud-hero-profile-field select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.hud-hero-profile-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.hud-hero-profile-button {
+  border: 1px solid rgba(226, 182, 109, 0.45);
+  background: rgba(226, 182, 109, 0.18);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 7px 10px;
+  font-size: 0.77rem;
+  cursor: pointer;
+}
+
+.hud-hero-profile-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.hud-hero-profile-message {
+  border: 1px solid rgba(127, 209, 199, 0.38);
+  background: rgba(127, 209, 199, 0.12);
+  color: #c8fff7;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.hud-hero-profile-error {
+  border: 1px solid rgba(242, 111, 111, 0.4);
+  background: rgba(242, 111, 111, 0.14);
+  color: #ffd1d1;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .hud-quests-header {
@@ -1509,7 +1613,8 @@ body::before {
   }
 
   .hud-auth-button,
-  .hud-combat-button {
+  .hud-combat-button,
+  .hud-hero-profile-button {
     flex: 1 1 100%;
   }
 }

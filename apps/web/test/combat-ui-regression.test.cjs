@@ -163,3 +163,17 @@ test('debug QA export button keeps dedicated styling', () => {
   assert.equal(stylesSource.includes('.hud-debug-qa-reference-filters'), true);
   assert.equal(stylesSource.includes('.hud-debug-qa-reference-output'), true);
 });
+
+test('hero profile creation panel exposes expected controls and wiring', () => {
+  assert.equal(gameSceneSource.includes('data-hud="heroProfileSummary"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="heroProfileName"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="heroProfileAppearance"'), true);
+  assert.equal(gameSceneSource.includes('data-profile-action="save"'), true);
+  assert.equal(gameSceneSource.includes('private async refreshHeroProfileState(): Promise<void>'), true);
+  assert.equal(gameSceneSource.includes('private async saveHeroProfile(): Promise<void>'), true);
+  assert.equal(gameSceneSource.includes('private updateHeroProfileHud(): void'), true);
+  assert.equal(gameSceneSource.includes('private normalizeHeroProfilePayload(payload: unknown): HeroProfileState | null'), true);
+  assert.equal(stylesSource.includes('.hud-hero-profile'), true);
+  assert.equal(stylesSource.includes('.hud-hero-profile-field'), true);
+  assert.equal(stylesSource.includes('.hud-hero-profile-button'), true);
+});
