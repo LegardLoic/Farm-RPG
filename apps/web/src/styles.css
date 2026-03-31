@@ -283,6 +283,18 @@ body::before {
   opacity: 0.55;
 }
 
+.hud-panel [data-gamepad-focused="1"] {
+  outline: 2px solid rgba(127, 209, 199, 0.78);
+  outline-offset: 1px;
+  box-shadow:
+    0 0 0 2px rgba(8, 14, 24, 0.72),
+    0 0 0 4px rgba(127, 209, 199, 0.2);
+}
+
+.hud-panel [data-gamepad-focused="1"]:not(:disabled) {
+  filter: brightness(1.06);
+}
+
 .hud-combat {
   display: flex;
   flex-direction: column;
