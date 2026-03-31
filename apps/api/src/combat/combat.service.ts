@@ -12,6 +12,10 @@ import {
   BASE_PLAYER_MAX_MP,
   BASE_WORLD_DAY,
   BASE_WORLD_ZONE,
+  COMBAT_PREPARATION_FLAGS,
+  COMBAT_PREPARATION_FLAG_ATTACK,
+  COMBAT_PREPARATION_FLAG_HP,
+  COMBAT_PREPARATION_FLAG_MP,
   PLAYER_PROGRESSION_TABLE,
   PLAYER_MAX_LEVEL,
   WORLD_STATE_TABLE,
@@ -117,6 +121,10 @@ type InventoryStackRow = {
 type WorldStateRow = {
   zone: string;
   day: number;
+};
+
+type WorldFlagRow = {
+  flag_key: string;
 };
 
 type EnemyIntent =
@@ -293,6 +301,7 @@ export class CombatService {
           progression,
           forcedStart ? forcedStart.isScriptedBossEncounter : scriptedEnemyKey !== null,
         );
+        await this.consumePreparedCombatBonuses(tx, userId, encounter);
         if (forcedStart) {
           const mode = forcedStart.isScriptedBossEncounter ? 'scripted boss mode' : 'normal mode';
           this.pushLog(encounter, `Debug override consumed: forced enemy ${enemy.name} (${enemy.key}) in ${mode}.`);
@@ -362,6 +371,7 @@ export class CombatService {
           ? forcedStart.isScriptedBossEncounter
           : scriptedEnemyKey !== null && enemy.key === scriptedEnemyKey,
       );
+      await this.consumePreparedCombatBonuses(tx, userId, encounter);
       if (forcedStart) {
         const mode = forcedStart.isScriptedBossEncounter ? 'scripted boss mode' : 'normal mode';
         this.pushLog(encounter, `Debug override consumed: forced enemy ${enemy.name} (${enemy.key}) in ${mode}.`);
@@ -1933,12 +1943,74 @@ export class CombatService {
     };
   }
 
+  private async consumePreparedCombatBonuses(
+    executor: TransactionClient,
+    userId: string,
+    encounter: CombatEncounterState,
+  ): Promise<void> {
+    const result = await executor.query<WorldFlagRow>(
+      `
+        SELECT flag_key
+        FROM ${WORLD_FLAGS_TABLE}
+        WHERE user_id = $1
+          AND flag_key = ANY($2::text[])
+        FOR UPDATE
+      `,
+      [userId, [...COMBAT_PREPARATION_FLAGS]],
+    );
+
+    if (result.rows.length === 0) {
+      return;
+    }
+
+    const activeFlags = new Set(result.rows.map((row) => row.flag_key));
+    const hpBoost = activeFlags.has(COMBAT_PREPARATION_FLAG_HP) ? 6 : 0;
+    const mpBoost = activeFlags.has(COMBAT_PREPARATION_FLAG_MP) ? 4 : 0;
+    const attackBoost = activeFlags.has(COMBAT_PREPARATION_FLAG_ATTACK) ? 1 : 0;
+
+    if (hpBoost > 0) {
+      const before = encounter.player.hp;
+      encounter.player.hp = Math.min(encounter.player.maxHp, encounter.player.hp + hpBoost);
+      this.pushLog(encounter, `Preparation bonus: +${encounter.player.hp - before} HP before combat.`);
+    }
+    if (mpBoost > 0) {
+      const before = encounter.player.mp;
+      encounter.player.mp = Math.min(encounter.player.maxMp, encounter.player.mp + mpBoost);
+      this.pushLog(encounter, `Preparation bonus: +${encounter.player.mp - before} MP before combat.`);
+    }
+    if (attackBoost > 0) {
+      encounter.scriptState = {
+        ...(encounter.scriptState ?? {}),
+        playerPrepAttackBonus: attackBoost,
+      };
+      this.pushLog(encounter, `Village support: +${attackBoost} attack and magic for this combat.`);
+    }
+
+    await executor.query(
+      `
+        DELETE FROM ${WORLD_FLAGS_TABLE}
+        WHERE user_id = $1
+          AND flag_key = ANY($2::text[])
+      `,
+      [userId, [...COMBAT_PREPARATION_FLAGS]],
+    );
+  }
+
+  private getPlayerPreparationAttackBonus(encounter: CombatEncounterState): number {
+    const value = encounter.scriptState?.playerPrepAttackBonus;
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return 0;
+    }
+
+    return Math.max(0, Math.floor(value));
+  }
+
   private getPlayerAttackBonus(encounter: CombatEncounterState): number {
-    return this.getPlayerRallyTurns(encounter) > 0 ? 3 : 0;
+    return (this.getPlayerRallyTurns(encounter) > 0 ? 3 : 0) + this.getPlayerPreparationAttackBonus(encounter);
   }
 
   private getPlayerMagicAttackBonus(encounter: CombatEncounterState): number {
-    return this.getPlayerRallyTurns(encounter) > 0 ? 3 : 0;
+    return (this.getPlayerRallyTurns(encounter) > 0 ? 3 : 0) + this.getPlayerPreparationAttackBonus(encounter);
   }
 
   private getEnemyDefensePenalty(encounter: CombatEncounterState): number {

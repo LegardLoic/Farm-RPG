@@ -379,6 +379,29 @@ type FarmCraftingState = {
   craftableRecipes: number;
 };
 
+type LoopPreparationState = {
+  active: boolean;
+  hpBoostActive: boolean;
+  mpBoostActive: boolean;
+  attackBoostActive: boolean;
+  ready: boolean;
+  blockers: string[];
+  nextStep: string;
+};
+
+type GameplayLoopState = {
+  stageKey: 'tower_bootstrap' | 'village_sync' | 'farm_scale' | 'combat_mastery';
+  stageLabel: string;
+  farmUnlocked: boolean;
+  villageMarketUnlocked: boolean;
+  supplies: {
+    healingHerb: number;
+    manaTonic: number;
+  };
+  relationshipAverage: number;
+  preparation: LoopPreparationState;
+};
+
 type AutoSaveState = {
   version: number;
   reason: string;
@@ -697,6 +720,13 @@ export class GameScene extends Phaser.Scene {
   private farmCraftingSummaryValue: HTMLElement | null = null;
   private farmCraftingListRoot: HTMLElement | null = null;
   private farmCraftingErrorValue: HTMLElement | null = null;
+  private loopSummaryValue: HTMLElement | null = null;
+  private loopStageValue: HTMLElement | null = null;
+  private loopSuppliesValue: HTMLElement | null = null;
+  private loopPrepValue: HTMLElement | null = null;
+  private loopBlockersValue: HTMLElement | null = null;
+  private loopErrorValue: HTMLElement | null = null;
+  private loopPrepareButton: HTMLButtonElement | null = null;
   private villageNpcSummaryValue: HTMLElement | null = null;
   private villageNpcMayorValue: HTMLElement | null = null;
   private villageNpcBlacksmithValue: HTMLElement | null = null;
@@ -776,6 +806,9 @@ export class GameScene extends Phaser.Scene {
   private farmCraftingBusy = false;
   private farmCraftingError: string | null = null;
   private farmCraftingRenderSignature = '';
+  private loopState: GameplayLoopState | null = null;
+  private loopBusy = false;
+  private loopError: string | null = null;
   private villageNpcState: VillageNpcHudState = {
     mayor: { stateKey: 'offscreen', available: false },
     blacksmith: { stateKey: 'cursed', available: false },
@@ -814,6 +847,7 @@ export class GameScene extends Phaser.Scene {
   private spriteManifest: SpriteManifest | null = null;
   private playerUsesStripAnimation = false;
   private playerStripActionTimer: Phaser.Time.TimerEvent | null = null;
+  private playerStripAccentTimer: Phaser.Time.TimerEvent | null = null;
   private enemyHudStripPlayback: HudStripPlaybackState | null = null;
   private enemyHudStripIntervalId: number | null = null;
   private enemyHudStripOverrideAnimation: StripAnimationName | null = null;
@@ -925,6 +959,7 @@ export class GameScene extends Phaser.Scene {
     const shopAction = button.dataset.shopAction;
     const marketAction = button.dataset.marketAction;
     const villageNpcAction = button.dataset.villageNpcAction;
+    const loopAction = button.dataset.loopAction;
     const farmAction = button.dataset.farmAction;
     const farmCraftAction = button.dataset.farmCraftAction;
     const saveAction = button.dataset.saveAction;
@@ -1003,6 +1038,11 @@ export class GameScene extends Phaser.Scene {
       if (npcKey === 'mayor' || npcKey === 'blacksmith' || npcKey === 'merchant') {
         void this.interactVillageNpc(npcKey);
       }
+      return;
+    }
+
+    if (loopAction === 'prepare') {
+      void this.prepareCombatLoop();
       return;
     }
 
@@ -1503,6 +1543,34 @@ export class GameScene extends Phaser.Scene {
           <div class="hud-farm-crafting-error" data-hud="farmCraftingError" hidden></div>
           <ul class="hud-farm-crafting-list" data-hud="farmCraftingRecipes"></ul>
         </div>
+        <div class="hud-loop">
+          <div class="hud-loop-header">
+            <span>Combat Loop</span>
+            <strong data-hud="loopSummary">Loading...</strong>
+          </div>
+          <div class="hud-loop-grid">
+            <div class="hud-loop-line">
+              <span>Stage</span>
+              <strong data-hud="loopStage">-</strong>
+            </div>
+            <div class="hud-loop-line">
+              <span>Supplies</span>
+              <strong data-hud="loopSupplies">-</strong>
+            </div>
+            <div class="hud-loop-line">
+              <span>Prep</span>
+              <strong data-hud="loopPreparation">-</strong>
+            </div>
+            <div class="hud-loop-line">
+              <span>Blocker</span>
+              <strong data-hud="loopBlockers">-</strong>
+            </div>
+          </div>
+          <div class="hud-loop-actions">
+            <button class="hud-loop-button" data-loop-action="prepare">Prepare combat</button>
+          </div>
+          <div class="hud-loop-error" data-hud="loopError" hidden></div>
+        </div>
         <div class="hud-autosave">
           <div class="hud-autosave-header">
             <span>Autosave</span>
@@ -1706,6 +1774,13 @@ export class GameScene extends Phaser.Scene {
     this.farmCraftingSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmCraftingSummary"]');
     this.farmCraftingListRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmCraftingRecipes"]');
     this.farmCraftingErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmCraftingError"]');
+    this.loopSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="loopSummary"]');
+    this.loopStageValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="loopStage"]');
+    this.loopSuppliesValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="loopSupplies"]');
+    this.loopPrepValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="loopPreparation"]');
+    this.loopBlockersValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="loopBlockers"]');
+    this.loopErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="loopError"]');
+    this.loopPrepareButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-loop-action="prepare"]');
     this.villageNpcSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcSummary"]');
     this.villageNpcMayorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcMayor"]');
     this.villageNpcBlacksmithValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcBlacksmith"]');
@@ -1829,6 +1904,13 @@ export class GameScene extends Phaser.Scene {
       this.playerStripActionTimer.remove(false);
       this.playerStripActionTimer = null;
     }
+    if (this.playerStripAccentTimer) {
+      this.playerStripAccentTimer.remove(false);
+      this.playerStripAccentTimer = null;
+    }
+    if (this.player) {
+      this.player.clearTint();
+    }
     this.stopEnemyHudStripPlayback();
     this.clearEnemyHudStripOverride();
     this.resetGamepadInputState();
@@ -1903,6 +1985,13 @@ export class GameScene extends Phaser.Scene {
     this.farmCraftingSummaryValue = null;
     this.farmCraftingListRoot = null;
     this.farmCraftingErrorValue = null;
+    this.loopSummaryValue = null;
+    this.loopStageValue = null;
+    this.loopSuppliesValue = null;
+    this.loopPrepValue = null;
+    this.loopBlockersValue = null;
+    this.loopErrorValue = null;
+    this.loopPrepareButton = null;
     this.villageNpcSummaryValue = null;
     this.villageNpcMayorValue = null;
     this.villageNpcBlacksmithValue = null;
@@ -1985,6 +2074,9 @@ export class GameScene extends Phaser.Scene {
     this.farmCraftingBusy = false;
     this.farmCraftingError = null;
     this.farmCraftingRenderSignature = '';
+    this.loopState = null;
+    this.loopBusy = false;
+    this.loopError = null;
     this.villageNpcState = {
       mayor: { stateKey: 'offscreen', available: false },
       blacksmith: { stateKey: 'cursed', available: false },
@@ -2046,6 +2138,7 @@ export class GameScene extends Phaser.Scene {
     this.updateVillageMarketHud();
     this.updateFarmHud();
     this.updateFarmCraftingHud();
+    this.updateLoopHud();
     this.updateAutoSaveHud();
     this.updateSaveSlotsHud();
     this.updateDebugQaHud();
@@ -2215,6 +2308,33 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.renderFarmCraftingRecipes();
+  }
+
+  private updateLoopHud(): void {
+    if (this.loopSummaryValue) {
+      this.loopSummaryValue.textContent = this.getLoopSummaryLabel();
+    }
+    if (this.loopStageValue) {
+      this.loopStageValue.textContent = this.loopState?.stageLabel ?? '-';
+    }
+    if (this.loopSuppliesValue) {
+      this.loopSuppliesValue.textContent = this.getLoopSuppliesLabel();
+    }
+    if (this.loopPrepValue) {
+      this.loopPrepValue.textContent = this.getLoopPreparationLabel();
+    }
+    if (this.loopBlockersValue) {
+      this.loopBlockersValue.textContent = this.getLoopBlockersLabel();
+    }
+    if (this.loopErrorValue) {
+      this.loopErrorValue.hidden = !this.loopError;
+      this.loopErrorValue.textContent = this.loopError ?? '';
+    }
+    if (this.loopPrepareButton) {
+      const canPrepare = Boolean(this.isAuthenticated && this.loopState?.preparation.ready);
+      this.loopPrepareButton.disabled = !canPrepare || this.loopBusy;
+      this.loopPrepareButton.textContent = this.loopBusy ? 'Preparing...' : 'Prepare combat';
+    }
   }
 
   private updateAutoSaveHud(): void {
@@ -3626,6 +3746,70 @@ export class GameScene extends Phaser.Scene {
       : `${this.farmCraftingState.craftableRecipes} craftable | ${unlockedRecipes} recipes`;
   }
 
+  private getLoopSummaryLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Login required';
+    }
+
+    if (this.loopBusy && !this.loopState) {
+      return 'Loading...';
+    }
+
+    if (!this.loopState) {
+      return 'No data';
+    }
+
+    if (this.loopState.preparation.active) {
+      return 'Preparation active';
+    }
+
+    return this.loopState.preparation.ready ? 'Preparation ready' : 'Preparation blocked';
+  }
+
+  private getLoopSuppliesLabel(): string {
+    if (!this.loopState) {
+      return '-';
+    }
+
+    return `Herb ${this.loopState.supplies.healingHerb} | Tonic ${this.loopState.supplies.manaTonic}`;
+  }
+
+  private getLoopPreparationLabel(): string {
+    if (!this.loopState) {
+      return '-';
+    }
+
+    const prep = this.loopState.preparation;
+    if (!prep.active) {
+      return prep.ready ? 'Ready to apply' : 'Inactive';
+    }
+
+    const bonuses: string[] = [];
+    if (prep.hpBoostActive) {
+      bonuses.push('+HP');
+    }
+    if (prep.mpBoostActive) {
+      bonuses.push('+MP');
+    }
+    if (prep.attackBoostActive) {
+      bonuses.push('+ATK');
+    }
+
+    return bonuses.length > 0 ? bonuses.join(' / ') : 'Active';
+  }
+
+  private getLoopBlockersLabel(): string {
+    if (!this.loopState) {
+      return '-';
+    }
+
+    if (this.loopState.preparation.blockers.length > 0) {
+      return this.loopState.preparation.blockers[0] ?? '-';
+    }
+
+    return this.loopState.preparation.nextStep;
+  }
+
   private getFarmPlotStatusLabel(plot: FarmPlotState): string {
     if (!plot.cropKey) {
       return 'Parcelle vide. Selectionne une graine puis plante.';
@@ -4201,6 +4385,13 @@ export class GameScene extends Phaser.Scene {
       window.clearInterval(this.enemyHudStripIntervalId);
       this.enemyHudStripIntervalId = null;
     }
+
+    const stripElement = this.hudRoot?.querySelector<HTMLElement>('[data-hud="combatEnemyStrip"]');
+    if (stripElement) {
+      stripElement.dataset.enemyKey = '';
+      stripElement.dataset.stripAnimation = '';
+    }
+
     this.enemyHudStripPlayback = null;
   }
 
@@ -4392,9 +4583,30 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.playPlayerStripAnimation(animation, true);
+    this.triggerPlayerStripAccent(animation, durationMs);
     this.playerStripActionTimer = this.time.delayedCall(durationMs, () => {
       this.playerStripActionTimer = null;
       this.playPlayerStripAnimation('idle', true);
+    });
+  }
+
+  private triggerPlayerStripAccent(animation: Exclude<StripAnimationName, 'idle'>, durationMs: number): void {
+    if (!this.player) {
+      return;
+    }
+
+    if (this.playerStripAccentTimer) {
+      this.playerStripAccentTimer.remove(false);
+      this.playerStripAccentTimer = null;
+    }
+
+    const tint = animation === 'hit' ? 0xff8c8c : 0x8cb8ff;
+    this.player.setTint(tint);
+    const clearDelay = Math.max(90, Math.min(220, Math.round(durationMs * 0.45)));
+
+    this.playerStripAccentTimer = this.time.delayedCall(clearDelay, () => {
+      this.playerStripAccentTimer = null;
+      this.player.clearTint();
     });
   }
 
@@ -4560,6 +4772,7 @@ export class GameScene extends Phaser.Scene {
       this.applyGameplaySnapshot(payload);
       this.farmCraftingError = null;
       this.villageNpcError = null;
+      this.loopError = null;
     } catch {
       // Keep previous HUD progression values if gameplay refresh fails.
     } finally {
@@ -5041,7 +5254,7 @@ export class GameScene extends Phaser.Scene {
     const playerStrip = this.getStripManifestEntry('player-hero');
     const playerTimings = this.getStripPlayerTimings(playerStrip);
 
-    if (action === 'attack' || action === 'defend') {
+    if (action === 'attack' || action === 'sunder' || action === 'interrupt') {
       this.triggerPlayerStripAction('hit', playerTimings.hitDurationMs);
       return;
     }
@@ -5232,6 +5445,39 @@ export class GameScene extends Phaser.Scene {
       this.villageNpcError = this.getErrorMessage(error, 'Unable to interact with this NPC.');
     } finally {
       this.villageNpcBusy = false;
+      this.updateHud();
+    }
+  }
+
+  private async prepareCombatLoop(): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.loopError = 'Login required to prepare combat.';
+      this.updateHud();
+      return;
+    }
+
+    if (!this.loopState?.preparation.ready) {
+      this.loopError = this.loopState?.preparation.nextStep ?? 'Preparation unavailable.';
+      this.updateHud();
+      return;
+    }
+
+    this.loopBusy = true;
+    this.loopError = null;
+    this.updateHud();
+
+    try {
+      await this.fetchJson('/gameplay/combat/prepare', {
+        method: 'POST',
+      });
+      await this.refreshGameplayState();
+      await this.refreshVillageMarketState();
+      await this.refreshBlacksmithState();
+      await this.refreshQuestState();
+    } catch (error) {
+      this.loopError = this.getErrorMessage(error, 'Unable to prepare combat.');
+    } finally {
+      this.loopBusy = false;
       this.updateHud();
     }
   }
@@ -5704,6 +5950,11 @@ export class GameScene extends Phaser.Scene {
     const crafting = this.normalizeGameplayCraftingPayload(payload);
     if (crafting) {
       this.farmCraftingState = crafting;
+    }
+
+    const loop = this.normalizeGameplayLoopPayload(payload);
+    if (loop) {
+      this.loopState = loop;
     }
 
     const progression = this.asRecord(payload.progression);
@@ -8048,6 +8299,68 @@ export class GameScene extends Phaser.Scene {
       unlocked: Boolean(craftingRecord.unlocked),
       craftableRecipes: Math.max(0, Math.round(craftableRecipes)),
       recipes,
+    };
+  }
+
+  private normalizeGameplayLoopPayload(payload: unknown): GameplayLoopState | null {
+    const root = this.asRecord(payload);
+    if (!root) {
+      return null;
+    }
+
+    const loopRecord = this.asRecord(root.loop) ?? root;
+    const stageKeyRaw = this.asString(loopRecord.stageKey)?.trim().toLowerCase();
+    const stageLabel = this.asString(loopRecord.stageLabel)?.trim();
+    const relationshipAverageRaw = this.asNumber(loopRecord.relationshipAverage);
+    const supplies = this.asRecord(loopRecord.supplies);
+    const preparation = this.asRecord(loopRecord.preparation);
+
+    if (
+      !stageKeyRaw ||
+      (stageKeyRaw !== 'tower_bootstrap' &&
+        stageKeyRaw !== 'village_sync' &&
+        stageKeyRaw !== 'farm_scale' &&
+        stageKeyRaw !== 'combat_mastery') ||
+      !stageLabel ||
+      relationshipAverageRaw === null ||
+      !supplies ||
+      !preparation
+    ) {
+      return null;
+    }
+
+    const healingHerb = this.asNumber(supplies.healingHerb);
+    const manaTonic = this.asNumber(supplies.manaTonic);
+    const nextStep = this.asString(preparation.nextStep)?.trim();
+    if (healingHerb === null || manaTonic === null || !nextStep) {
+      return null;
+    }
+
+    const blockers = Array.isArray(preparation.blockers)
+      ? preparation.blockers
+          .map((entry) => this.asString(entry)?.trim() ?? '')
+          .filter((entry) => entry.length > 0)
+      : [];
+
+    return {
+      stageKey: stageKeyRaw,
+      stageLabel,
+      farmUnlocked: Boolean(loopRecord.farmUnlocked),
+      villageMarketUnlocked: Boolean(loopRecord.villageMarketUnlocked),
+      relationshipAverage: Number(relationshipAverageRaw.toFixed(2)),
+      supplies: {
+        healingHerb: Math.max(0, Math.round(healingHerb)),
+        manaTonic: Math.max(0, Math.round(manaTonic)),
+      },
+      preparation: {
+        active: Boolean(preparation.active),
+        hpBoostActive: Boolean(preparation.hpBoostActive),
+        mpBoostActive: Boolean(preparation.mpBoostActive),
+        attackBoostActive: Boolean(preparation.attackBoostActive),
+        ready: Boolean(preparation.ready),
+        blockers,
+        nextStep,
+      },
     };
   }
 

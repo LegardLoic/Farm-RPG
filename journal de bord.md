@@ -1428,6 +1428,84 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - rejet interaction PNJ indisponible
   - regression web etendue pour verrouiller wiring du panneau relationnel PNJ.
 
+### Lot 95 - Boucle verticale complete: tour -> village -> ferme -> preparation combat
+- Backend gameplay:
+  - `GET /gameplay/state` enrichi avec le bloc `loop`:
+    - `stageKey/stageLabel` derives de la progression tour (`tower_progression`)
+    - disponibilite ferme/marche village
+    - stock consommables (`healing_herb`, `mana_tonic`)
+    - etat preparation combat (`active/ready/blockers/nextStep`)
+  - nouvel endpoint protege:
+    - `POST /gameplay/combat/prepare`
+  - regles MVP:
+    - ferme + marche village requis
+    - preparation impossible si une preparation est deja active
+    - consommation transactionnelle des consommables ferme
+    - bonus attaque accorde selon relation maire (`familiar+`).
+- Backend combat:
+  - branchement one-shot des bonus de preparation sur `POST /combat/start`:
+    - `combat_prep_hp` -> bonus HP de debut
+    - `combat_prep_mp` -> bonus MP de debut
+    - `combat_prep_attack` -> bonus attaque/magie pour le combat
+  - purge automatique des flags de preparation apres consommation.
+- Frontend HUD (Phaser):
+  - nouveau panneau `Combat Loop`:
+    - stage vertical courant
+    - recap supplies ferme
+    - etat de preparation actif/bloque
+    - blocker prioritaire + message d'erreur local
+    - action `Prepare combat`.
+  - wiring action preparation:
+    - `POST /gameplay/combat/prepare`
+    - refresh `gameplay/state` + panel village/crafting associes.
+- QA:
+  - tests API crosscut ajoutes:
+    - lecture du bloc `loop`
+    - preparation combat (consommation ressources + activation flags)
+  - regression web etendue pour verrouiller le wiring du panneau loop.
+
+### Lot 96 - Gate MVP: campagne QA verticale + checklist executable
+- Gate automatique:
+  - nouvelle commande racine:
+    - `npm run qa:gate:mvp`
+  - orchestration sequentielle:
+    - `lint` -> `typecheck` -> `build` -> tests API -> tests web
+  - mode etendu optionnel:
+    - `MVP_GATE_INCLUDE_E2E=1 npm run qa:gate:mvp`
+    - ajoute `test:e2e` API + smoke web.
+  - artifact local de synthese:
+    - `artifacts/qa-gate/mvp-gate-report.md`
+- Documentation:
+  - nouveau document:
+    - `docs/08-gate-mvp-vertical-checklist.md`
+  - checklist manuelle verticale (intro, farm, crafting, prep combat, start combat, save/load, HUD)
+  - Definition of Done explicite du gate.
+
+### Lot 97 - Review animation: peaufinage hero/boss (timings + lisibilite)
+- Assets/tuning strips:
+  - retuning des sequences `idle/hit/cast` dans `manifest.json` pour:
+    - meilleure lecture des impacts (`hit`)
+    - meilleur maintien des phases de cast (`cast`)
+    - idle moins hache sur hero + boss.
+  - retuning des timings hero et boss (fps/interval/duration) pour rendre les beats plus lisibles.
+- Runtime frontend:
+  - mapping actions hero ajuste:
+    - `attack/sunder/interrupt` -> profil `hit`
+    - autres skills -> profil `cast`
+  - accent visuel hero en combat:
+    - tint rouge sur impact
+    - tint bleu sur cast
+    - clear automatique court pour eviter les etats bloques.
+  - nettoyage du dataset strip HUD a l'arret pour eviter la persistance de style stale.
+- UI/CSS:
+  - etats visuels explicites sur strip HUD ennemi:
+    - `data-strip-animation="cast"` (glow/pulse)
+    - `data-strip-animation="hit"` (impact/shake)
+  - etats portraits fallback:
+    - `data-visual-state="hit"` et `cast` avec accent de lisibilite.
+- QA:
+  - regression web etendue avec assertions lot 97 (mapping action + selectors CSS + keyframes).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1438,6 +1516,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - endpoints ferme transactionnels (`plant/water/harvest`) avec validations metier serveur
   - endpoint temps `sleep` pour avance de jour + reset arrosage journalier
   - crafting ferme (recettes recoltes -> consommables combat) + etat `crafting` expose au HUD
+  - boucle verticale exposee via `loop` + endpoint `POST /gameplay/combat/prepare`
+  - consommation one-shot des bonus de preparation sur `combat/start`
   - etat village par flags
   - score relationnel PNJ persistant (amitie/tier/cooldown journalier)
   - etat intro scenario MVP pilote par flags monde + endpoint d'avance
@@ -1513,7 +1593,9 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - panneau Village Market (achat graines + vente recoltes)
   - panneau Farm Plots (selection graine + actions plant/water/harvest)
   - panneau Farm Crafting (recettes recoltes -> consommables combat)
+  - panneau Combat Loop (stage vertical + preparation combat one-shot)
   - cycle jour/nuit MVP + action `Sleep (+1 day)` sur la ferme
+  - animation review lot 97: accents visuels strips/portraits + timings hero/boss retunes
 - Chargement web optimise:
   - entree legere
   - bootstrap asynchrone
@@ -1540,6 +1622,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `POST /auth/logout`
 - `GET /gameplay/state`
 - `POST /gameplay/intro/advance`
+- `POST /gameplay/combat/prepare`
 - `POST /gameplay/village/npc/interact`
 - `POST /gameplay/sleep`
 - `GET /gameplay/crafting`
@@ -1602,19 +1685,20 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Nightly smoke auth nettoie automatiquement le combat ouvert (`forfeit`) pour eviter l'accumulation d'encounters actifs.
 - Nightly staging publie un dashboard historique 7 jours (`history.json` + `dashboard.md`) pour suivre la tendance smoke/e2e.
 - Nightly staging declenche une alerte GitHub dediee en cas de 2 echecs consecutifs.
+- Gate locale MVP ajoutee via `npm run qa:gate:mvp` + rapport markdown dedie.
 - Endpoint debug readonly disponible pour auditer scripts combat sans lancer un combat complet.
 - Tuning animation hero/boss configurable via manifest sans toucher au code runtime.
 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
-2. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
-3. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
-4. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
-5. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
-6. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
-7. Lot 101 - Quetes narratives village: premieres micro-quetes dialoguees reliees aux etats PNJ.
-8. Lot 102 - Premiere passe dialogues contextuels PNJ relies au tier de relation.
+1. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
+2. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
+3. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
+4. Lot 101 - Quetes narratives village: premieres micro-quetes dialoguees reliees aux etats PNJ.
+5. Lot 102 - Premiere passe dialogues contextuels PNJ relies au tier de relation.
+6. Lot 103 - Hook scenario ferme: premiers evenements declenches par jour + progression recoltes.
+7. Lot 104 - Trigger scenario tour: premiers beats narratifs relies aux paliers 3/5/8/10.
+8. Lot 105 - Passe accessibilite HUD combat (contraste, focus, lisibilite mobile).
 
 

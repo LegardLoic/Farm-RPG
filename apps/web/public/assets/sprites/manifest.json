@@ -107,24 +107,24 @@
       "frameSize": { "width": 64, "height": 64 },
       "frameCount": 3,
       "animations": {
-        "idle": [0, 1, 0, 2],
-        "hit": [2, 1, 0, 1],
-        "cast": [0, 2, 1, 2]
+        "idle": [0, 1, 0, 2, 0, 1],
+        "hit": [2, 1, 0, 1, 2],
+        "cast": [0, 2, 1, 2, 0, 2]
       },
       "timings": {
         "player": {
-          "idleFps": 5,
-          "hitFps": 10,
-          "castFps": 9,
-          "hitDurationMs": 320,
-          "castDurationMs": 440
+          "idleFps": 6,
+          "hitFps": 12,
+          "castFps": 10,
+          "hitDurationMs": 340,
+          "castDurationMs": 500
         },
         "hud": {
-          "idleIntervalMs": 220,
-          "hitIntervalMs": 120,
-          "castIntervalMs": 140,
-          "hitDurationMs": 360,
-          "castDurationMs": 440
+          "idleIntervalMs": 200,
+          "hitIntervalMs": 100,
+          "castIntervalMs": 125,
+          "hitDurationMs": 320,
+          "castDurationMs": 500
         }
       },
       "scale": { "x": 0.28125, "y": 0.40625 },
@@ -137,17 +137,17 @@
       "frameSize": { "width": 64, "height": 64 },
       "frameCount": 3,
       "animations": {
-        "idle": [0, 1, 0],
-        "hit": [2, 1, 0],
-        "cast": [1, 2, 1, 0]
+        "idle": [0, 1, 0, 2, 0],
+        "hit": [2, 1, 0, 1],
+        "cast": [1, 2, 1, 2, 0]
       },
       "timings": {
         "hud": {
-          "idleIntervalMs": 260,
-          "hitIntervalMs": 130,
-          "castIntervalMs": 165,
-          "hitDurationMs": 440,
-          "castDurationMs": 480
+          "idleIntervalMs": 230,
+          "hitIntervalMs": 115,
+          "castIntervalMs": 138,
+          "hitDurationMs": 370,
+          "castDurationMs": 500
         }
       },
       "scale": { "x": 0.359375, "y": 0.390625 },
@@ -160,16 +160,16 @@
       "frameSize": { "width": 64, "height": 64 },
       "frameCount": 3,
       "animations": {
-        "idle": [0, 1, 0, 1],
-        "hit": [1, 2, 1],
-        "cast": [0, 2, 2, 1]
+        "idle": [0, 1, 0, 2, 0, 1],
+        "hit": [2, 1, 0, 1],
+        "cast": [0, 2, 2, 1, 2]
       },
       "timings": {
         "hud": {
-          "idleIntervalMs": 250,
-          "hitIntervalMs": 125,
-          "castIntervalMs": 150,
-          "hitDurationMs": 390,
+          "idleIntervalMs": 220,
+          "hitIntervalMs": 110,
+          "castIntervalMs": 130,
+          "hitDurationMs": 360,
           "castDurationMs": 520
         }
       },
@@ -183,17 +183,17 @@
       "frameSize": { "width": 64, "height": 64 },
       "frameCount": 3,
       "animations": {
-        "idle": [0, 1, 0],
-        "hit": [2, 1, 0],
-        "cast": [0, 2, 1, 2]
+        "idle": [0, 1, 0, 2, 0],
+        "hit": [2, 1, 0, 2],
+        "cast": [0, 2, 1, 2, 1]
       },
       "timings": {
         "hud": {
-          "idleIntervalMs": 240,
-          "hitIntervalMs": 120,
-          "castIntervalMs": 145,
-          "hitDurationMs": 390,
-          "castDurationMs": 470
+          "idleIntervalMs": 215,
+          "hitIntervalMs": 108,
+          "castIntervalMs": 128,
+          "hitDurationMs": 350,
+          "castDurationMs": 500
         }
       },
       "scale": { "x": 0.34375, "y": 0.375 },
@@ -206,16 +206,16 @@
       "frameSize": { "width": 64, "height": 64 },
       "frameCount": 3,
       "animations": {
-        "idle": [0, 1, 0, 1],
-        "hit": [1, 2, 1, 0],
-        "cast": [2, 1, 0, 2]
+        "idle": [0, 1, 0, 2, 0, 1],
+        "hit": [2, 1, 0, 1, 2],
+        "cast": [2, 1, 0, 2, 1, 2]
       },
       "timings": {
         "hud": {
-          "idleIntervalMs": 220,
-          "hitIntervalMs": 120,
-          "castIntervalMs": 140,
-          "hitDurationMs": 430,
+          "idleIntervalMs": 205,
+          "hitIntervalMs": 104,
+          "castIntervalMs": 122,
+          "hitDurationMs": 360,
           "castDurationMs": 540
         }
       },

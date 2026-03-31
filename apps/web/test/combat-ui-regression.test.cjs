@@ -300,3 +300,33 @@ test('farm crafting panel wiring exists for lot 92', () => {
   assert.equal(stylesSource.includes('.hud-farm-crafting-list'), true);
   assert.equal(stylesSource.includes('.farm-crafting-ingredients'), true);
 });
+
+test('combat preparation loop panel wiring exists for lot 95', () => {
+  assert.equal(gameSceneSource.includes('data-hud="loopSummary"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="loopStage"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="loopSupplies"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="loopPreparation"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="loopBlockers"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="loopError"'), true);
+  assert.equal(gameSceneSource.includes('data-loop-action="prepare"'), true);
+  assert.equal(gameSceneSource.includes("await this.fetchJson('/gameplay/combat/prepare'"), true);
+  assert.equal(gameSceneSource.includes('private updateLoopHud(): void'), true);
+  assert.equal(gameSceneSource.includes('private async prepareCombatLoop(): Promise<void>'), true);
+  assert.equal(gameSceneSource.includes('private normalizeGameplayLoopPayload(payload: unknown): GameplayLoopState | null'), true);
+  assert.equal(stylesSource.includes('.hud-loop'), true);
+  assert.equal(stylesSource.includes('.hud-loop-grid'), true);
+  assert.equal(stylesSource.includes('.hud-loop-button'), true);
+  assert.equal(stylesSource.includes('.hud-loop-error'), true);
+});
+
+test('animation polish wiring exists for lot 97', () => {
+  assert.equal(gameSceneSource.includes("if (action === 'attack' || action === 'sunder' || action === 'interrupt')"), true);
+  assert.equal(gameSceneSource.includes('private triggerPlayerStripAccent(animation: Exclude<StripAnimationName, \'idle\'>, durationMs: number): void'), true);
+  assert.equal(gameSceneSource.includes('this.player.setTint(tint);'), true);
+  assert.equal(stylesSource.includes('.combat-enemy-strip[data-strip-animation="cast"]'), true);
+  assert.equal(stylesSource.includes('.combat-enemy-strip[data-strip-animation="hit"]'), true);
+  assert.equal(stylesSource.includes('@keyframes combat-enemy-strip-cast'), true);
+  assert.equal(stylesSource.includes('@keyframes combat-enemy-strip-hit'), true);
+  assert.equal(stylesSource.includes('.combat-enemy-visual img[data-visual-type="portrait"][data-visual-state="hit"]'), true);
+  assert.equal(stylesSource.includes('.combat-enemy-visual img[data-visual-type="portrait"][data-visual-state="cast"]'), true);
+});

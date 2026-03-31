@@ -28,6 +28,7 @@ Create local env files before starting:
 - `npm run build`: build all workspaces
 - `npm run lint`: lint all workspaces
 - `npm run typecheck`: type-check all workspaces
+- `npm run qa:gate:mvp`: run vertical MVP gate (lint + typecheck + build + api/web tests)
 - `npm run test:e2e --workspace @farm-rpg/api`: run e2e auth -> combat -> save/load (requires env + seeded DB)
 
 ## Branch strategy
@@ -63,6 +64,7 @@ Create local env files before starting:
 - `POST /equipment/unequip`
 - `GET /gameplay/state`
 - `POST /gameplay/intro/advance`
+- `POST /gameplay/combat/prepare`
 - `POST /gameplay/village/npc/interact`
 - `POST /gameplay/sleep`
 - `GET /gameplay/crafting`
@@ -101,6 +103,7 @@ Use `.env.example` templates and repository secrets for CI.
 
 - Fixtures SQL + runner script: `docs/06-fixtures-integration-sql.md`
 - E2E flow auth/combat/save-load: `docs/07-e2e-auth-combat-save-load.md`
+- MVP vertical gate checklist: `docs/08-gate-mvp-vertical-checklist.md`
 
 ## Current gameplay slice
 
@@ -125,3 +128,5 @@ Use `.env.example` templates and repository secrets for CI.
 - Blacksmith shop now supports tiered offers with per-offer flag prerequisites.
 - Debug QA supports one-click state presets (`village_open`, `mid_tower`, `act1_done`).
 - Village NPC relationship MVP: friendship score + daily interaction with mayor, blacksmith, and merchant.
+- Vertical loop prep MVP: farm consumables can be converted into one-shot combat preparation bonuses via `POST /gameplay/combat/prepare`.
+- Animation polish pass: hero/boss strips retuned (timings + cast/hit readability) with stronger combat HUD visual states.
