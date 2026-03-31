@@ -307,6 +307,38 @@ type VillageCropBuybackOfferState = {
   ownedQuantity: number;
 };
 
+type FarmCropCatalogEntryState = {
+  cropKey: string;
+  seedItemKey: string;
+  harvestItemKey: string;
+  growthDays: number;
+  requiredFlags: string[];
+  unlocked: boolean;
+};
+
+type FarmPlotState = {
+  plotKey: string;
+  row: number;
+  col: number;
+  cropKey: string | null;
+  plantedDay: number | null;
+  growthDays: number | null;
+  wateredToday: boolean;
+  growthProgressDays: number;
+  daysToMaturity: number | null;
+  readyToHarvest: boolean;
+};
+
+type FarmState = {
+  unlocked: boolean;
+  totalPlots: number;
+  plantedPlots: number;
+  wateredPlots: number;
+  readyPlots: number;
+  cropCatalog: FarmCropCatalogEntryState[];
+  plots: FarmPlotState[];
+};
+
 type AutoSaveState = {
   version: number;
   reason: string;
@@ -617,6 +649,10 @@ export class GameScene extends Phaser.Scene {
   private villageMarketSeedsRoot: HTMLElement | null = null;
   private villageMarketBuybackRoot: HTMLElement | null = null;
   private villageMarketErrorValue: HTMLElement | null = null;
+  private farmSummaryValue: HTMLElement | null = null;
+  private farmSeedSelect: HTMLSelectElement | null = null;
+  private farmPlotsRoot: HTMLElement | null = null;
+  private farmErrorValue: HTMLElement | null = null;
   private villageNpcSummaryValue: HTMLElement | null = null;
   private villageNpcMayorValue: HTMLElement | null = null;
   private villageNpcBlacksmithValue: HTMLElement | null = null;
@@ -683,6 +719,11 @@ export class GameScene extends Phaser.Scene {
   private villageMarketBusy = false;
   private villageMarketError: string | null = null;
   private villageMarketRenderSignature = '';
+  private farmState: FarmState | null = null;
+  private farmBusy = false;
+  private farmError: string | null = null;
+  private farmSelectedSeedItemKey = '';
+  private farmRenderSignature = '';
   private villageNpcState: VillageNpcHudState = {
     mayor: { stateKey: 'offscreen', available: false },
     blacksmith: { stateKey: 'cursed', available: false },
@@ -802,6 +843,11 @@ export class GameScene extends Phaser.Scene {
     this.heroProfileAppearanceDraft = this.readHeroProfileAppearanceFromUi();
     this.heroProfileMessage = null;
   };
+  private readonly onFarmSeedSelectionChange = () => {
+    this.farmSelectedSeedItemKey = this.readFarmSeedSelectionFromUi();
+    this.farmError = null;
+    this.updateHud();
+  };
 
   private readonly onDebugQaImportFileChange = (event: Event) => {
     void this.handleDebugQaImportFileChange(event);
@@ -819,6 +865,7 @@ export class GameScene extends Phaser.Scene {
     const questAction = button.dataset.questAction;
     const shopAction = button.dataset.shopAction;
     const marketAction = button.dataset.marketAction;
+    const farmAction = button.dataset.farmAction;
     const saveAction = button.dataset.saveAction;
     const profileAction = button.dataset.profileAction;
     const introAction = button.dataset.introAction;
@@ -887,6 +934,24 @@ export class GameScene extends Phaser.Scene {
       if (itemKey) {
         void this.sellVillageCrop(itemKey);
       }
+      return;
+    }
+
+    if (farmAction === 'plant' || farmAction === 'water' || farmAction === 'harvest') {
+      const plotKey = button.dataset.plotKey;
+      if (!plotKey) {
+        return;
+      }
+
+      if (farmAction === 'plant') {
+        void this.plantFarmPlot(plotKey);
+        return;
+      }
+      if (farmAction === 'water') {
+        void this.waterFarmPlot(plotKey);
+        return;
+      }
+      void this.harvestFarmPlot(plotKey);
       return;
     }
 
@@ -1314,6 +1379,20 @@ export class GameScene extends Phaser.Scene {
           <p class="hud-village-market-subtitle">Crop Buyback</p>
           <ul class="hud-village-market-list" data-hud="villageMarketBuybackOffers"></ul>
         </div>
+        <div class="hud-farm">
+          <div class="hud-farm-header">
+            <span>Farm Plots</span>
+            <strong data-hud="farmSummary">Locked</strong>
+          </div>
+          <div class="hud-farm-controls">
+            <label class="hud-farm-field">
+              <span>Selected seed</span>
+              <select data-hud="farmSeedSelect"></select>
+            </label>
+          </div>
+          <div class="hud-farm-error" data-hud="farmError" hidden></div>
+          <ul class="hud-farm-plots" data-hud="farmPlots"></ul>
+        </div>
         <div class="hud-autosave">
           <div class="hud-autosave-header">
             <span>Autosave</span>
@@ -1509,6 +1588,10 @@ export class GameScene extends Phaser.Scene {
     this.villageMarketSeedsRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageMarketSeedOffers"]');
     this.villageMarketBuybackRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageMarketBuybackOffers"]');
     this.villageMarketErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageMarketError"]');
+    this.farmSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmSummary"]');
+    this.farmSeedSelect = this.hudRoot.querySelector<HTMLSelectElement>('[data-hud="farmSeedSelect"]');
+    this.farmPlotsRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmPlots"]');
+    this.farmErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmError"]');
     this.villageNpcSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcSummary"]');
     this.villageNpcMayorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcMayor"]');
     this.villageNpcBlacksmithValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcBlacksmith"]');
@@ -1608,6 +1691,9 @@ export class GameScene extends Phaser.Scene {
     if (this.heroProfileAppearanceSelect) {
       this.heroProfileAppearanceSelect.addEventListener('change', this.onHeroProfileAppearanceChange);
     }
+    if (this.farmSeedSelect) {
+      this.farmSeedSelect.addEventListener('change', this.onFarmSeedSelectionChange);
+    }
     this.hudRoot.addEventListener('click', this.onHudClick);
     this.updateHud();
   }
@@ -1650,6 +1736,9 @@ export class GameScene extends Phaser.Scene {
     if (this.heroProfileAppearanceSelect) {
       this.heroProfileAppearanceSelect.removeEventListener('change', this.onHeroProfileAppearanceChange);
     }
+    if (this.farmSeedSelect) {
+      this.farmSeedSelect.removeEventListener('change', this.onFarmSeedSelectionChange);
+    }
 
     if (this.hudRoot) {
       this.hudRoot.removeEventListener('click', this.onHudClick);
@@ -1682,6 +1771,10 @@ export class GameScene extends Phaser.Scene {
     this.villageMarketSeedsRoot = null;
     this.villageMarketBuybackRoot = null;
     this.villageMarketErrorValue = null;
+    this.farmSummaryValue = null;
+    this.farmSeedSelect = null;
+    this.farmPlotsRoot = null;
+    this.farmErrorValue = null;
     this.villageNpcSummaryValue = null;
     this.villageNpcMayorValue = null;
     this.villageNpcBlacksmithValue = null;
@@ -1746,11 +1839,16 @@ export class GameScene extends Phaser.Scene {
     this.questsRenderSignature = '';
     this.blacksmithRenderSignature = '';
     this.villageMarketRenderSignature = '';
+    this.farmRenderSignature = '';
     this.villageMarketUnlocked = false;
     this.villageMarketSeedOffers = [];
     this.villageMarketBuybackOffers = [];
     this.villageMarketBusy = false;
     this.villageMarketError = null;
+    this.farmState = null;
+    this.farmBusy = false;
+    this.farmError = null;
+    this.farmSelectedSeedItemKey = '';
     this.villageNpcState = {
       mayor: { stateKey: 'offscreen', available: false },
       blacksmith: { stateKey: 'cursed', available: false },
@@ -1809,6 +1907,7 @@ export class GameScene extends Phaser.Scene {
     this.updateVillageNpcHud();
     this.updateBlacksmithHud();
     this.updateVillageMarketHud();
+    this.updateFarmHud();
     this.updateAutoSaveHud();
     this.updateSaveSlotsHud();
     this.updateDebugQaHud();
@@ -1909,6 +2008,19 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.renderVillageMarketOffers();
+  }
+
+  private updateFarmHud(): void {
+    if (this.farmSummaryValue) {
+      this.farmSummaryValue.textContent = this.getFarmSummaryLabel();
+    }
+
+    if (this.farmErrorValue) {
+      this.farmErrorValue.hidden = !this.farmError;
+      this.farmErrorValue.textContent = this.farmError ?? '';
+    }
+
+    this.renderFarmPanel();
   }
 
   private updateAutoSaveHud(): void {
@@ -2897,6 +3009,165 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private renderFarmPanel(): void {
+    const seedSelect = this.farmSeedSelect;
+    const plotsRoot = this.farmPlotsRoot;
+    if (!seedSelect || !plotsRoot) {
+      return;
+    }
+
+    const signature = this.computeFarmRenderSignature();
+    if (signature === this.farmRenderSignature) {
+      return;
+    }
+    this.farmRenderSignature = signature;
+
+    seedSelect.replaceChildren();
+    plotsRoot.replaceChildren();
+
+    if (!this.isAuthenticated) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'Connexion requise';
+      seedSelect.appendChild(option);
+      seedSelect.value = '';
+      seedSelect.disabled = true;
+
+      const item = document.createElement('li');
+      item.classList.add('farm-plot-item', 'empty');
+      item.textContent = 'Connecte toi pour gerer la ferme.';
+      plotsRoot.appendChild(item);
+      return;
+    }
+
+    const farm = this.farmState;
+    if (!farm) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = this.farmBusy ? 'Chargement...' : 'Aucune donnee ferme';
+      seedSelect.appendChild(option);
+      seedSelect.value = '';
+      seedSelect.disabled = true;
+
+      const item = document.createElement('li');
+      item.classList.add('farm-plot-item', 'empty');
+      item.textContent = this.farmBusy ? 'Chargement des parcelles...' : 'Aucune donnee ferme disponible.';
+      plotsRoot.appendChild(item);
+      return;
+    }
+
+    const unlockedCrops = farm.cropCatalog.filter((entry) => entry.unlocked);
+    if (unlockedCrops.length === 0) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'Aucune graine debloquee';
+      seedSelect.appendChild(option);
+      this.farmSelectedSeedItemKey = '';
+    } else {
+      const unlockedSeedKeys = new Set(unlockedCrops.map((entry) => entry.seedItemKey));
+      if (!unlockedSeedKeys.has(this.farmSelectedSeedItemKey)) {
+        const firstUnlocked = unlockedCrops[0];
+        this.farmSelectedSeedItemKey = firstUnlocked ? firstUnlocked.seedItemKey : '';
+      }
+
+      for (const crop of unlockedCrops) {
+        const option = document.createElement('option');
+        option.value = crop.seedItemKey;
+        option.textContent = `${this.formatFarmLabel(crop.cropKey)} seed (${crop.growthDays}j)`;
+        seedSelect.appendChild(option);
+      }
+    }
+
+    seedSelect.value = this.farmSelectedSeedItemKey;
+    seedSelect.disabled = this.farmBusy || !farm.unlocked || unlockedCrops.length === 0;
+
+    if (!farm.unlocked) {
+      const item = document.createElement('li');
+      item.classList.add('farm-plot-item', 'empty');
+      item.textContent = 'Ferme verrouillee. Termine l intro (attribution de ferme).';
+      plotsRoot.appendChild(item);
+      return;
+    }
+
+    if (farm.plots.length === 0) {
+      const item = document.createElement('li');
+      item.classList.add('farm-plot-item', 'empty');
+      item.textContent = this.farmBusy ? 'Chargement des parcelles...' : 'Aucune parcelle configuree.';
+      plotsRoot.appendChild(item);
+      return;
+    }
+
+    const selectedSeedItemKey = this.farmSelectedSeedItemKey;
+    const sortedPlots = [...farm.plots].sort((left, right) => (
+      left.row - right.row || left.col - right.col || left.plotKey.localeCompare(right.plotKey)
+    ));
+
+    for (const plot of sortedPlots) {
+      const item = document.createElement('li');
+      item.classList.add('farm-plot-item');
+      if (plot.readyToHarvest) {
+        item.dataset.ready = '1';
+      }
+      if (!plot.cropKey) {
+        item.dataset.empty = '1';
+      }
+
+      const header = document.createElement('div');
+      header.classList.add('farm-plot-header');
+
+      const title = document.createElement('strong');
+      title.textContent = `Parcelle ${plot.row}-${plot.col}`;
+      header.appendChild(title);
+
+      const badge = document.createElement('span');
+      badge.classList.add('farm-plot-meta');
+      badge.textContent = plot.cropKey ? this.formatFarmLabel(plot.cropKey) : 'Vide';
+      header.appendChild(badge);
+      item.appendChild(header);
+
+      const status = document.createElement('p');
+      status.classList.add('farm-plot-status');
+      status.textContent = this.getFarmPlotStatusLabel(plot);
+      item.appendChild(status);
+
+      const actions = document.createElement('div');
+      actions.classList.add('farm-plot-actions');
+
+      const canPlant = !plot.cropKey && selectedSeedItemKey.length > 0;
+      const canWater = Boolean(plot.cropKey) && !plot.wateredToday;
+      const canHarvest = Boolean(plot.cropKey) && plot.readyToHarvest;
+
+      const plantButton = document.createElement('button');
+      plantButton.classList.add('hud-farm-action', 'plant');
+      plantButton.dataset.farmAction = 'plant';
+      plantButton.dataset.plotKey = plot.plotKey;
+      plantButton.textContent = canPlant
+        ? `Plant (${this.formatFarmLabel(selectedSeedItemKey)})`
+        : 'Plant';
+      plantButton.disabled = this.farmBusy || !farm.unlocked || !canPlant;
+      actions.appendChild(plantButton);
+
+      const waterButton = document.createElement('button');
+      waterButton.classList.add('hud-farm-action', 'water');
+      waterButton.dataset.farmAction = 'water';
+      waterButton.dataset.plotKey = plot.plotKey;
+      waterButton.textContent = plot.wateredToday ? 'Watered' : 'Water';
+      waterButton.disabled = this.farmBusy || !farm.unlocked || !canWater;
+      actions.appendChild(waterButton);
+
+      const harvestButton = document.createElement('button');
+      harvestButton.classList.add('hud-farm-action', 'harvest');
+      harvestButton.dataset.farmAction = 'harvest';
+      harvestButton.dataset.plotKey = plot.plotKey;
+      harvestButton.textContent = 'Harvest';
+      harvestButton.disabled = this.farmBusy || !farm.unlocked || !canHarvest;
+      actions.appendChild(harvestButton);
+
+      item.appendChild(actions);
+      plotsRoot.appendChild(item);
+    }
+  }
+
   private renderQuestList(): void {
     if (!this.questsListRoot) {
       return;
@@ -3017,6 +3288,56 @@ export class GameScene extends Phaser.Scene {
     return this.villageMarketBusy
       ? 'Refreshing...'
       : `${this.villageMarketSeedOffers.length} seeds | ${this.villageMarketBuybackOffers.length} crops`;
+  }
+
+  private getFarmSummaryLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Login required';
+    }
+
+    if (this.farmBusy && !this.farmState) {
+      return 'Loading...';
+    }
+
+    if (!this.farmState) {
+      return 'No data';
+    }
+
+    if (!this.farmState.unlocked) {
+      return this.farmBusy ? 'Checking unlock...' : 'Locked';
+    }
+
+    return this.farmBusy
+      ? 'Refreshing...'
+      : `Ready ${this.farmState.readyPlots} | Planted ${this.farmState.plantedPlots}/${this.farmState.totalPlots}`;
+  }
+
+  private getFarmPlotStatusLabel(plot: FarmPlotState): string {
+    if (!plot.cropKey) {
+      return 'Parcelle vide. Selectionne une graine puis plante.';
+    }
+
+    const cropLabel = this.formatFarmLabel(plot.cropKey);
+    const progress = `${Math.max(0, plot.growthProgressDays)}/${Math.max(1, plot.growthDays ?? 1)}j`;
+    const waterLabel = plot.wateredToday ? 'Arrosee aujourd hui' : 'A arroser';
+    const maturityLabel = plot.readyToHarvest
+      ? 'Prete a recolter'
+      : `Maturite: ${Math.max(0, plot.daysToMaturity ?? 0)}j`;
+
+    return `${cropLabel} | Croissance ${progress} | ${waterLabel} | ${maturityLabel}`;
+  }
+
+  private formatFarmLabel(raw: string): string {
+    const value = raw.trim().toLowerCase();
+    if (value.length === 0) {
+      return '-';
+    }
+
+    return value
+      .split('_')
+      .filter((part) => part.length > 0)
+      .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+      .join(' ');
   }
 
   private getAutoSaveSummaryLabel(): string {
@@ -3188,6 +3509,32 @@ export class GameScene extends Phaser.Scene {
       this.villageMarketError ?? '',
       seedParts.join(';'),
       buybackParts.join(';'),
+    ].join('|');
+  }
+
+  private computeFarmRenderSignature(): string {
+    const farm = this.farmState;
+    const cropParts = farm
+      ? farm.cropCatalog.map((entry) => (
+          `${entry.cropKey}:${entry.seedItemKey}:${entry.growthDays}:${entry.unlocked ? '1' : '0'}`
+        ))
+      : [];
+    const plotParts = farm
+      ? farm.plots.map((plot) => (
+          `${plot.plotKey}:${plot.row}:${plot.col}:${plot.cropKey ?? '-'}:${plot.growthProgressDays}:${plot.growthDays ?? '-'}:${plot.daysToMaturity ?? '-'}:${plot.wateredToday ? '1' : '0'}:${plot.readyToHarvest ? '1' : '0'}`
+        ))
+      : [];
+
+    return [
+      this.isAuthenticated ? '1' : '0',
+      this.farmBusy ? '1' : '0',
+      this.farmError ?? '',
+      this.farmSelectedSeedItemKey,
+      farm
+        ? `${farm.unlocked ? '1' : '0'}:${farm.totalPlots}:${farm.plantedPlots}:${farm.wateredPlots}:${farm.readyPlots}`
+        : 'none',
+      cropParts.join(';'),
+      plotParts.join(';'),
     ].join('|');
   }
 
@@ -4515,6 +4862,115 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private async plantFarmPlot(plotKey: string): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.farmError = 'Login required to plant crops.';
+      this.updateHud();
+      return;
+    }
+
+    if (!this.farmState?.unlocked) {
+      this.farmError = 'Farm is locked.';
+      this.updateHud();
+      return;
+    }
+
+    const seedItemKey = this.farmSelectedSeedItemKey.trim();
+    if (!seedItemKey) {
+      this.farmError = 'Select a seed before planting.';
+      this.updateHud();
+      return;
+    }
+
+    this.farmBusy = true;
+    this.farmError = null;
+    this.updateHud();
+
+    try {
+      await this.fetchJson('/gameplay/farm/plant', {
+        method: 'POST',
+        body: JSON.stringify({
+          plotKey,
+          seedItemKey,
+        }),
+      });
+      await this.refreshGameplayState();
+      await this.refreshVillageMarketState();
+    } catch (error) {
+      this.farmError = this.getErrorMessage(error, 'Unable to plant this plot.');
+    } finally {
+      this.farmBusy = false;
+      this.updateHud();
+    }
+  }
+
+  private async waterFarmPlot(plotKey: string): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.farmError = 'Login required to water crops.';
+      this.updateHud();
+      return;
+    }
+
+    if (!this.farmState?.unlocked) {
+      this.farmError = 'Farm is locked.';
+      this.updateHud();
+      return;
+    }
+
+    this.farmBusy = true;
+    this.farmError = null;
+    this.updateHud();
+
+    try {
+      await this.fetchJson('/gameplay/farm/water', {
+        method: 'POST',
+        body: JSON.stringify({
+          plotKey,
+        }),
+      });
+      await this.refreshGameplayState();
+    } catch (error) {
+      this.farmError = this.getErrorMessage(error, 'Unable to water this plot.');
+    } finally {
+      this.farmBusy = false;
+      this.updateHud();
+    }
+  }
+
+  private async harvestFarmPlot(plotKey: string): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.farmError = 'Login required to harvest crops.';
+      this.updateHud();
+      return;
+    }
+
+    if (!this.farmState?.unlocked) {
+      this.farmError = 'Farm is locked.';
+      this.updateHud();
+      return;
+    }
+
+    this.farmBusy = true;
+    this.farmError = null;
+    this.updateHud();
+
+    try {
+      await this.fetchJson('/gameplay/farm/harvest', {
+        method: 'POST',
+        body: JSON.stringify({
+          plotKey,
+        }),
+      });
+      await this.refreshGameplayState();
+      await this.refreshVillageMarketState();
+    } catch (error) {
+      this.farmError = this.getErrorMessage(error, 'Unable to harvest this plot.');
+    } finally {
+      this.farmBusy = false;
+      this.updateHud();
+    }
+  }
+
   private async restoreAutoSaveToSlot(slot: number): Promise<void> {
     if (!this.isAuthenticated) {
       this.autosaveError = 'Login required to restore autosave.';
@@ -4777,6 +5233,21 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    const farm = this.normalizeGameplayFarmPayload(payload);
+    if (farm) {
+      this.farmState = farm;
+      if (farm.unlocked) {
+        const unlockedSeedKeys = new Set(
+          farm.cropCatalog.filter((entry) => entry.unlocked).map((entry) => entry.seedItemKey),
+        );
+        if (!unlockedSeedKeys.has(this.farmSelectedSeedItemKey)) {
+          this.farmSelectedSeedItemKey = farm.cropCatalog.find((entry) => entry.unlocked)?.seedItemKey ?? '';
+        }
+      } else {
+        this.farmSelectedSeedItemKey = '';
+      }
+    }
+
     const progression = this.asRecord(payload.progression);
     if (!progression) {
       return;
@@ -4881,6 +5352,11 @@ export class GameScene extends Phaser.Scene {
       blacksmith: { stateKey: 'cursed', available: false },
       merchant: { stateKey: 'absent', available: false },
     };
+    this.farmState = null;
+    this.farmBusy = false;
+    this.farmError = null;
+    this.farmSelectedSeedItemKey = '';
+    this.farmRenderSignature = '';
   }
 
   private resetHeroProfileState(): void {
@@ -6699,6 +7175,25 @@ export class GameScene extends Phaser.Scene {
     return 'default';
   }
 
+  private readFarmSeedSelectionFromUi(): string {
+    const value = this.farmSeedSelect?.value?.trim() ?? '';
+    if (!value) {
+      return '';
+    }
+
+    const farm = this.farmState;
+    if (!farm) {
+      return value;
+    }
+
+    const availableSeeds = new Set(
+      farm.cropCatalog
+        .filter((entry) => entry.unlocked)
+        .map((entry) => entry.seedItemKey),
+    );
+    return availableSeeds.has(value) ? value : '';
+  }
+
   private isQuestStatusValue(value: string): value is QuestStatus {
     return value === 'active' || value === 'completed' || value === 'claimed';
   }
@@ -6923,6 +7418,113 @@ export class GameScene extends Phaser.Scene {
     return {
       stateKey,
       available: Boolean(record.available),
+    };
+  }
+
+  private normalizeGameplayFarmPayload(payload: unknown): FarmState | null {
+    const root = this.asRecord(payload);
+    if (!root) {
+      return null;
+    }
+
+    const farmRecord = this.asRecord(root.farm) ?? root;
+    const totalPlots = this.asNumber(farmRecord.totalPlots);
+    const plantedPlots = this.asNumber(farmRecord.plantedPlots);
+    const wateredPlots = this.asNumber(farmRecord.wateredPlots);
+    const readyPlots = this.asNumber(farmRecord.readyPlots);
+    const cropCatalogRaw = Array.isArray(farmRecord.cropCatalog) ? farmRecord.cropCatalog : null;
+    const plotsRaw = Array.isArray(farmRecord.plots) ? farmRecord.plots : null;
+
+    if (
+      totalPlots === null ||
+      plantedPlots === null ||
+      wateredPlots === null ||
+      readyPlots === null ||
+      !cropCatalogRaw ||
+      !plotsRaw
+    ) {
+      return null;
+    }
+
+    const cropCatalog = cropCatalogRaw
+      .map((entry) => this.normalizeFarmCropCatalogEntry(entry))
+      .filter((entry): entry is FarmCropCatalogEntryState => entry !== null);
+    const plots = plotsRaw
+      .map((entry) => this.normalizeFarmPlotState(entry))
+      .filter((entry): entry is FarmPlotState => entry !== null)
+      .sort((left, right) => left.row - right.row || left.col - right.col || left.plotKey.localeCompare(right.plotKey));
+
+    return {
+      unlocked: Boolean(farmRecord.unlocked),
+      totalPlots: Math.max(0, Math.round(totalPlots)),
+      plantedPlots: Math.max(0, Math.round(plantedPlots)),
+      wateredPlots: Math.max(0, Math.round(wateredPlots)),
+      readyPlots: Math.max(0, Math.round(readyPlots)),
+      cropCatalog,
+      plots,
+    };
+  }
+
+  private normalizeFarmCropCatalogEntry(payload: unknown): FarmCropCatalogEntryState | null {
+    const record = this.asRecord(payload);
+    if (!record) {
+      return null;
+    }
+
+    const cropKey = this.asString(record.cropKey);
+    const seedItemKey = this.asString(record.seedItemKey);
+    const harvestItemKey = this.asString(record.harvestItemKey);
+    const growthDays = this.asNumber(record.growthDays);
+    const requiredFlags = Array.isArray(record.requiredFlags)
+      ? record.requiredFlags
+          .map((entry) => this.asString(entry))
+          .filter((entry): entry is string => entry !== null)
+      : [];
+
+    if (!cropKey || !seedItemKey || !harvestItemKey || growthDays === null) {
+      return null;
+    }
+
+    return {
+      cropKey,
+      seedItemKey,
+      harvestItemKey,
+      growthDays: Math.max(1, Math.round(growthDays)),
+      requiredFlags,
+      unlocked: Boolean(record.unlocked),
+    };
+  }
+
+  private normalizeFarmPlotState(payload: unknown): FarmPlotState | null {
+    const record = this.asRecord(payload);
+    if (!record) {
+      return null;
+    }
+
+    const plotKey = this.asString(record.plotKey);
+    const row = this.asNumber(record.row);
+    const col = this.asNumber(record.col);
+    const cropKey = this.asString(record.cropKey);
+    const plantedDay = this.asNumber(record.plantedDay);
+    const growthDays = this.asNumber(record.growthDays);
+    const growthProgressDays = this.asNumber(record.growthProgressDays);
+    const daysToMaturity = this.asNumber(record.daysToMaturity);
+
+    if (!plotKey || row === null || col === null || growthProgressDays === null) {
+      return null;
+    }
+
+    return {
+      plotKey,
+      row: Math.max(1, Math.round(row)),
+      col: Math.max(1, Math.round(col)),
+      cropKey: cropKey ?? null,
+      plantedDay: plantedDay === null ? null : Math.max(1, Math.round(plantedDay)),
+      growthDays: growthDays === null ? null : Math.max(1, Math.round(growthDays)),
+      wateredToday: Boolean(record.wateredToday),
+      growthProgressDays: Math.max(0, Math.round(growthProgressDays)),
+      daysToMaturity: daysToMaturity === null ? null : Math.max(0, Math.round(daysToMaturity)),
+      readyToHarvest: Boolean(record.readyToHarvest),
     };
   }
 

@@ -1306,6 +1306,26 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - arrosage (flag `wateredToday`)
     - recolte (gain inventaire + reset plot).
 
+### Lot 90 - Ferme frontend: panneau jouable (graine/plantation/arrosage/recolte)
+- Frontend HUD (Phaser):
+  - nouveau panneau `Farm Plots` avec:
+    - resume (`ready/planted/total`)
+    - select de graine debloquee (catalogue cultures serveur)
+    - liste des 12 parcelles et statut par parcelle.
+  - actions par parcelle branchees sur API:
+    - `Plant` -> `POST /gameplay/farm/plant`
+    - `Water` -> `POST /gameplay/farm/water`
+    - `Harvest` -> `POST /gameplay/farm/harvest`
+  - gestion UX:
+    - lock ferme (intro non terminee)
+    - loading/error par panneau
+    - etat visuel `ready to harvest`.
+- Integration:
+  - parsing du bloc `farm` depuis `GET /gameplay/state`
+  - synchro du panneau ferme apres actions + refresh `Village Market` pour les quantites de recoltes.
+- QA:
+  - extension regression web (`combat-ui-regression`) pour verrouiller wiring HUD ferme + styles.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1385,6 +1405,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - panneau intro scenario MVP (3 etapes narratives + progression)
   - panneau Village PNJ (etats maire/forgeron/marchand pilotés par flags)
   - panneau Village Market (achat graines + vente recoltes)
+  - panneau Farm Plots (selection graine + actions plant/water/harvest)
 - Chargement web optimise:
   - entree legere
   - bootstrap asynchrone
@@ -1475,16 +1496,15 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 90 - Ferme frontend: panneau ferme jouable (selection graine, plantation, arrosage, recolte).
-2. Lot 91 - Temps: cycle jour/nuit MVP + action `sleep` qui avance le jour et fait pousser les cultures.
-3. Lot 92 - Crafting ferme: recettes basiques (consommables combat) basees sur recoltes.
-4. Lot 93 - Quetes ferme/village: quetes secondaires simples liees aux recoltes et livraisons.
-5. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
-6. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
-7. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
-8. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
-9. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
-10. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
-11. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
+1. Lot 91 - Temps: cycle jour/nuit MVP + action `sleep` qui avance le jour et fait pousser les cultures.
+2. Lot 92 - Crafting ferme: recettes basiques (consommables combat) basees sur recoltes.
+3. Lot 93 - Quetes ferme/village: quetes secondaires simples liees aux recoltes et livraisons.
+4. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
+5. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
+6. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
+7. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
+8. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
+9. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
+10. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
 
 
