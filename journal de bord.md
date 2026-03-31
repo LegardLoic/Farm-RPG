@@ -1464,6 +1464,23 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - preparation combat (consommation ressources + activation flags)
   - regression web etendue pour verrouiller le wiring du panneau loop.
 
+### Lot 96 - Gate MVP: campagne QA verticale + checklist executable
+- Gate automatique:
+  - nouvelle commande racine:
+    - `npm run qa:gate:mvp`
+  - orchestration sequentielle:
+    - `lint` -> `typecheck` -> `build` -> tests API -> tests web
+  - mode etendu optionnel:
+    - `MVP_GATE_INCLUDE_E2E=1 npm run qa:gate:mvp`
+    - ajoute `test:e2e` API + smoke web.
+  - artifact local de synthese:
+    - `artifacts/qa-gate/mvp-gate-report.md`
+- Documentation:
+  - nouveau document:
+    - `docs/08-gate-mvp-vertical-checklist.md`
+  - checklist manuelle verticale (intro, farm, crafting, prep combat, start combat, save/load, HUD)
+  - Definition of Done explicite du gate.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1642,19 +1659,20 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Nightly smoke auth nettoie automatiquement le combat ouvert (`forfeit`) pour eviter l'accumulation d'encounters actifs.
 - Nightly staging publie un dashboard historique 7 jours (`history.json` + `dashboard.md`) pour suivre la tendance smoke/e2e.
 - Nightly staging declenche une alerte GitHub dediee en cas de 2 echecs consecutifs.
+- Gate locale MVP ajoutee via `npm run qa:gate:mvp` + rapport markdown dedie.
 - Endpoint debug readonly disponible pour auditer scripts combat sans lancer un combat complet.
 - Tuning animation hero/boss configurable via manifest sans toucher au code runtime.
 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
-2. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
-3. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
-4. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
-5. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
-6. Lot 101 - Quetes narratives village: premieres micro-quetes dialoguees reliees aux etats PNJ.
-7. Lot 102 - Premiere passe dialogues contextuels PNJ relies au tier de relation.
-8. Lot 103 - Hook scenario ferme: premiers evenements declenches par jour + progression recoltes.
+1. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
+2. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
+3. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
+4. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
+5. Lot 101 - Quetes narratives village: premieres micro-quetes dialoguees reliees aux etats PNJ.
+6. Lot 102 - Premiere passe dialogues contextuels PNJ relies au tier de relation.
+7. Lot 103 - Hook scenario ferme: premiers evenements declenches par jour + progression recoltes.
+8. Lot 104 - Trigger scenario tour: premiers beats narratifs relies aux paliers 3/5/8/10.
 
 

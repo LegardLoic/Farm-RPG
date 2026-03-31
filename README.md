@@ -28,6 +28,7 @@ Create local env files before starting:
 - `npm run build`: build all workspaces
 - `npm run lint`: lint all workspaces
 - `npm run typecheck`: type-check all workspaces
+- `npm run qa:gate:mvp`: run vertical MVP gate (lint + typecheck + build + api/web tests)
 - `npm run test:e2e --workspace @farm-rpg/api`: run e2e auth -> combat -> save/load (requires env + seeded DB)
 
 ## Branch strategy
@@ -102,6 +103,7 @@ Use `.env.example` templates and repository secrets for CI.
 
 - Fixtures SQL + runner script: `docs/06-fixtures-integration-sql.md`
 - E2E flow auth/combat/save-load: `docs/07-e2e-auth-combat-save-load.md`
+- MVP vertical gate checklist: `docs/08-gate-mvp-vertical-checklist.md`
 
 ## Current gameplay slice
 
