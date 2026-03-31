@@ -139,3 +139,55 @@ export const VILLAGE_CROP_BUYBACK_OFFERS: VillageCropBuybackOffer[] = [
     requiredFlags: ['story_floor_5_cleared'],
   },
 ];
+
+export const VILLAGE_CROP_SALE_BASE_EXPERIENCE: Record<string, number> = {
+  turnip: 2,
+  carrot: 3,
+  wheat: 4,
+};
+
+export type VillageSaleExperienceTier = {
+  key: 'farm_bootstrap' | 'watch_support' | 'supply_route' | 'vanguard_supply' | 'act1_war_effort';
+  requiredFlags: string[];
+  experienceMultiplier: number;
+};
+
+export const VILLAGE_SALE_EXPERIENCE_TIERS: VillageSaleExperienceTier[] = [
+  {
+    key: 'farm_bootstrap',
+    requiredFlags: [],
+    experienceMultiplier: 1,
+  },
+  {
+    key: 'watch_support',
+    requiredFlags: ['story_floor_3_cleared'],
+    experienceMultiplier: 1.1,
+  },
+  {
+    key: 'supply_route',
+    requiredFlags: ['story_floor_5_cleared'],
+    experienceMultiplier: 1.22,
+  },
+  {
+    key: 'vanguard_supply',
+    requiredFlags: ['story_floor_8_cleared'],
+    experienceMultiplier: 1.36,
+  },
+  {
+    key: 'act1_war_effort',
+    requiredFlags: ['story_act_1_complete'],
+    experienceMultiplier: 1.5,
+  },
+];
+
+export function resolveVillageSaleExperienceTier(worldFlags: Set<string>): VillageSaleExperienceTier {
+  let resolvedTier = VILLAGE_SALE_EXPERIENCE_TIERS[0];
+
+  for (const tier of VILLAGE_SALE_EXPERIENCE_TIERS) {
+    if (tier.requiredFlags.every((flag) => worldFlags.has(flag))) {
+      resolvedTier = tier;
+    }
+  }
+
+  return resolvedTier;
+}

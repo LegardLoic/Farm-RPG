@@ -26,6 +26,90 @@ export const PLAYER_POISON_DURATION_TURNS = 2;
 export const PLAYER_BLINDED_DURATION_TURNS = 2;
 export const PLAYER_BLINDED_MISS_CHANCE = 0.5;
 export const PLAYER_DARKENED_DURATION_TURNS = 2;
+
+export type CombatStatusBalanceTierKey =
+  | 'floor_1_2'
+  | 'floor_3_4'
+  | 'floor_5_7'
+  | 'floor_8_9'
+  | 'floor_10_plus';
+
+export type CombatStatusBalanceTier = {
+  key: CombatStatusBalanceTierKey;
+  minFloor: number;
+  maxFloor: number | null;
+  poisonDurationTurns: number;
+  poisonApplyChance: number;
+  ceciteDurationTurns: number;
+  ceciteApplyChance: number;
+  ceciteMissChance: number;
+  obscuriteDurationTurns: number;
+  obscuriteApplyChance: number;
+};
+
+export const COMBAT_STATUS_BALANCE_TABLE: CombatStatusBalanceTier[] = [
+  {
+    key: 'floor_1_2',
+    minFloor: 1,
+    maxFloor: 2,
+    poisonDurationTurns: 1,
+    poisonApplyChance: 0.45,
+    ceciteDurationTurns: 1,
+    ceciteApplyChance: 0.35,
+    ceciteMissChance: 0.32,
+    obscuriteDurationTurns: 1,
+    obscuriteApplyChance: 0.3,
+  },
+  {
+    key: 'floor_3_4',
+    minFloor: 3,
+    maxFloor: 4,
+    poisonDurationTurns: 2,
+    poisonApplyChance: 0.55,
+    ceciteDurationTurns: 2,
+    ceciteApplyChance: 0.52,
+    ceciteMissChance: 0.38,
+    obscuriteDurationTurns: 1,
+    obscuriteApplyChance: 0.4,
+  },
+  {
+    key: 'floor_5_7',
+    minFloor: 5,
+    maxFloor: 7,
+    poisonDurationTurns: 2,
+    poisonApplyChance: 0.68,
+    ceciteDurationTurns: 2,
+    ceciteApplyChance: 0.6,
+    ceciteMissChance: 0.45,
+    obscuriteDurationTurns: 2,
+    obscuriteApplyChance: 0.56,
+  },
+  {
+    key: 'floor_8_9',
+    minFloor: 8,
+    maxFloor: 9,
+    poisonDurationTurns: 3,
+    poisonApplyChance: 0.78,
+    ceciteDurationTurns: 2,
+    ceciteApplyChance: 0.68,
+    ceciteMissChance: 0.5,
+    obscuriteDurationTurns: 2,
+    obscuriteApplyChance: 0.66,
+  },
+  {
+    key: 'floor_10_plus',
+    minFloor: 10,
+    maxFloor: null,
+    poisonDurationTurns: 3,
+    poisonApplyChance: 0.88,
+    ceciteDurationTurns: 3,
+    ceciteApplyChance: 0.78,
+    ceciteMissChance: 0.58,
+    obscuriteDurationTurns: 3,
+    obscuriteApplyChance: 0.8,
+  },
+] as const;
+
 export const RALLY_DURATION_TURNS = 2;
 export const SUNDER_DURATION_TURNS = 2;
 export const CLEANSE_REACTION_WINDOW_TURNS = 1;

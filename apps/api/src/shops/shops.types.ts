@@ -65,6 +65,14 @@ export interface VillageCropSaleResult {
   quantitySold: number;
   unitGoldValue: number;
   totalGoldGained: number;
+  totalExperienceGained: number;
+  economyTierKey: string;
   newGold: number;
   remainingQuantity: number;
+  progression: {
+    level: number;
+    experience: number;
+    experienceToNextLevel: number;
+    gold: number;
+  };
 }

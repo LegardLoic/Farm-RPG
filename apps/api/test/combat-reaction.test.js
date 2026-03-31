@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 
 const { CombatService } = require('../dist/combat/combat.service.js');
 const {
+  COMBAT_STATUS_BALANCE_TABLE,
   COMBAT_ENEMY_DEFINITIONS,
   CLEANSE_REACTION_WINDOW_TURNS,
   INTERRUPT_REACTION_WINDOW_TURNS,
@@ -158,6 +159,78 @@ test('cecite can cause physical attacks to miss', () => {
       next.logs.some((entry) => entry.includes('Cecite')),
       true,
     );
+  } finally {
+    Math.random = previousRandom;
+  }
+});
+
+test('status balance profile shifts on floor milestones 3/5/8/10', () => {
+  const service = createCombatService();
+  const floor3 = service.resolveStatusBalanceProfile(3);
+  const floor5 = service.resolveStatusBalanceProfile(5);
+  const floor8 = service.resolveStatusBalanceProfile(8);
+  const floor10 = service.resolveStatusBalanceProfile(10);
+
+  assert.equal(floor3.key, 'floor_3_4');
+  assert.equal(floor5.key, 'floor_5_7');
+  assert.equal(floor8.key, 'floor_8_9');
+  assert.equal(floor10.key, 'floor_10_plus');
+  assert.equal(floor3.poisonDurationTurns <= floor5.poisonDurationTurns, true);
+  assert.equal(floor5.poisonDurationTurns <= floor8.poisonDurationTurns, true);
+  assert.equal(floor8.poisonDurationTurns <= floor10.poisonDurationTurns, true);
+  assert.equal(floor3.ceciteMissChance <= floor5.ceciteMissChance, true);
+  assert.equal(floor5.ceciteMissChance <= floor8.ceciteMissChance, true);
+  assert.equal(floor8.ceciteMissChance <= floor10.ceciteMissChance, true);
+  assert.equal(Array.isArray(COMBAT_STATUS_BALANCE_TABLE), true);
+});
+
+test('cinder burst can fail to apply poison when status chance roll fails', () => {
+  const service = createCombatService();
+  const encounter = createEncounter({
+    enemyKey: 'cinder_warden',
+    towerFloor: 5,
+    enemy: { currentMp: 12 },
+    round: 3,
+    scriptState: {
+      playerPoisonedTurns: 0,
+    },
+  });
+
+  const previousRandom = Math.random;
+  Math.random = () => 0.99;
+  try {
+    service.resolveEnemyTurn(encounter);
+  } finally {
+    Math.random = previousRandom;
+  }
+
+  assert.equal(encounter.scriptState.playerPoisonedTurns ?? 0, 0);
+  assert.equal(
+    encounter.logs.some((entry) => entry.includes('resist Poison')),
+    true,
+  );
+});
+
+test('cecite miss roll scales by floor balance profile', () => {
+  const service = createCombatService();
+  const lowFloorEncounter = createEncounter({
+    towerFloor: 3,
+    scriptState: {
+      playerBlindedTurns: 1,
+    },
+  });
+  const highFloorEncounter = createEncounter({
+    towerFloor: 10,
+    scriptState: {
+      playerBlindedTurns: 1,
+    },
+  });
+
+  const previousRandom = Math.random;
+  Math.random = () => 0.45;
+  try {
+    assert.equal(service.rollPlayerBlindMiss(lowFloorEncounter, 'attack'), false);
+    assert.equal(service.rollPlayerBlindMiss(highFloorEncounter, 'attack'), true);
   } finally {
     Math.random = previousRandom;
   }

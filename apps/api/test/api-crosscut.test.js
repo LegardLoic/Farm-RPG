@@ -142,6 +142,14 @@ function createShopDatabaseStub({ unlocked, worldFlags, initialGold = 120, inven
       return { rows: [] };
     }
 
+    if (text.includes('UPDATE player_progression') && text.includes('SET level = $2')) {
+      state.progression.level = values[1];
+      state.progression.experience = values[2];
+      state.progression.experience_to_next = values[3];
+      state.progression.gold = values[4];
+      return { rows: [] };
+    }
+
     if (text.includes('SELECT item_key, quantity') && text.includes('item_key = ANY($2::text[])')) {
       const itemKeys = Array.isArray(values[1]) ? values[1] : [];
       const rows = itemKeys
@@ -1017,9 +1025,15 @@ test('village market buy and sell operations update gold and inventory', async (
   const sale = await service.sellVillageCrop('user-1', 'turnip', 1);
   assert.equal(sale.unitGoldValue, 10);
   assert.equal(sale.totalGoldGained, 10);
+  assert.equal(sale.totalExperienceGained, 2);
+  assert.equal(sale.economyTierKey, 'farm_bootstrap');
   assert.equal(sale.newGold, 94);
   assert.equal(sale.remainingQuantity, 1);
+  assert.equal(sale.progression.level, 1);
+  assert.equal(sale.progression.experience, 2);
+  assert.equal(sale.progression.experienceToNextLevel, 100);
   assert.equal(db.state.progression.gold, 94);
+  assert.equal(db.state.progression.experience, 2);
   assert.equal(db.state.inventory.get('turnip'), 1);
 });
 
@@ -1045,6 +1059,27 @@ test('village market sale reports village delivery quest progression', async () 
       quantity: 2,
     },
   });
+});
+
+test('village crop sale experience scales with story progression tiers', async () => {
+  const db = createShopDatabaseStub({
+    worldFlags: ['intro_farm_assigned', 'floor_3_cleared', 'story_floor_8_cleared'],
+    initialGold: 80,
+    inventory: {
+      carrot: 3,
+    },
+  });
+  const service = new ShopsService(db);
+
+  const sale = await service.sellVillageCrop('user-1', 'carrot', 2);
+
+  assert.equal(sale.totalGoldGained, 30);
+  assert.equal(sale.totalExperienceGained, 8);
+  assert.equal(sale.economyTierKey, 'vanguard_supply');
+  assert.equal(sale.progression.experience, 8);
+  assert.equal(sale.newGold, 110);
+  assert.equal(db.state.progression.experience, 8);
+  assert.equal(db.state.progression.gold, 110);
 });
 
 test('save snapshot parsing normalizes version 1 data and legacy autosaves', () => {
