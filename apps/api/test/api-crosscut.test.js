@@ -88,41 +88,125 @@ function createAuthDatabaseStub() {
   };
 }
 
-function createShopDatabaseStub({ unlocked, worldFlags }) {
+function createShopDatabaseStub({ unlocked, worldFlags, initialGold = 120, inventory = {} }) {
   const calls = [];
+  const state = {
+    progression: {
+      user_id: 'user-1',
+      level: 1,
+      experience: 0,
+      experience_to_next: 100,
+      gold: initialGold,
+    },
+    worldFlags: new Set(worldFlags ?? []),
+    inventory: new Map(Object.entries(inventory)),
+  };
+
+  const executeQuery = async (text, values = []) => {
+    calls.push({ text, values });
+
+    if (text.includes('SELECT 1') && text.includes('flag_key = $2')) {
+      const flagKey = values[1];
+      const hasFlag = state.worldFlags.has(flagKey);
+      const unlockedState =
+        typeof unlocked === 'boolean' && flagKey === BLACKSMITH_SHOP_UNLOCK_FLAG
+          ? unlocked
+          : hasFlag;
+
+      return {
+        rowCount: unlockedState ? 1 : 0,
+        rows: unlockedState ? [{}] : [],
+      };
+    }
+
+    if (text.includes('SELECT flag_key') && text.includes('FROM world_flags')) {
+      return {
+        rows: Array.from(state.worldFlags)
+          .sort((left, right) => left.localeCompare(right))
+          .map((flag_key) => ({ flag_key })),
+      };
+    }
+
+    if (text.includes('INSERT INTO player_progression')) {
+      return { rows: [] };
+    }
+
+    if (text.includes('SELECT user_id, level, experience, experience_to_next, gold')) {
+      return {
+        rows: [{ ...state.progression }],
+      };
+    }
+
+    if (text.includes('UPDATE player_progression') && text.includes('SET gold = $2')) {
+      state.progression.gold = values[1];
+      return { rows: [] };
+    }
+
+    if (text.includes('SELECT item_key, quantity') && text.includes('item_key = ANY($2::text[])')) {
+      const itemKeys = Array.isArray(values[1]) ? values[1] : [];
+      const rows = itemKeys
+        .map((itemKey) => {
+          const quantity = state.inventory.get(itemKey);
+          if (typeof quantity !== 'number') {
+            return null;
+          }
+
+          return { item_key: itemKey, quantity };
+        })
+        .filter((row) => row !== null);
+      return { rows };
+    }
+
+    if (text.includes('SELECT item_key, quantity') && text.includes('LIMIT 1') && text.includes('FOR UPDATE')) {
+      const itemKey = values[1];
+      const quantity = state.inventory.get(itemKey);
+      if (typeof quantity !== 'number') {
+        return { rows: [] };
+      }
+
+      return {
+        rows: [{ item_key: itemKey, quantity }],
+      };
+    }
+
+    if (text.includes('INSERT INTO inventory_items')) {
+      const itemKey = values[1];
+      const quantity = values[2];
+      const nextQuantity = (state.inventory.get(itemKey) ?? 0) + quantity;
+      state.inventory.set(itemKey, nextQuantity);
+
+      return {
+        rows: [{ item_key: itemKey, quantity: nextQuantity }],
+      };
+    }
+
+    if (text.includes('UPDATE inventory_items') && text.includes('SET quantity = $3')) {
+      const itemKey = values[1];
+      const quantity = values[2];
+      state.inventory.set(itemKey, quantity);
+      return { rows: [] };
+    }
+
+    if (text.includes('DELETE FROM inventory_items')) {
+      state.inventory.delete(values[1]);
+      return { rows: [] };
+    }
+
+    throw new Error(`Unexpected shop query: ${text}`);
+  };
+
   return {
     calls,
-    async query(text) {
-      calls.push(text);
-
-      if (text.includes('SELECT 1') && text.includes('flag_key = $2')) {
-        return {
-          rowCount: unlocked ? 1 : 0,
-          rows: unlocked ? [{}] : [],
-        };
-      }
-
-      if (text.includes('SELECT flag_key') && text.includes('FROM world_flags')) {
-        return {
-          rows: worldFlags.map((flag_key) => ({ flag_key })),
-        };
-      }
-
-      if (text.includes('SELECT user_id, level, experience, experience_to_next, gold')) {
-        return {
-          rows: [
-            {
-              user_id: 'user-1',
-              level: 1,
-              experience: 0,
-              experience_to_next: 100,
-              gold: 120,
-            },
-          ],
-        };
-      }
-
-      throw new Error(`Unexpected shop query: ${text}`);
+    state,
+    async query(text, values = []) {
+      return executeQuery(text, values);
+    },
+    async withTransaction(callback) {
+      return callback({
+        async query(text, values = []) {
+          return executeQuery(text, values);
+        },
+      });
     },
   };
 }
@@ -596,6 +680,73 @@ test('blacksmith shop stays locked until the unlock flag exists', async () => {
 
   assert.equal(shop.unlocked, false);
   assert.deepEqual(shop.offers, []);
+});
+
+test('village market stays locked until intro farm + floor 3 flags are unlocked', async () => {
+  const db = createShopDatabaseStub({
+    worldFlags: ['intro_farm_assigned'],
+  });
+  const service = new ShopsService(db);
+
+  const market = await service.getVillageMarket('user-1');
+
+  assert.equal(market.unlocked, false);
+  assert.deepEqual(market.seedOffers, []);
+  assert.deepEqual(market.cropBuybackOffers, []);
+});
+
+test('village market exposes seed and buyback offers with owned quantities', async () => {
+  const db = createShopDatabaseStub({
+    worldFlags: ['intro_farm_assigned', 'floor_3_cleared', 'story_floor_5_cleared'],
+    inventory: {
+      turnip: 5,
+      carrot: 2,
+      wheat: 1,
+    },
+  });
+  const service = new ShopsService(db);
+
+  const market = await service.getVillageMarket('user-1');
+
+  assert.equal(market.unlocked, true);
+  assert.deepEqual(
+    market.seedOffers.map((offer) => offer.offerKey),
+    ['turnip_seed_packet', 'carrot_seed_packet', 'wheat_seed_packet'],
+  );
+  assert.deepEqual(
+    market.cropBuybackOffers.map((offer) => [offer.itemKey, offer.ownedQuantity]),
+    [
+      ['turnip', 5],
+      ['carrot', 2],
+      ['wheat', 1],
+    ],
+  );
+});
+
+test('village market buy and sell operations update gold and inventory', async () => {
+  const db = createShopDatabaseStub({
+    worldFlags: ['intro_farm_assigned', 'floor_3_cleared'],
+    initialGold: 100,
+    inventory: {
+      turnip: 2,
+    },
+  });
+  const service = new ShopsService(db);
+
+  const purchase = await service.buyVillageSeed('user-1', 'turnip_seed_packet', 2);
+  assert.equal(purchase.totalCost, 16);
+  assert.equal(purchase.newGold, 84);
+  assert.equal(purchase.inventoryItem.itemKey, 'turnip_seed');
+  assert.equal(purchase.inventoryItem.totalQuantity, 2);
+  assert.equal(db.state.progression.gold, 84);
+
+  const sale = await service.sellVillageCrop('user-1', 'turnip', 1);
+  assert.equal(sale.unitGoldValue, 10);
+  assert.equal(sale.totalGoldGained, 10);
+  assert.equal(sale.newGold, 94);
+  assert.equal(sale.remainingQuantity, 1);
+  assert.equal(db.state.progression.gold, 94);
+  assert.equal(db.state.inventory.get('turnip'), 1);
 });
 
 test('save snapshot parsing normalizes version 1 data and legacy autosaves', () => {
