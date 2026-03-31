@@ -201,3 +201,14 @@ test('intro narrative panel wiring exists for lot 85', () => {
   assert.equal(stylesSource.includes('.hud-intro'), true);
   assert.equal(stylesSource.includes('.hud-intro-button'), true);
 });
+
+test('village NPC state panel wiring exists for lot 86', () => {
+  assert.equal(gameSceneSource.includes('data-hud="villageNpcSummary"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="villageNpcMayor"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="villageNpcBlacksmith"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="villageNpcMerchant"'), true);
+  assert.equal(gameSceneSource.includes('private updateVillageNpcHud(): void'), true);
+  assert.equal(gameSceneSource.includes('private normalizeVillageNpcEntry(payload: unknown): VillageNpcHudEntry | null'), true);
+  assert.equal(stylesSource.includes('.hud-village-npcs'), true);
+  assert.equal(stylesSource.includes('.hud-village-npc-line'), true);
+});

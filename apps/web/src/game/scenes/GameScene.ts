@@ -20,6 +20,17 @@ type HudState = {
   area: string;
 };
 
+type VillageNpcHudEntry = {
+  stateKey: string;
+  available: boolean;
+};
+
+type VillageNpcHudState = {
+  mayor: VillageNpcHudEntry;
+  blacksmith: VillageNpcHudEntry;
+  merchant: VillageNpcHudEntry;
+};
+
 type CombatStatus = 'active' | 'won' | 'lost' | 'fled';
 type CombatTurn = 'player' | 'enemy';
 type CombatUiStatus = CombatStatus | 'idle' | 'loading' | 'error';
@@ -586,6 +597,10 @@ export class GameScene extends Phaser.Scene {
   private blacksmithSummaryValue: HTMLElement | null = null;
   private blacksmithOffersRoot: HTMLElement | null = null;
   private blacksmithErrorValue: HTMLElement | null = null;
+  private villageNpcSummaryValue: HTMLElement | null = null;
+  private villageNpcMayorValue: HTMLElement | null = null;
+  private villageNpcBlacksmithValue: HTMLElement | null = null;
+  private villageNpcMerchantValue: HTMLElement | null = null;
   private autosaveSummaryValue: HTMLElement | null = null;
   private autosaveMetaValue: HTMLElement | null = null;
   private autosaveActionsRoot: HTMLElement | null = null;
@@ -642,6 +657,11 @@ export class GameScene extends Phaser.Scene {
   private blacksmithBusy = false;
   private blacksmithError: string | null = null;
   private blacksmithRenderSignature = '';
+  private villageNpcState: VillageNpcHudState = {
+    mayor: { stateKey: 'offscreen', available: false },
+    blacksmith: { stateKey: 'cursed', available: false },
+    merchant: { stateKey: 'absent', available: false },
+  };
   private autosave: AutoSaveState | null = null;
   private autosaveBusy = false;
   private autosaveRestoreSlotBusy: number | null = null;
@@ -1212,6 +1232,26 @@ export class GameScene extends Phaser.Scene {
           <div class="hud-quests-error" data-hud="questsError" hidden></div>
           <ul class="hud-quests-list" data-hud="questsList"></ul>
         </div>
+        <div class="hud-village-npcs">
+          <div class="hud-village-npcs-header">
+            <span>Village PNJ</span>
+            <strong data-hud="villageNpcSummary">3 etats suivis</strong>
+          </div>
+          <div class="hud-village-npc-grid">
+            <div class="hud-village-npc-line">
+              <span>Maire</span>
+              <strong data-hud="villageNpcMayor">-</strong>
+            </div>
+            <div class="hud-village-npc-line">
+              <span>Forgeron</span>
+              <strong data-hud="villageNpcBlacksmith">-</strong>
+            </div>
+            <div class="hud-village-npc-line">
+              <span>Marchand</span>
+              <strong data-hud="villageNpcMerchant">-</strong>
+            </div>
+          </div>
+        </div>
         <div class="hud-blacksmith">
           <div class="hud-blacksmith-header">
             <span>Blacksmith Shop</span>
@@ -1411,6 +1451,10 @@ export class GameScene extends Phaser.Scene {
     this.blacksmithSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="blacksmithSummary"]');
     this.blacksmithOffersRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="blacksmithOffers"]');
     this.blacksmithErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="blacksmithError"]');
+    this.villageNpcSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcSummary"]');
+    this.villageNpcMayorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcMayor"]');
+    this.villageNpcBlacksmithValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcBlacksmith"]');
+    this.villageNpcMerchantValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcMerchant"]');
     this.autosaveSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="autosaveSummary"]');
     this.autosaveMetaValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="autosaveMeta"]');
     this.autosaveActionsRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="autosaveActions"]');
@@ -1576,6 +1620,10 @@ export class GameScene extends Phaser.Scene {
     this.blacksmithSummaryValue = null;
     this.blacksmithOffersRoot = null;
     this.blacksmithErrorValue = null;
+    this.villageNpcSummaryValue = null;
+    this.villageNpcMayorValue = null;
+    this.villageNpcBlacksmithValue = null;
+    this.villageNpcMerchantValue = null;
     this.autosaveSummaryValue = null;
     this.autosaveMetaValue = null;
     this.autosaveActionsRoot = null;
@@ -1635,6 +1683,11 @@ export class GameScene extends Phaser.Scene {
     this.debugQaExportMarkdownButton = null;
     this.questsRenderSignature = '';
     this.blacksmithRenderSignature = '';
+    this.villageNpcState = {
+      mayor: { stateKey: 'offscreen', available: false },
+      blacksmith: { stateKey: 'cursed', available: false },
+      merchant: { stateKey: 'absent', available: false },
+    };
     this.autosaveRenderSignature = '';
     this.saveSlotsRenderSignature = '';
     this.heroProfile = null;
@@ -1685,6 +1738,7 @@ export class GameScene extends Phaser.Scene {
     this.updateIntroHud();
     this.updateCombatHud();
     this.updateQuestHud();
+    this.updateVillageNpcHud();
     this.updateBlacksmithHud();
     this.updateAutoSaveHud();
     this.updateSaveSlotsHud();
@@ -1742,6 +1796,24 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.renderQuestList();
+  }
+
+  private updateVillageNpcHud(): void {
+    if (this.villageNpcSummaryValue) {
+      this.villageNpcSummaryValue.textContent = this.getVillageNpcSummaryLabel();
+    }
+
+    if (this.villageNpcMayorValue) {
+      this.villageNpcMayorValue.textContent = this.getVillageNpcEntryLabel('mayor');
+    }
+
+    if (this.villageNpcBlacksmithValue) {
+      this.villageNpcBlacksmithValue.textContent = this.getVillageNpcEntryLabel('blacksmith');
+    }
+
+    if (this.villageNpcMerchantValue) {
+      this.villageNpcMerchantValue.textContent = this.getVillageNpcEntryLabel('merchant');
+    }
   }
 
   private updateBlacksmithHud(): void {
@@ -4396,6 +4468,23 @@ export class GameScene extends Phaser.Scene {
         this.hudState.blacksmithUnlocked = Boolean(blacksmith.unlocked);
         this.hudState.blacksmithCurseLifted = Boolean(blacksmith.curseLifted);
       }
+
+      const npcs = this.asRecord(village.npcs);
+      if (npcs) {
+        const mayor = this.normalizeVillageNpcEntry(npcs.mayor);
+        const blacksmithNpc = this.normalizeVillageNpcEntry(npcs.blacksmith);
+        const merchant = this.normalizeVillageNpcEntry(npcs.merchant);
+
+        if (mayor) {
+          this.villageNpcState.mayor = mayor;
+        }
+        if (blacksmithNpc) {
+          this.villageNpcState.blacksmith = blacksmithNpc;
+        }
+        if (merchant) {
+          this.villageNpcState.merchant = merchant;
+        }
+      }
     }
 
     const tower = this.asRecord(payload.tower);
@@ -4428,6 +4517,11 @@ export class GameScene extends Phaser.Scene {
     this.hudState.towerBossFloor10Defeated = false;
     this.hudState.blacksmithUnlocked = false;
     this.hudState.blacksmithCurseLifted = false;
+    this.villageNpcState = {
+      mayor: { stateKey: 'offscreen', available: false },
+      blacksmith: { stateKey: 'cursed', available: false },
+      merchant: { stateKey: 'absent', available: false },
+    };
   }
 
   private resetHeroProfileState(): void {
@@ -6267,6 +6361,55 @@ export class GameScene extends Phaser.Scene {
     return 'Unlocked';
   }
 
+  private getVillageNpcSummaryLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Connexion requise';
+    }
+
+    const availableCount =
+      Number(this.villageNpcState.mayor.available) +
+      Number(this.villageNpcState.blacksmith.available) +
+      Number(this.villageNpcState.merchant.available);
+    return `${availableCount}/3 accessibles`;
+  }
+
+  private getVillageNpcEntryLabel(npcKey: keyof VillageNpcHudState): string {
+    const entry = this.villageNpcState[npcKey];
+    const availability = entry.available ? 'Disponible' : 'Indisponible';
+    return `${this.formatVillageNpcStateLabel(entry.stateKey)} | ${availability}`;
+  }
+
+  private formatVillageNpcStateLabel(stateKey: string): string {
+    switch (stateKey) {
+      case 'offscreen':
+        return 'Hors village';
+      case 'awaiting_meeting':
+        return 'Attend rencontre';
+      case 'briefing':
+        return 'Briefing';
+      case 'village_overseer':
+        return 'Supervision village';
+      case 'tower_strategist':
+        return 'Strategie tour';
+      case 'cursed':
+        return 'Maudit';
+      case 'recovering':
+        return 'Recuperation';
+      case 'open':
+        return 'Ouvert';
+      case 'masterwork_ready':
+        return 'Maitrise';
+      case 'absent':
+        return 'Absent';
+      case 'setting_stall':
+        return 'Installe etal';
+      case 'traveling_buyer':
+        return 'Achat itinerant';
+      default:
+        return stateKey.replace(/_/g, ' ');
+    }
+  }
+
   private getIntroSummaryLabel(): string {
     if (!this.isAuthenticated) {
       return 'Connexion requise';
@@ -6395,6 +6538,23 @@ export class GameScene extends Phaser.Scene {
         metMayor: Boolean(steps?.metMayor),
         farmAssigned: Boolean(steps?.farmAssigned),
       },
+    };
+  }
+
+  private normalizeVillageNpcEntry(payload: unknown): VillageNpcHudEntry | null {
+    const record = this.asRecord(payload);
+    if (!record) {
+      return null;
+    }
+
+    const stateKey = this.asString(record.stateKey)?.trim().toLowerCase();
+    if (!stateKey) {
+      return null;
+    }
+
+    return {
+      stateKey,
+      available: Boolean(record.available),
     };
   }
 

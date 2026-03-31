@@ -776,3 +776,31 @@ test('gameplay intro state progresses through village arrival, mayor, and farm a
   const noOpAfterCompletion = await service.advanceIntroState('user-1');
   assert.deepEqual(noOpAfterCompletion, afterFarmAssignment);
 });
+
+test('gameplay village NPC states are derived from world flags', async () => {
+  const earlyService = new GameplayService(createGameplayDatabaseStub());
+  const earlyVillageState = await earlyService.getVillageState('user-1');
+  assert.deepEqual(earlyVillageState.npcs, {
+    mayor: { stateKey: 'offscreen', available: false },
+    blacksmith: { stateKey: 'cursed', available: false },
+    merchant: { stateKey: 'absent', available: false },
+  });
+
+  const advancedFlags = [
+    'intro_arrived_village',
+    'intro_met_mayor',
+    'intro_farm_assigned',
+    'blacksmith_curse_lifted',
+    'blacksmith_shop_tier_1_unlocked',
+    'floor_3_cleared',
+    'story_floor_5_cleared',
+    'story_floor_8_cleared',
+  ];
+  const advancedService = new GameplayService(createGameplayDatabaseStub(advancedFlags));
+  const advancedVillageState = await advancedService.getVillageState('user-1');
+  assert.deepEqual(advancedVillageState.npcs, {
+    mayor: { stateKey: 'tower_strategist', available: true },
+    blacksmith: { stateKey: 'masterwork_ready', available: true },
+    merchant: { stateKey: 'traveling_buyer', available: true },
+  });
+});
