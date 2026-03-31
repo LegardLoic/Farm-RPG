@@ -490,6 +490,16 @@ body::before {
   color: var(--muted);
 }
 
+.hud-debug-qa-reference-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hud-debug-qa-reference-filters .hud-debug-qa-field span {
+  font-size: 0.66rem;
+}
+
 .hud-debug-qa-reference-output {
   margin: 0;
   padding: 10px 12px;
@@ -528,6 +538,11 @@ body::before {
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+
+.hud-debug-qa-button.export.markdown {
+  border-color: rgba(127, 209, 199, 0.42);
+  background: rgba(127, 209, 199, 0.14);
 }
 
 .hud-debug-qa-button:hover:not(:disabled) {
@@ -1477,6 +1492,10 @@ body::before {
   }
 
   .hud-debug-qa-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hud-debug-qa-reference-filters {
     grid-template-columns: 1fr;
   }
 
