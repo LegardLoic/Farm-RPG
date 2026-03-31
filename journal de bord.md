@@ -1104,6 +1104,20 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - wiring export markdown
     - styles dedies (`reference filters` + bouton markdown export).
 
+### Lot 82 - CI QA: smoke auth etendu + alerte 2 fails consecutifs
+- Web smoke auth (`apps/web/test/smoke-web-auth-combat.mjs`):
+  - ajout d'une assertion explicite `Debug QA reference loaded` en mode authentifie.
+  - verification API de `GET /combat/debug/scripted-intents`:
+    - endpoint accessible
+    - payload non vide (`scriptedIntents` > 0).
+  - le resume smoke inclut maintenant un bloc `debugQaReference` (profiles/floors/skills).
+- Workflow nightly staging (`.github/workflows/nightly-staging-e2e.yml`):
+  - calcul du compteur d'echecs consecutifs a partir de l'historique 7 runs.
+  - publication de l'output `consecutive_failures` sur l'etape history.
+  - ajout d'une alerte automatique quand `consecutive_failures >= 2`:
+    - creation (ou commentaire) d'une issue GitHub dediee pour signaler la degradation continue.
+  - permissions workflow mises a jour pour autoriser l'ecriture d'issues (`issues: write`).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1251,30 +1265,30 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Nightly staging CI couvre maintenant aussi un smoke web authentifie avec fixture auto (token/cookie).
 - Nightly smoke auth nettoie automatiquement le combat ouvert (`forfeit`) pour eviter l'accumulation d'encounters actifs.
 - Nightly staging publie un dashboard historique 7 jours (`history.json` + `dashboard.md`) pour suivre la tendance smoke/e2e.
+- Nightly staging declenche une alerte GitHub dediee en cas de 2 echecs consecutifs.
 - Endpoint debug readonly disponible pour auditer scripts combat sans lancer un combat complet.
 - Tuning animation hero/boss configurable via manifest sans toucher au code runtime.
 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 82 - CI QA: smoke auth etendu avec assertion `Debug QA reference loaded` + alerte nightly sur 2 fails consecutifs.
-2. Lot 83 - Personnage: ecran creation hero minimal (nom, apparence de base) + persistence profil.
-3. Lot 84 - Input: premiere passe support manette (navigation HUD + actions combat principales).
-4. Lot 85 - Narration: sequence d'intro MVP (arrivee village, maire, attribution ferme) en mode textuel/cinematique simple.
-5. Lot 86 - PNJ: systeme d'etats PNJ (maire, forgeron, marchand) pilote par flags monde.
-6. Lot 87 - Village economy: boutique graines + rachat recoltes (API + HUD) pour demarrer la boucle ferme.
-7. Lot 88 - Ferme data model: parcelles, cultures plantees, etats arrose/non arrose, timers de croissance.
-8. Lot 89 - Ferme backend: endpoints `plant`, `water`, `harvest` avec validations metier serveur.
-9. Lot 90 - Ferme frontend: panneau ferme jouable (selection graine, plantation, arrosage, recolte).
-10. Lot 91 - Temps: cycle jour/nuit MVP + action `sleep` qui avance le jour et fait pousser les cultures.
-11. Lot 92 - Crafting ferme: recettes basiques (consommables combat) basees sur recoltes.
-12. Lot 93 - Quetes ferme/village: quetes secondaires simples liees aux recoltes et livraisons.
-13. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
-14. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
-15. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
-16. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
-17. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
-18. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
-19. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
+1. Lot 83 - Personnage: ecran creation hero minimal (nom, apparence de base) + persistence profil.
+2. Lot 84 - Input: premiere passe support manette (navigation HUD + actions combat principales).
+3. Lot 85 - Narration: sequence d'intro MVP (arrivee village, maire, attribution ferme) en mode textuel/cinematique simple.
+4. Lot 86 - PNJ: systeme d'etats PNJ (maire, forgeron, marchand) pilote par flags monde.
+5. Lot 87 - Village economy: boutique graines + rachat recoltes (API + HUD) pour demarrer la boucle ferme.
+6. Lot 88 - Ferme data model: parcelles, cultures plantees, etats arrose/non arrose, timers de croissance.
+7. Lot 89 - Ferme backend: endpoints `plant`, `water`, `harvest` avec validations metier serveur.
+8. Lot 90 - Ferme frontend: panneau ferme jouable (selection graine, plantation, arrosage, recolte).
+9. Lot 91 - Temps: cycle jour/nuit MVP + action `sleep` qui avance le jour et fait pousser les cultures.
+10. Lot 92 - Crafting ferme: recettes basiques (consommables combat) basees sur recoltes.
+11. Lot 93 - Quetes ferme/village: quetes secondaires simples liees aux recoltes et livraisons.
+12. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
+13. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
+14. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
+15. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
+16. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
+17. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
+18. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
 
 

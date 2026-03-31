@@ -42,6 +42,34 @@ async function readCurrentCombatId(request, apiBaseUrl) {
   return normalize(payload?.encounter?.id);
 }
 
+async function assertDebugQaReferenceLoaded(request, apiBaseUrl) {
+  const response = await request.get(new URL('/combat/debug/scripted-intents', apiBaseUrl).toString(), {
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  if (!response.ok()) {
+    throw new Error(`Failed to load debug QA scripted intents reference (HTTP ${response.status()}).`);
+  }
+
+  const payload = await response.json();
+  const scriptedIntents = Array.isArray(payload?.scriptedIntents) ? payload.scriptedIntents : [];
+  const scriptedFloors = Array.isArray(payload?.scriptedFloors) ? payload.scriptedFloors : [];
+  const playerSkills = Array.isArray(payload?.playerSkills) ? payload.playerSkills : [];
+
+  if (scriptedIntents.length === 0) {
+    throw new Error('Debug QA scripted intents reference is empty.');
+  }
+
+  return {
+    loaded: true,
+    scriptedProfiles: scriptedIntents.length,
+    scriptedFloors: scriptedFloors.length,
+    playerSkills: playerSkills.length,
+  };
+}
+
 async function cleanupAuthCombat(context, apiBaseUrl, encounterId) {
   const request = context.request;
   const forfeitUrl = new URL(`/combat/${encounterId}/forfeit`, apiBaseUrl).toString();
@@ -233,6 +261,8 @@ async function main() {
       throw new Error(`Unexpected visible combat error after auth start: "${combatError}".`);
     }
 
+    const debugQaReference = await assertDebugQaReferenceLoaded(context.request, apiBaseUrl);
+
     const summary = {
       baseUrl,
       mode: smokeMode,
@@ -246,6 +276,7 @@ async function main() {
       combatResult,
       combatError,
       combatStartRequestCount,
+      debugQaReference,
       result: 'passed',
     };
     console.log(JSON.stringify(summary, null, 2));
