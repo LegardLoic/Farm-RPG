@@ -255,3 +255,16 @@ test('farm panel wiring exists for lot 90', () => {
   assert.equal(stylesSource.includes('.farm-plot-item'), true);
   assert.equal(stylesSource.includes('.hud-farm-action'), true);
 });
+
+test('day-night cycle and sleep action wiring exists for lot 91', () => {
+  assert.equal(gameSceneSource.includes('data-hud="dayPhase"'), true);
+  assert.equal(gameSceneSource.includes('data-farm-action="sleep"'), true);
+  assert.equal(gameSceneSource.includes('private getDayPhaseKey(): \'day\' | \'night\''), true);
+  assert.equal(gameSceneSource.includes('private getDayPhaseLabel(): string'), true);
+  assert.equal(gameSceneSource.includes('private updateDayPhaseVisual(): void'), true);
+  assert.equal(gameSceneSource.includes('private async sleepAtFarm(): Promise<void>'), true);
+  assert.equal(gameSceneSource.includes("await this.fetchJson<unknown>('/gameplay/sleep'"), true);
+  assert.equal(stylesSource.includes('#game-shell[data-day-phase="night"] #game-root'), true);
+  assert.equal(stylesSource.includes('.hud-farm-actions'), true);
+  assert.equal(stylesSource.includes('.hud-farm-action.sleep'), true);
+});

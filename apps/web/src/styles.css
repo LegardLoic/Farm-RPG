@@ -73,9 +73,14 @@ body::before {
   backdrop-filter: blur(10px);
 }
 
+#game-shell[data-day-phase="night"] #game-root {
+  filter: brightness(0.78) saturate(0.88);
+}
+
 #game-root {
   position: absolute;
   inset: 0;
+  transition: filter 180ms ease;
 }
 
 #game-root canvas {
@@ -1049,6 +1054,14 @@ body::before {
 
 .hud-farm-controls {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hud-farm-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .hud-farm-field {
@@ -1392,6 +1405,11 @@ body::before {
 .hud-farm-action.harvest {
   border-color: rgba(127, 209, 199, 0.45);
   background: rgba(127, 209, 199, 0.16);
+}
+
+.hud-farm-action.sleep {
+  border-color: rgba(185, 195, 212, 0.45);
+  background: rgba(185, 195, 212, 0.14);
 }
 
 .hud-autosave-restore {
