@@ -316,6 +316,39 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     `);
 
     await this.query(`
+      CREATE TABLE IF NOT EXISTS village_npc_relationships (
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        npc_key TEXT NOT NULL CHECK (npc_key IN ('mayor', 'blacksmith', 'merchant')),
+        friendship INTEGER NOT NULL DEFAULT 0 CHECK (friendship >= 0),
+        last_interaction_day INTEGER CHECK (last_interaction_day IS NULL OR last_interaction_day >= 1),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, npc_key)
+      );
+    `);
+
+    await this.query(`
+      CREATE INDEX IF NOT EXISTS village_npc_relationships_user_id_idx
+      ON village_npc_relationships(user_id);
+    `);
+
+    await this.query(`
+      ALTER TABLE village_npc_relationships
+      ADD COLUMN IF NOT EXISTS friendship INTEGER NOT NULL DEFAULT 0;
+    `);
+
+    await this.query(`
+      ALTER TABLE village_npc_relationships
+      ADD COLUMN IF NOT EXISTS last_interaction_day INTEGER;
+    `);
+
+    await this.query(`
+      UPDATE village_npc_relationships
+      SET friendship = 0
+      WHERE friendship IS NULL OR friendship < 0;
+    `);
+
+    await this.query(`
       CREATE TABLE IF NOT EXISTS quest_states (
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         quest_key TEXT NOT NULL,

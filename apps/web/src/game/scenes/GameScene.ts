@@ -25,10 +25,26 @@ type VillageNpcHudEntry = {
   available: boolean;
 };
 
+type VillageNpcRelationshipTier = 'stranger' | 'familiar' | 'trusted' | 'ally';
+type VillageNpcKey = 'mayor' | 'blacksmith' | 'merchant';
+
+type VillageNpcRelationshipHudEntry = {
+  friendship: number;
+  tier: VillageNpcRelationshipTier;
+  lastInteractionDay: number | null;
+  canTalkToday: boolean;
+};
+
 type VillageNpcHudState = {
   mayor: VillageNpcHudEntry;
   blacksmith: VillageNpcHudEntry;
   merchant: VillageNpcHudEntry;
+};
+
+type VillageNpcRelationshipHudState = {
+  mayor: VillageNpcRelationshipHudEntry;
+  blacksmith: VillageNpcRelationshipHudEntry;
+  merchant: VillageNpcRelationshipHudEntry;
 };
 
 type CombatStatus = 'active' | 'won' | 'lost' | 'fled';
@@ -685,6 +701,10 @@ export class GameScene extends Phaser.Scene {
   private villageNpcMayorValue: HTMLElement | null = null;
   private villageNpcBlacksmithValue: HTMLElement | null = null;
   private villageNpcMerchantValue: HTMLElement | null = null;
+  private villageNpcErrorValue: HTMLElement | null = null;
+  private villageNpcTalkMayorButton: HTMLButtonElement | null = null;
+  private villageNpcTalkBlacksmithButton: HTMLButtonElement | null = null;
+  private villageNpcTalkMerchantButton: HTMLButtonElement | null = null;
   private autosaveSummaryValue: HTMLElement | null = null;
   private autosaveMetaValue: HTMLElement | null = null;
   private autosaveActionsRoot: HTMLElement | null = null;
@@ -761,6 +781,13 @@ export class GameScene extends Phaser.Scene {
     blacksmith: { stateKey: 'cursed', available: false },
     merchant: { stateKey: 'absent', available: false },
   };
+  private villageNpcRelationships: VillageNpcRelationshipHudState = {
+    mayor: { friendship: 0, tier: 'stranger', lastInteractionDay: null, canTalkToday: false },
+    blacksmith: { friendship: 0, tier: 'stranger', lastInteractionDay: null, canTalkToday: false },
+    merchant: { friendship: 0, tier: 'stranger', lastInteractionDay: null, canTalkToday: false },
+  };
+  private villageNpcBusy = false;
+  private villageNpcError: string | null = null;
   private autosave: AutoSaveState | null = null;
   private autosaveBusy = false;
   private autosaveRestoreSlotBusy: number | null = null;
@@ -897,6 +924,7 @@ export class GameScene extends Phaser.Scene {
     const questAction = button.dataset.questAction;
     const shopAction = button.dataset.shopAction;
     const marketAction = button.dataset.marketAction;
+    const villageNpcAction = button.dataset.villageNpcAction;
     const farmAction = button.dataset.farmAction;
     const farmCraftAction = button.dataset.farmCraftAction;
     const saveAction = button.dataset.saveAction;
@@ -966,6 +994,14 @@ export class GameScene extends Phaser.Scene {
       const itemKey = button.dataset.itemKey;
       if (itemKey) {
         void this.sellVillageCrop(itemKey);
+      }
+      return;
+    }
+
+    if (villageNpcAction === 'talk') {
+      const npcKey = button.dataset.npcKey;
+      if (npcKey === 'mayor' || npcKey === 'blacksmith' || npcKey === 'merchant') {
+        void this.interactVillageNpc(npcKey);
       }
       return;
     }
@@ -1392,18 +1428,34 @@ export class GameScene extends Phaser.Scene {
             <span>Village PNJ</span>
             <strong data-hud="villageNpcSummary">3 etats suivis</strong>
           </div>
+          <div class="hud-village-npc-error" data-hud="villageNpcError" hidden></div>
           <div class="hud-village-npc-grid">
             <div class="hud-village-npc-line">
               <span>Maire</span>
-              <strong data-hud="villageNpcMayor">-</strong>
+              <div class="hud-village-npc-actions">
+                <strong data-hud="villageNpcMayor">-</strong>
+                <button class="hud-village-npc-button" data-village-npc-action="talk" data-npc-key="mayor">
+                  Parler
+                </button>
+              </div>
             </div>
             <div class="hud-village-npc-line">
               <span>Forgeron</span>
-              <strong data-hud="villageNpcBlacksmith">-</strong>
+              <div class="hud-village-npc-actions">
+                <strong data-hud="villageNpcBlacksmith">-</strong>
+                <button class="hud-village-npc-button" data-village-npc-action="talk" data-npc-key="blacksmith">
+                  Parler
+                </button>
+              </div>
             </div>
             <div class="hud-village-npc-line">
               <span>Marchand</span>
-              <strong data-hud="villageNpcMerchant">-</strong>
+              <div class="hud-village-npc-actions">
+                <strong data-hud="villageNpcMerchant">-</strong>
+                <button class="hud-village-npc-button" data-village-npc-action="talk" data-npc-key="merchant">
+                  Parler
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1658,6 +1710,16 @@ export class GameScene extends Phaser.Scene {
     this.villageNpcMayorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcMayor"]');
     this.villageNpcBlacksmithValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcBlacksmith"]');
     this.villageNpcMerchantValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcMerchant"]');
+    this.villageNpcErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcError"]');
+    this.villageNpcTalkMayorButton = this.hudRoot.querySelector<HTMLButtonElement>(
+      '[data-village-npc-action="talk"][data-npc-key="mayor"]',
+    );
+    this.villageNpcTalkBlacksmithButton = this.hudRoot.querySelector<HTMLButtonElement>(
+      '[data-village-npc-action="talk"][data-npc-key="blacksmith"]',
+    );
+    this.villageNpcTalkMerchantButton = this.hudRoot.querySelector<HTMLButtonElement>(
+      '[data-village-npc-action="talk"][data-npc-key="merchant"]',
+    );
     this.autosaveSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="autosaveSummary"]');
     this.autosaveMetaValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="autosaveMeta"]');
     this.autosaveActionsRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="autosaveActions"]');
@@ -1845,6 +1907,10 @@ export class GameScene extends Phaser.Scene {
     this.villageNpcMayorValue = null;
     this.villageNpcBlacksmithValue = null;
     this.villageNpcMerchantValue = null;
+    this.villageNpcErrorValue = null;
+    this.villageNpcTalkMayorButton = null;
+    this.villageNpcTalkBlacksmithButton = null;
+    this.villageNpcTalkMerchantButton = null;
     this.autosaveSummaryValue = null;
     this.autosaveMetaValue = null;
     this.autosaveActionsRoot = null;
@@ -2055,6 +2121,42 @@ export class GameScene extends Phaser.Scene {
     if (this.villageNpcMerchantValue) {
       this.villageNpcMerchantValue.textContent = this.getVillageNpcEntryLabel('merchant');
     }
+
+    if (this.villageNpcErrorValue) {
+      this.villageNpcErrorValue.hidden = !this.villageNpcError;
+      this.villageNpcErrorValue.textContent = this.villageNpcError ?? '';
+    }
+
+    this.updateVillageNpcTalkButton('mayor', this.villageNpcTalkMayorButton);
+    this.updateVillageNpcTalkButton('blacksmith', this.villageNpcTalkBlacksmithButton);
+    this.updateVillageNpcTalkButton('merchant', this.villageNpcTalkMerchantButton);
+  }
+
+  private updateVillageNpcTalkButton(
+    npcKey: VillageNpcKey,
+    button: HTMLButtonElement | null,
+  ): void {
+    if (!button) {
+      return;
+    }
+
+    const relation = this.villageNpcRelationships[npcKey];
+    const npc = this.villageNpcState[npcKey];
+    const canTalk = this.isAuthenticated && npc.available && relation.canTalkToday;
+    button.disabled = this.villageNpcBusy || !canTalk;
+    if (this.villageNpcBusy) {
+      button.textContent = 'Parler...';
+      return;
+    }
+    if (!this.isAuthenticated) {
+      button.textContent = 'Login';
+      return;
+    }
+    if (!npc.available) {
+      button.textContent = 'Indispo';
+      return;
+    }
+    button.textContent = relation.canTalkToday ? 'Parler' : 'Deja vu';
   }
 
   private updateBlacksmithHud(): void {
@@ -4457,6 +4559,7 @@ export class GameScene extends Phaser.Scene {
       });
       this.applyGameplaySnapshot(payload);
       this.farmCraftingError = null;
+      this.villageNpcError = null;
     } catch {
       // Keep previous HUD progression values if gameplay refresh fails.
     } finally {
@@ -5093,6 +5196,46 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private async interactVillageNpc(npcKey: VillageNpcKey): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.villageNpcError = 'Login required to interact with village NPCs.';
+      this.updateHud();
+      return;
+    }
+
+    const npc = this.villageNpcState[npcKey];
+    const relationship = this.villageNpcRelationships[npcKey];
+    if (!npc.available) {
+      this.villageNpcError = `${this.getVillageNpcDisplayName(npcKey)} is unavailable right now.`;
+      this.updateHud();
+      return;
+    }
+    if (!relationship.canTalkToday) {
+      this.villageNpcError = `${this.getVillageNpcDisplayName(npcKey)} already talked today.`;
+      this.updateHud();
+      return;
+    }
+
+    this.villageNpcBusy = true;
+    this.villageNpcError = null;
+    this.updateHud();
+
+    try {
+      await this.fetchJson('/gameplay/village/npc/interact', {
+        method: 'POST',
+        body: JSON.stringify({
+          npcKey,
+        }),
+      });
+      await this.refreshGameplayState();
+    } catch (error) {
+      this.villageNpcError = this.getErrorMessage(error, 'Unable to interact with this NPC.');
+    } finally {
+      this.villageNpcBusy = false;
+      this.updateHud();
+    }
+  }
+
   private async sleepAtFarm(): Promise<void> {
     if (!this.isAuthenticated) {
       this.farmError = 'Login required to sleep at farm.';
@@ -5630,6 +5773,23 @@ export class GameScene extends Phaser.Scene {
           this.villageNpcState.merchant = merchant;
         }
       }
+
+      const relationships = this.asRecord(village.relationships);
+      if (relationships) {
+        const mayorRelationship = this.normalizeVillageNpcRelationshipEntry(relationships.mayor);
+        const blacksmithRelationship = this.normalizeVillageNpcRelationshipEntry(relationships.blacksmith);
+        const merchantRelationship = this.normalizeVillageNpcRelationshipEntry(relationships.merchant);
+
+        if (mayorRelationship) {
+          this.villageNpcRelationships.mayor = mayorRelationship;
+        }
+        if (blacksmithRelationship) {
+          this.villageNpcRelationships.blacksmith = blacksmithRelationship;
+        }
+        if (merchantRelationship) {
+          this.villageNpcRelationships.merchant = merchantRelationship;
+        }
+      }
     }
 
     const tower = this.asRecord(payload.tower);
@@ -5667,6 +5827,13 @@ export class GameScene extends Phaser.Scene {
       blacksmith: { stateKey: 'cursed', available: false },
       merchant: { stateKey: 'absent', available: false },
     };
+    this.villageNpcRelationships = {
+      mayor: { friendship: 0, tier: 'stranger', lastInteractionDay: null, canTalkToday: false },
+      blacksmith: { friendship: 0, tier: 'stranger', lastInteractionDay: null, canTalkToday: false },
+      merchant: { friendship: 0, tier: 'stranger', lastInteractionDay: null, canTalkToday: false },
+    };
+    this.villageNpcBusy = false;
+    this.villageNpcError = null;
     this.farmState = null;
     this.farmBusy = false;
     this.farmError = null;
@@ -7568,13 +7735,18 @@ export class GameScene extends Phaser.Scene {
       Number(this.villageNpcState.mayor.available) +
       Number(this.villageNpcState.blacksmith.available) +
       Number(this.villageNpcState.merchant.available);
-    return `${availableCount}/3 accessibles`;
+    const friendshipTotal =
+      this.villageNpcRelationships.mayor.friendship +
+      this.villageNpcRelationships.blacksmith.friendship +
+      this.villageNpcRelationships.merchant.friendship;
+    return `${availableCount}/3 accessibles | Amitie ${friendshipTotal}`;
   }
 
-  private getVillageNpcEntryLabel(npcKey: keyof VillageNpcHudState): string {
+  private getVillageNpcEntryLabel(npcKey: VillageNpcKey): string {
     const entry = this.villageNpcState[npcKey];
     const availability = entry.available ? 'Disponible' : 'Indisponible';
-    return `${this.formatVillageNpcStateLabel(entry.stateKey)} | ${availability}`;
+    const relationship = this.villageNpcRelationships[npcKey];
+    return `${this.formatVillageNpcStateLabel(entry.stateKey)} | ${availability} | Amitie ${relationship.friendship} (${this.formatVillageRelationshipTierLabel(relationship.tier)})`;
   }
 
   private formatVillageNpcStateLabel(stateKey: string): string {
@@ -7606,6 +7778,32 @@ export class GameScene extends Phaser.Scene {
       default:
         return stateKey.replace(/_/g, ' ');
     }
+  }
+
+  private formatVillageRelationshipTierLabel(tier: VillageNpcRelationshipTier): string {
+    switch (tier) {
+      case 'stranger':
+        return 'Inconnu';
+      case 'familiar':
+        return 'Connu';
+      case 'trusted':
+        return 'Confiant';
+      case 'ally':
+        return 'Allie';
+      default:
+        return tier;
+    }
+  }
+
+  private getVillageNpcDisplayName(npcKey: VillageNpcKey): string {
+    if (npcKey === 'mayor') {
+      return 'Mayor';
+    }
+    if (npcKey === 'blacksmith') {
+      return 'Blacksmith';
+    }
+
+    return 'Merchant';
   }
 
   private getIntroSummaryLabel(): string {
@@ -7753,6 +7951,35 @@ export class GameScene extends Phaser.Scene {
     return {
       stateKey,
       available: Boolean(record.available),
+    };
+  }
+
+  private normalizeVillageNpcRelationshipEntry(payload: unknown): VillageNpcRelationshipHudEntry | null {
+    const record = this.asRecord(payload);
+    if (!record) {
+      return null;
+    }
+
+    const friendshipRaw = this.asNumber(record.friendship);
+    const tierRaw = this.asString(record.tier)?.trim().toLowerCase();
+    const lastInteractionDayRaw = this.asNumber(record.lastInteractionDay);
+    if (
+      friendshipRaw === null ||
+      !tierRaw ||
+      (tierRaw !== 'stranger' && tierRaw !== 'familiar' && tierRaw !== 'trusted' && tierRaw !== 'ally')
+    ) {
+      return null;
+    }
+
+    const lastInteractionDay = lastInteractionDayRaw === null || lastInteractionDayRaw < 1
+      ? null
+      : Math.round(lastInteractionDayRaw);
+
+    return {
+      friendship: Math.max(0, Math.round(friendshipRaw)),
+      tier: tierRaw,
+      lastInteractionDay,
+      canTalkToday: Boolean(record.canTalkToday),
     };
   }
 

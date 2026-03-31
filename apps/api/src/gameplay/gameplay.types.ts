@@ -123,11 +123,34 @@ export interface GameplayVillageState {
     blacksmith: GameplayVillageNpcState;
     merchant: GameplayVillageNpcState;
   };
+  relationships: {
+    mayor: GameplayVillageNpcRelationshipState;
+    blacksmith: GameplayVillageNpcRelationshipState;
+    merchant: GameplayVillageNpcRelationshipState;
+  };
 }
 
 export interface GameplayVillageNpcState {
   stateKey: string;
   available: boolean;
+}
+
+export type GameplayVillageNpcRelationshipTier = 'stranger' | 'familiar' | 'trusted' | 'ally';
+
+export interface GameplayVillageNpcRelationshipState {
+  friendship: number;
+  tier: GameplayVillageNpcRelationshipTier;
+  lastInteractionDay: number | null;
+  canTalkToday: boolean;
+}
+
+export interface GameplayVillageNpcInteractResult {
+  npcKey: 'mayor' | 'blacksmith' | 'merchant';
+  friendshipBefore: number;
+  friendshipAfter: number;
+  tierBefore: GameplayVillageNpcRelationshipTier;
+  tierAfter: GameplayVillageNpcRelationshipTier;
+  day: number;
 }
 
 export type GameplayIntroStepKey =

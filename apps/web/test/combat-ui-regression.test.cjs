@@ -213,6 +213,22 @@ test('village NPC state panel wiring exists for lot 86', () => {
   assert.equal(stylesSource.includes('.hud-village-npc-line'), true);
 });
 
+test('village NPC relationship panel wiring exists for lot 94', () => {
+  assert.equal(gameSceneSource.includes('data-hud="villageNpcError"'), true);
+  assert.equal(gameSceneSource.includes('data-village-npc-action="talk"'), true);
+  assert.equal(gameSceneSource.includes("await this.fetchJson('/gameplay/village/npc/interact'"), true);
+  assert.equal(gameSceneSource.includes('private async interactVillageNpc(npcKey: VillageNpcKey): Promise<void>'), true);
+  assert.equal(
+    gameSceneSource.includes('private normalizeVillageNpcRelationshipEntry(payload: unknown): VillageNpcRelationshipHudEntry | null'),
+    true,
+  );
+  assert.equal(gameSceneSource.includes('private updateVillageNpcTalkButton('), true);
+  assert.equal(gameSceneSource.includes('private formatVillageRelationshipTierLabel(tier: VillageNpcRelationshipTier): string'), true);
+  assert.equal(stylesSource.includes('.hud-village-npc-actions'), true);
+  assert.equal(stylesSource.includes('.hud-village-npc-button'), true);
+  assert.equal(stylesSource.includes('.hud-village-npc-error'), true);
+});
+
 test('village market panel wiring exists for lot 87', () => {
   assert.equal(gameSceneSource.includes('data-hud="villageMarketSummary"'), true);
   assert.equal(gameSceneSource.includes('data-hud="villageMarketError"'), true);
