@@ -23,6 +23,15 @@ export const INTRO_PROGRESS_FLAGS = [
   INTRO_FLAG_FARM_ASSIGNED,
 ] as const;
 
+export const COMBAT_PREPARATION_FLAG_HP = 'combat_prep_hp';
+export const COMBAT_PREPARATION_FLAG_MP = 'combat_prep_mp';
+export const COMBAT_PREPARATION_FLAG_ATTACK = 'combat_prep_attack';
+export const COMBAT_PREPARATION_FLAGS = [
+  COMBAT_PREPARATION_FLAG_HP,
+  COMBAT_PREPARATION_FLAG_MP,
+  COMBAT_PREPARATION_FLAG_ATTACK,
+] as const;
+
 export const VILLAGE_NPC_KEYS = ['mayor', 'blacksmith', 'merchant'] as const;
 export type VillageNpcKey = (typeof VILLAGE_NPC_KEYS)[number];
 

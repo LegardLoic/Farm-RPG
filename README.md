@@ -63,6 +63,7 @@ Create local env files before starting:
 - `POST /equipment/unequip`
 - `GET /gameplay/state`
 - `POST /gameplay/intro/advance`
+- `POST /gameplay/combat/prepare`
 - `POST /gameplay/village/npc/interact`
 - `POST /gameplay/sleep`
 - `GET /gameplay/crafting`
@@ -125,3 +126,4 @@ Use `.env.example` templates and repository secrets for CI.
 - Blacksmith shop now supports tiered offers with per-offer flag prerequisites.
 - Debug QA supports one-click state presets (`village_open`, `mid_tower`, `act1_done`).
 - Village NPC relationship MVP: friendship score + daily interaction with mayor, blacksmith, and merchant.
+- Vertical loop prep MVP: farm consumables can be converted into one-shot combat preparation bonuses via `POST /gameplay/combat/prepare`.

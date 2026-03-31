@@ -153,6 +153,30 @@ export interface GameplayVillageNpcInteractResult {
   day: number;
 }
 
+export interface GameplayCombatPreparationState {
+  active: boolean;
+  hpBoostActive: boolean;
+  mpBoostActive: boolean;
+  attackBoostActive: boolean;
+}
+
+export interface GameplayLoopState {
+  stageKey: 'tower_bootstrap' | 'village_sync' | 'farm_scale' | 'combat_mastery';
+  stageLabel: string;
+  farmUnlocked: boolean;
+  villageMarketUnlocked: boolean;
+  supplies: {
+    healingHerb: number;
+    manaTonic: number;
+  };
+  relationshipAverage: number;
+  preparation: GameplayCombatPreparationState & {
+    ready: boolean;
+    blockers: string[];
+    nextStep: string;
+  };
+}
+
 export type GameplayIntroStepKey =
   | 'arrive_village'
   | 'meet_mayor'

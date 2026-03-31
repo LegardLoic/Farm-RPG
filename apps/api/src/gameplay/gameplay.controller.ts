@@ -20,12 +20,13 @@ export class GameplayController {
 
   @Get('state')
   async getState(@Req() req: AuthenticatedRequest) {
-    const [progression, village, tower, world, intro] = await Promise.all([
+    const [progression, village, tower, world, intro, loop] = await Promise.all([
       this.gameplayService.getPlayerProgression(req.authUser!.id),
       this.gameplayService.getVillageState(req.authUser!.id),
       this.towerService.getState(req.authUser!.id),
       this.gameplayService.getWorldState(req.authUser!.id),
       this.gameplayService.getIntroState(req.authUser!.id),
+      this.gameplayService.getLoopState(req.authUser!.id),
     ]);
     const [farm, crafting] = await Promise.all([
       this.gameplayService.getFarmState(req.authUser!.id, world.day),
@@ -40,6 +41,7 @@ export class GameplayController {
       village,
       tower,
       intro,
+      loop,
       farm,
       crafting,
     };
@@ -57,6 +59,15 @@ export class GameplayController {
   @Post('village/npc/interact')
   async interactVillageNpc(@Req() req: AuthenticatedRequest, @Body() body: InteractVillageNpcDto) {
     const result = await this.gameplayService.interactVillageNpc(req.authUser!.id, body.npcKey);
+    return {
+      status: 'ok',
+      ...result,
+    };
+  }
+
+  @Post('combat/prepare')
+  async prepareCombatLoadout(@Req() req: AuthenticatedRequest) {
+    const result = await this.gameplayService.prepareCombatLoadout(req.authUser!.id);
     return {
       status: 'ok',
       ...result,

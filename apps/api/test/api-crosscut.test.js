@@ -311,12 +311,22 @@ function createGameplayDatabaseStub(
   initialFarmPlots = [],
   initialInventory = {},
   initialRelationships = {},
+  initialTower = {
+    current_floor: 1,
+    highest_floor: 1,
+    boss_floor_10_defeated: false,
+  },
 ) {
   const state = {
     worldFlags: new Set(initialFlags),
     world: {
       zone: 'Ferme',
       day: 1,
+    },
+    tower: {
+      current_floor: Math.max(1, Math.floor(initialTower.current_floor ?? 1)),
+      highest_floor: Math.max(1, Math.floor(initialTower.highest_floor ?? 1)),
+      boss_floor_10_defeated: Boolean(initialTower.boss_floor_10_defeated),
     },
     farmPlots: new Map(),
     inventory: new Map(Object.entries(initialInventory)),
@@ -380,6 +390,16 @@ function createGameplayDatabaseStub(
     if (text.includes('UPDATE world_state') && text.includes('SET day = $2')) {
       state.world.day = values[1];
       return { rows: [] };
+    }
+
+    if (text.includes('INSERT INTO tower_progression')) {
+      return { rows: [] };
+    }
+
+    if (text.includes('SELECT current_floor, highest_floor, boss_floor_10_defeated') && text.includes('FROM tower_progression')) {
+      return {
+        rows: [{ ...state.tower }],
+      };
     }
 
     if (text.includes('INSERT INTO farm_plots')) {
@@ -1235,6 +1255,78 @@ test('gameplay village NPC states are derived from world flags', async () => {
   assert.equal(advancedVillageState.relationships.mayor.canTalkToday, true);
   assert.equal(advancedVillageState.relationships.blacksmith.canTalkToday, true);
   assert.equal(advancedVillageState.relationships.merchant.canTalkToday, true);
+});
+
+test('gameplay loop state reflects stage progression and preparation readiness', async () => {
+  const db = createGameplayDatabaseStub(
+    ['intro_arrived_village', 'intro_met_mayor', 'intro_farm_assigned', 'floor_3_cleared'],
+    [],
+    {
+      healing_herb: 2,
+      mana_tonic: 1,
+    },
+    {
+      mayor: { friendship: 6 },
+      blacksmith: { friendship: 3 },
+      merchant: { friendship: 0 },
+    },
+    {
+      current_floor: 6,
+      highest_floor: 6,
+      boss_floor_10_defeated: false,
+    },
+  );
+  const service = new GameplayService(db);
+
+  const loop = await service.getLoopState('user-1');
+
+  assert.equal(loop.stageKey, 'farm_scale');
+  assert.equal(loop.farmUnlocked, true);
+  assert.equal(loop.villageMarketUnlocked, true);
+  assert.deepEqual(loop.supplies, {
+    healingHerb: 2,
+    manaTonic: 1,
+  });
+  assert.equal(loop.relationshipAverage, 3);
+  assert.equal(loop.preparation.active, false);
+  assert.equal(loop.preparation.ready, true);
+  assert.deepEqual(loop.preparation.blockers, []);
+  assert.equal(loop.preparation.nextStep.includes('/gameplay/combat/prepare'), true);
+});
+
+test('gameplay combat preparation consumes farm consumables and activates one-shot combat bonuses', async () => {
+  const db = createGameplayDatabaseStub(
+    ['intro_arrived_village', 'intro_met_mayor', 'intro_farm_assigned', 'floor_3_cleared'],
+    [],
+    {
+      healing_herb: 1,
+      mana_tonic: 1,
+    },
+    {
+      mayor: { friendship: 8 },
+    },
+  );
+  const service = new GameplayService(db);
+
+  const result = await service.prepareCombatLoadout('user-1');
+
+  assert.equal(result.preparation.active, true);
+  assert.equal(result.preparation.hpBoostActive, true);
+  assert.equal(result.preparation.mpBoostActive, true);
+  assert.equal(result.preparation.attackBoostActive, true);
+  assert.equal(result.loop.preparation.active, true);
+  assert.equal(result.loop.preparation.ready, false);
+  assert.equal(result.loop.preparation.nextStep.includes('Preparation active'), true);
+  assert.equal(db.state.inventory.has('healing_herb'), false);
+  assert.equal(db.state.inventory.has('mana_tonic'), false);
+  assert.equal(db.state.worldFlags.has('combat_prep_hp'), true);
+  assert.equal(db.state.worldFlags.has('combat_prep_mp'), true);
+  assert.equal(db.state.worldFlags.has('combat_prep_attack'), true);
+
+  await assert.rejects(
+    () => service.prepareCombatLoadout('user-1'),
+    /already active/,
+  );
 });
 
 test('gameplay village NPC interaction increases friendship once per day', async () => {

@@ -14,6 +14,10 @@ import {
   BASE_PLAYER_MAX_MP,
   BASE_WORLD_DAY,
   BASE_WORLD_ZONE,
+  COMBAT_PREPARATION_FLAGS,
+  COMBAT_PREPARATION_FLAG_ATTACK,
+  COMBAT_PREPARATION_FLAG_HP,
+  COMBAT_PREPARATION_FLAG_MP,
   INTRO_FLAG_ARRIVED_VILLAGE,
   INTRO_FLAG_FARM_ASSIGNED,
   INTRO_FLAG_MET_MAYOR,
@@ -31,7 +35,9 @@ import {
   clampPlayerLevel,
   xpRequiredForLevel,
 } from './gameplay.constants';
+import { TOWER_PROGRESSION_TABLE } from '../tower/tower.constants';
 import type {
+  GameplayCombatPreparationState,
   GameplayFarmHarvestResult,
   GameplayFarmCraftingState,
   GameplayFarmCraftResult,
@@ -40,6 +46,7 @@ import type {
   GameplaySleepResult,
   GameplayFarmWaterResult,
   GameplayIntroState,
+  GameplayLoopState,
   GameplayVillageNpcInteractResult,
   GameplayVillageNpcRelationshipTier,
   GameplayVillageState,
@@ -86,6 +93,12 @@ type VillageNpcRelationshipRow = {
   npc_key: VillageNpcKey;
   friendship: number;
   last_interaction_day: number | null;
+};
+
+type TowerProgressionRow = {
+  current_floor: number;
+  highest_floor: number;
+  boss_floor_10_defeated: boolean;
 };
 
 type QueryExecutor = Pick<DatabaseService, 'query'> | TransactionClient;
@@ -216,6 +229,88 @@ export class GameplayService {
           day: world.day,
         },
         village,
+      };
+    });
+  }
+
+  async getLoopState(userId: string): Promise<GameplayLoopState> {
+    await this.ensureWorldState(this.databaseService, userId);
+    await this.ensureVillageNpcRelationshipRows(this.databaseService, userId);
+
+    const worldFlags = new Set(await this.getWorldFlags(userId));
+    const [towerState, relationships, inventoryByItemKey] = await Promise.all([
+      this.getTowerState(this.databaseService, userId),
+      this.getVillageNpcRelationshipRows(this.databaseService, userId),
+      this.getInventoryQuantitiesByItemKeys(this.databaseService, userId, ['healing_herb', 'mana_tonic']),
+    ]);
+
+    return this.buildLoopState(worldFlags, towerState.highestFloor, relationships, inventoryByItemKey);
+  }
+
+  async prepareCombatLoadout(userId: string): Promise<{
+    preparation: GameplayCombatPreparationState;
+    loop: GameplayLoopState;
+  }> {
+    return this.databaseService.withTransaction(async (tx) => {
+      await this.ensureWorldState(tx, userId);
+      await this.ensureVillageNpcRelationshipRows(tx, userId);
+
+      const worldFlags = new Set(await this.getWorldFlags(userId, tx));
+      const farmUnlocked = worldFlags.has(INTRO_FLAG_FARM_ASSIGNED);
+      const villageMarketUnlocked = worldFlags.has('floor_3_cleared') && farmUnlocked;
+      if (!farmUnlocked) {
+        throw new ForbiddenException('Farm is locked');
+      }
+      if (!villageMarketUnlocked) {
+        throw new ForbiddenException('Village market is locked');
+      }
+      if (COMBAT_PREPARATION_FLAGS.some((flag) => worldFlags.has(flag))) {
+        throw new BadRequestException('A combat preparation is already active');
+      }
+
+      const healingHerbRow = await this.getInventoryItemForUpdate(tx, userId, 'healing_herb');
+      const manaTonicRow = await this.getInventoryItemForUpdate(tx, userId, 'mana_tonic');
+      const useHealingHerb = (healingHerbRow?.quantity ?? 0) > 0;
+      const useManaTonic = (manaTonicRow?.quantity ?? 0) > 0;
+      if (!useHealingHerb && !useManaTonic) {
+        throw new BadRequestException('Missing preparation consumables (healing_herb or mana_tonic)');
+      }
+
+      if (useHealingHerb) {
+        await this.setInventoryItemQuantity(tx, userId, 'healing_herb', Math.max(0, (healingHerbRow?.quantity ?? 0) - 1));
+        worldFlags.add(COMBAT_PREPARATION_FLAG_HP);
+      }
+      if (useManaTonic) {
+        await this.setInventoryItemQuantity(tx, userId, 'mana_tonic', Math.max(0, (manaTonicRow?.quantity ?? 0) - 1));
+        worldFlags.add(COMBAT_PREPARATION_FLAG_MP);
+      }
+
+      const mayorRelation = await this.getVillageNpcRelationshipRowForUpdate(tx, userId, 'mayor');
+      if (this.toVillageRelationshipTier(mayorRelation.friendship) !== 'stranger') {
+        worldFlags.add(COMBAT_PREPARATION_FLAG_ATTACK);
+      }
+
+      const prepFlagsToInsert = COMBAT_PREPARATION_FLAGS.filter((flag) => worldFlags.has(flag));
+      for (const flag of prepFlagsToInsert) {
+        await tx.query(
+          `
+            INSERT INTO ${WORLD_FLAGS_TABLE} (user_id, flag_key, unlocked_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (user_id, flag_key)
+            DO UPDATE SET unlocked_at = NOW()
+          `,
+          [userId, flag],
+        );
+      }
+
+      const relationships = await this.getVillageNpcRelationshipRows(tx, userId);
+      const inventoryByItemKey = await this.getInventoryQuantitiesByItemKeys(tx, userId, ['healing_herb', 'mana_tonic']);
+      const towerState = await this.getTowerState(tx, userId);
+      const loop = this.buildLoopState(worldFlags, towerState.highestFloor, relationships, inventoryByItemKey);
+
+      return {
+        preparation: this.resolveCombatPreparationState(worldFlags),
+        loop,
       };
     });
   }
@@ -745,6 +840,103 @@ export class GameplayService {
     };
   }
 
+  private buildLoopState(
+    worldFlags: Set<string>,
+    towerHighestFloor: number,
+    relationships: VillageNpcRelationshipRow[],
+    inventoryByItemKey: Map<string, number>,
+  ): GameplayLoopState {
+    const farmUnlocked = worldFlags.has(INTRO_FLAG_FARM_ASSIGNED);
+    const villageMarketUnlocked = farmUnlocked && worldFlags.has('floor_3_cleared');
+    const healingHerb = Math.max(0, inventoryByItemKey.get('healing_herb') ?? 0);
+    const manaTonic = Math.max(0, inventoryByItemKey.get('mana_tonic') ?? 0);
+    const preparation = this.resolveCombatPreparationState(worldFlags);
+
+    const blockers: string[] = [];
+    if (!farmUnlocked) {
+      blockers.push('Completer l intro pour debloquer la ferme');
+    }
+    if (!villageMarketUnlocked) {
+      blockers.push('Atteindre le palier tour 3 pour ouvrir le marche du village');
+    }
+    if (!preparation.active && healingHerb < 1 && manaTonic < 1) {
+      blockers.push('Produire des consommables via recolte + crafting ferme');
+    }
+
+    const stage = this.resolveLoopStage(towerHighestFloor);
+    const ready = !preparation.active && blockers.length === 0;
+    const relationshipAverage = this.getVillageRelationshipAverage(relationships);
+    const nextStep = blockers.length > 0
+      ? blockers[0]
+      : preparation.active
+        ? 'Preparation active: lancer un combat pour consommer les bonus'
+        : 'Preparation disponible: utiliser /gameplay/combat/prepare';
+
+    return {
+      stageKey: stage.stageKey,
+      stageLabel: stage.stageLabel,
+      farmUnlocked,
+      villageMarketUnlocked,
+      supplies: {
+        healingHerb,
+        manaTonic,
+      },
+      relationshipAverage,
+      preparation: {
+        ...preparation,
+        ready,
+        blockers,
+        nextStep,
+      },
+    };
+  }
+
+  private resolveCombatPreparationState(worldFlags: Set<string>): GameplayCombatPreparationState {
+    return {
+      active: COMBAT_PREPARATION_FLAGS.some((flag) => worldFlags.has(flag)),
+      hpBoostActive: worldFlags.has(COMBAT_PREPARATION_FLAG_HP),
+      mpBoostActive: worldFlags.has(COMBAT_PREPARATION_FLAG_MP),
+      attackBoostActive: worldFlags.has(COMBAT_PREPARATION_FLAG_ATTACK),
+    };
+  }
+
+  private resolveLoopStage(towerHighestFloor: number): Pick<GameplayLoopState, 'stageKey' | 'stageLabel'> {
+    if (towerHighestFloor < 3) {
+      return {
+        stageKey: 'tower_bootstrap',
+        stageLabel: 'Stabiliser la tour (palier 3)',
+      };
+    }
+
+    if (towerHighestFloor < 5) {
+      return {
+        stageKey: 'village_sync',
+        stageLabel: 'Deblocages village et approvisionnement',
+      };
+    }
+
+    if (towerHighestFloor < 8) {
+      return {
+        stageKey: 'farm_scale',
+        stageLabel: 'Monter la ferme pour soutenir les expeditions',
+      };
+    }
+
+    return {
+      stageKey: 'combat_mastery',
+      stageLabel: 'Preparation combat avancee pour paliers hauts',
+    };
+  }
+
+  private getVillageRelationshipAverage(rows: VillageNpcRelationshipRow[]): number {
+    if (rows.length === 0) {
+      return 0;
+    }
+
+    const total = rows.reduce((sum, row) => sum + Math.max(0, Math.floor(row.friendship)), 0);
+    return Number((total / rows.length).toFixed(2));
+  }
+
   private toFarmPlotState(row: FarmPlotRow, day: number): GameplayFarmState['plots'][number] {
     const maturity = this.toFarmPlotMaturity(row, day);
 
@@ -829,6 +1021,46 @@ export class GameplayService {
     }
 
     return crop;
+  }
+
+  private async getTowerState(executor: QueryExecutor, userId: string): Promise<{
+    currentFloor: number;
+    highestFloor: number;
+    bossFloor10Defeated: boolean;
+  }> {
+    await executor.query(
+      `
+        INSERT INTO ${TOWER_PROGRESSION_TABLE} (user_id, current_floor, highest_floor, boss_floor_10_defeated)
+        VALUES ($1, 1, 1, FALSE)
+        ON CONFLICT (user_id) DO NOTHING
+      `,
+      [userId],
+    );
+
+    const result = await executor.query<TowerProgressionRow>(
+      `
+        SELECT current_floor, highest_floor, boss_floor_10_defeated
+        FROM ${TOWER_PROGRESSION_TABLE}
+        WHERE user_id = $1
+        LIMIT 1
+      `,
+      [userId],
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      return {
+        currentFloor: 1,
+        highestFloor: 1,
+        bossFloor10Defeated: false,
+      };
+    }
+
+    return {
+      currentFloor: Math.max(1, Math.floor(row.current_floor)),
+      highestFloor: Math.max(1, Math.floor(row.highest_floor)),
+      bossFloor10Defeated: Boolean(row.boss_floor_10_defeated),
+    };
   }
 
   private async getWorldStateForUpdate(executor: TransactionClient, userId: string): Promise<GameplayWorldState> {
