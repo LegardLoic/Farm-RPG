@@ -16,13 +16,22 @@ import {
   INTRO_FLAG_FARM_ASSIGNED,
   INTRO_FLAG_MET_MAYOR,
   INTRO_PROGRESS_FLAGS,
+  FARM_CROP_CATALOG,
+  FARM_PLOTS_TABLE,
+  FARM_PLOT_LAYOUT,
   PLAYER_PROGRESSION_TABLE,
   WORLD_STATE_TABLE,
   WORLD_FLAGS_TABLE,
   clampPlayerLevel,
   xpRequiredForLevel,
 } from './gameplay.constants';
-import type { GameplayIntroState, GameplayVillageState, GameplayWorldState, PlayerProgressionState } from './gameplay.types';
+import type {
+  GameplayFarmState,
+  GameplayIntroState,
+  GameplayVillageState,
+  GameplayWorldState,
+  PlayerProgressionState,
+} from './gameplay.types';
 
 type PlayerProgressionRow = {
   level: number;
@@ -42,6 +51,16 @@ type WorldFlagRow = {
 type WorldStateRow = {
   zone: string;
   day: number;
+};
+
+type FarmPlotRow = {
+  plot_key: string;
+  row_index: number;
+  col_index: number;
+  crop_key: string | null;
+  planted_day: number | null;
+  growth_days: number | null;
+  watered_today: boolean;
 };
 
 type QueryExecutor = Pick<DatabaseService, 'query'> | TransactionClient;
@@ -163,6 +182,75 @@ export class GameplayService {
     return this.toIntroState(flags);
   }
 
+  async getFarmState(userId: string, currentDay?: number): Promise<GameplayFarmState> {
+    const worldFlags = new Set(await this.getWorldFlags(userId));
+    const unlocked = worldFlags.has(INTRO_FLAG_FARM_ASSIGNED);
+    await this.ensureFarmPlots(this.databaseService, userId);
+    const day = typeof currentDay === 'number' && Number.isFinite(currentDay) && currentDay > 0
+      ? Math.floor(currentDay)
+      : (await this.getWorldState(userId)).day;
+
+    const plotsResult = await this.databaseService.query<FarmPlotRow>(
+      `
+        SELECT plot_key, row_index, col_index, crop_key, planted_day, growth_days, watered_today
+        FROM ${FARM_PLOTS_TABLE}
+        WHERE user_id = $1
+        ORDER BY row_index ASC, col_index ASC
+      `,
+      [userId],
+    );
+
+    const plots = plotsResult.rows.map((row) => {
+      const plantedDay = typeof row.planted_day === 'number' && row.planted_day > 0
+        ? Math.floor(row.planted_day)
+        : null;
+      const growthDays = typeof row.growth_days === 'number' && row.growth_days > 0
+        ? Math.floor(row.growth_days)
+        : null;
+      const growthProgressDays = plantedDay !== null
+        ? Math.max(0, day - plantedDay)
+        : 0;
+      const daysToMaturity = growthDays !== null
+        ? Math.max(0, growthDays - growthProgressDays)
+        : null;
+      const readyToHarvest = growthDays !== null && growthProgressDays >= growthDays;
+
+      return {
+        plotKey: row.plot_key,
+        row: Math.max(1, Math.floor(row.row_index)),
+        col: Math.max(1, Math.floor(row.col_index)),
+        cropKey: row.crop_key,
+        plantedDay,
+        growthDays,
+        wateredToday: Boolean(row.watered_today),
+        growthProgressDays,
+        daysToMaturity,
+        readyToHarvest,
+      };
+    });
+
+    const plantedPlots = plots.filter((plot) => plot.cropKey !== null).length;
+    const wateredPlots = plots.filter((plot) => plot.wateredToday).length;
+    const readyPlots = plots.filter((plot) => plot.readyToHarvest).length;
+
+    return {
+      unlocked,
+      totalPlots: plots.length,
+      plantedPlots,
+      wateredPlots,
+      readyPlots,
+      cropCatalog: FARM_CROP_CATALOG.map((crop) => ({
+        cropKey: crop.cropKey,
+        seedItemKey: crop.seedItemKey,
+        harvestItemKey: crop.harvestItemKey,
+        growthDays: crop.growthDays,
+        requiredFlags: [...crop.requiredFlags],
+        unlocked: crop.requiredFlags.every((flag) => worldFlags.has(flag)),
+      })),
+      plots,
+    };
+  }
+
   async advanceIntroState(userId: string): Promise<GameplayIntroState> {
     return this.databaseService.withTransaction(async (tx) => {
       await this.ensureWorldState(tx, userId);
@@ -217,6 +305,24 @@ export class GameplayService {
         ON CONFLICT (user_id) DO NOTHING
       `,
       [userId, BASE_WORLD_ZONE, BASE_WORLD_DAY],
+    );
+  }
+
+  private async ensureFarmPlots(executor: QueryExecutor, userId: string): Promise<void> {
+    const values: unknown[] = [userId];
+    const plotRowsSql = FARM_PLOT_LAYOUT.map((plot, index) => {
+      const base = index * 3;
+      values.push(plot.plotKey, plot.row, plot.col);
+      return `($1, $${base + 2}, $${base + 3}, $${base + 4})`;
+    }).join(', ');
+
+    await executor.query(
+      `
+        INSERT INTO ${FARM_PLOTS_TABLE} (user_id, plot_key, row_index, col_index)
+        VALUES ${plotRowsSql}
+        ON CONFLICT (user_id, plot_key) DO NOTHING
+      `,
+      values,
     );
   }
 

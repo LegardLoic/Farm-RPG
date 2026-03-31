@@ -14,6 +14,38 @@ export interface GameplayWorldState {
   day: number;
 }
 
+export interface GameplayFarmCropCatalogEntry {
+  cropKey: string;
+  seedItemKey: string;
+  harvestItemKey: string;
+  growthDays: number;
+  requiredFlags: string[];
+  unlocked: boolean;
+}
+
+export interface GameplayFarmPlotState {
+  plotKey: string;
+  row: number;
+  col: number;
+  cropKey: string | null;
+  plantedDay: number | null;
+  growthDays: number | null;
+  wateredToday: boolean;
+  growthProgressDays: number;
+  daysToMaturity: number | null;
+  readyToHarvest: boolean;
+}
+
+export interface GameplayFarmState {
+  unlocked: boolean;
+  totalPlots: number;
+  plantedPlots: number;
+  wateredPlots: number;
+  readyPlots: number;
+  cropCatalog: GameplayFarmCropCatalogEntry[];
+  plots: GameplayFarmPlotState[];
+}
+
 export interface GameplayVillageState {
   blacksmith: {
     unlocked: boolean;

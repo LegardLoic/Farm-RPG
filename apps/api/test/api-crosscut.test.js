@@ -281,14 +281,27 @@ function createProfileDatabaseStub(initialProfile = null) {
   };
 }
 
-function createGameplayDatabaseStub(initialFlags = []) {
+function createGameplayDatabaseStub(initialFlags = [], initialFarmPlots = []) {
   const state = {
     worldFlags: new Set(initialFlags),
     world: {
       zone: 'Ferme',
       day: 1,
     },
+    farmPlots: new Map(),
   };
+
+  for (const plot of initialFarmPlots) {
+    state.farmPlots.set(plot.plot_key, {
+      plot_key: plot.plot_key,
+      row_index: plot.row_index,
+      col_index: plot.col_index,
+      crop_key: plot.crop_key ?? null,
+      planted_day: plot.planted_day ?? null,
+      growth_days: plot.growth_days ?? null,
+      watered_today: Boolean(plot.watered_today),
+    });
+  }
 
   const executeQuery = async (text, values = []) => {
     if (text.includes('INSERT INTO world_state')) {
@@ -312,6 +325,33 @@ function createGameplayDatabaseStub(initialFlags = []) {
     if (text.includes('UPDATE world_state') && text.includes('SET zone = $2')) {
       state.world.zone = values[1];
       return { rows: [] };
+    }
+
+    if (text.includes('INSERT INTO farm_plots')) {
+      for (let index = 1; index < values.length; index += 3) {
+        const plotKey = values[index];
+        const rowIndex = values[index + 1];
+        const colIndex = values[index + 2];
+        if (!state.farmPlots.has(plotKey)) {
+          state.farmPlots.set(plotKey, {
+            plot_key: plotKey,
+            row_index: rowIndex,
+            col_index: colIndex,
+            crop_key: null,
+            planted_day: null,
+            growth_days: null,
+            watered_today: false,
+          });
+        }
+      }
+      return { rows: [] };
+    }
+
+    if (text.includes('SELECT plot_key, row_index, col_index, crop_key, planted_day, growth_days, watered_today')) {
+      const rows = Array.from(state.farmPlots.values())
+        .sort((left, right) => left.row_index - right.row_index || left.col_index - right.col_index)
+        .map((entry) => ({ ...entry }));
+      return { rows };
     }
 
     throw new Error(`Unexpected gameplay query: ${text}`);
@@ -954,4 +994,65 @@ test('gameplay village NPC states are derived from world flags', async () => {
     blacksmith: { stateKey: 'masterwork_ready', available: true },
     merchant: { stateKey: 'traveling_buyer', available: true },
   });
+});
+
+test('gameplay farm state seeds default plot layout and keeps it locked before farm assignment', async () => {
+  const db = createGameplayDatabaseStub();
+  const service = new GameplayService(db);
+
+  const farm = await service.getFarmState('user-1', 1);
+
+  assert.equal(farm.unlocked, false);
+  assert.equal(farm.totalPlots, 12);
+  assert.equal(farm.plantedPlots, 0);
+  assert.equal(farm.readyPlots, 0);
+  assert.equal(farm.wateredPlots, 0);
+  assert.equal(farm.plots.length, 12);
+  assert.equal(farm.cropCatalog.length, 3);
+  assert.equal(farm.cropCatalog.find((entry) => entry.cropKey === 'wheat')?.unlocked, false);
+  assert.equal(db.state.farmPlots.size, 12);
+});
+
+test('gameplay farm state computes growth timers and ready-to-harvest summary', async () => {
+  const db = createGameplayDatabaseStub(
+    ['intro_farm_assigned', 'story_floor_5_cleared'],
+    [
+      {
+        plot_key: 'plot_r1_c1',
+        row_index: 1,
+        col_index: 1,
+        crop_key: 'turnip',
+        planted_day: 1,
+        growth_days: 2,
+        watered_today: false,
+      },
+      {
+        plot_key: 'plot_r1_c2',
+        row_index: 1,
+        col_index: 2,
+        crop_key: 'carrot',
+        planted_day: 2,
+        growth_days: 3,
+        watered_today: true,
+      },
+    ],
+  );
+  const service = new GameplayService(db);
+
+  const farm = await service.getFarmState('user-1', 3);
+  const readyTurnip = farm.plots.find((plot) => plot.plotKey === 'plot_r1_c1');
+  const growingCarrot = farm.plots.find((plot) => plot.plotKey === 'plot_r1_c2');
+
+  assert.equal(farm.unlocked, true);
+  assert.equal(farm.totalPlots, 12);
+  assert.equal(farm.plantedPlots, 2);
+  assert.equal(farm.readyPlots, 1);
+  assert.equal(farm.wateredPlots, 1);
+  assert.equal(readyTurnip?.readyToHarvest, true);
+  assert.equal(readyTurnip?.growthProgressDays, 2);
+  assert.equal(readyTurnip?.daysToMaturity, 0);
+  assert.equal(growingCarrot?.readyToHarvest, false);
+  assert.equal(growingCarrot?.growthProgressDays, 1);
+  assert.equal(growingCarrot?.daysToMaturity, 2);
+  assert.equal(farm.cropCatalog.find((entry) => entry.cropKey === 'wheat')?.unlocked, true);
 });
