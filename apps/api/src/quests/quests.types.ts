@@ -4,6 +4,10 @@ export interface QuestProgressState {
   victoriesTotal: number;
   enemyVictories: Record<string, number>;
   towerHighestFloor: number;
+  cropsHarvestedTotal: number;
+  harvestedCrops: Record<string, number>;
+  cropsDeliveredTotal: number;
+  deliveredCrops: Record<string, number>;
   lastVictoryAt: string | null;
   completedAt: string | null;
   claimedAt: string | null;
@@ -12,9 +16,17 @@ export interface QuestProgressState {
 export interface QuestObjectiveDefinition {
   key: string;
   description: string;
-  metric: 'victories_total' | 'enemy_victories' | 'tower_highest_floor';
+  metric:
+    | 'victories_total'
+    | 'enemy_victories'
+    | 'tower_highest_floor'
+    | 'farm_harvest_total'
+    | 'farm_harvest_crop'
+    | 'village_delivery_total'
+    | 'village_delivery_crop';
   target: number;
   enemyKey?: string;
+  cropKey?: string;
 }
 
 export interface QuestRewardDefinition {

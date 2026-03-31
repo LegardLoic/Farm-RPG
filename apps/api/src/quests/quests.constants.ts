@@ -59,6 +59,89 @@ export const QUEST_DEFINITIONS: QuestDefinition[] = [
     },
   },
   {
+    key: 'farm_first_harvest',
+    title: 'Fresh Soil, First Harvest',
+    description: 'Harvest your first crop from the new farm and prove it can sustain the village.',
+    objectives: [
+      {
+        key: 'harvest_1_crop',
+        description: 'Harvest 1 crop',
+        metric: 'farm_harvest_total',
+        target: 1,
+      },
+    ],
+    rewards: {
+      experience: 18,
+      gold: 20,
+      items: [
+        {
+          itemKey: 'turnip_seed',
+          quantity: 2,
+        },
+      ],
+      flags: [],
+    },
+  },
+  {
+    key: 'turnip_delivery_request',
+    title: 'Merchant Turnip Request',
+    description: 'Deliver turnips to the village market to reopen local trade routes.',
+    objectives: [
+      {
+        key: 'deliver_turnip_3',
+        description: 'Deliver 3 turnips to the village market',
+        metric: 'village_delivery_crop',
+        target: 3,
+        cropKey: 'turnip',
+      },
+    ],
+    rewards: {
+      experience: 28,
+      gold: 35,
+      items: [
+        {
+          itemKey: 'carrot_seed',
+          quantity: 2,
+        },
+      ],
+      flags: ['village_trade_reopened'],
+    },
+  },
+  {
+    key: 'granary_restock',
+    title: 'Granary Restock',
+    description: 'Build a stable food flow by harvesting and delivering enough crops to the village.',
+    objectives: [
+      {
+        key: 'harvest_8_crops',
+        description: 'Harvest 8 crops',
+        metric: 'farm_harvest_total',
+        target: 8,
+      },
+      {
+        key: 'deliver_5_crops',
+        description: 'Deliver 5 crops to the village market',
+        metric: 'village_delivery_total',
+        target: 5,
+      },
+    ],
+    rewards: {
+      experience: 55,
+      gold: 60,
+      items: [
+        {
+          itemKey: 'wheat_seed',
+          quantity: 2,
+        },
+        {
+          itemKey: 'healing_herb',
+          quantity: 1,
+        },
+      ],
+      flags: ['village_supply_line_stable'],
+    },
+  },
+  {
     key: 'story_floor_3',
     title: 'Smoke Above The Fields',
     description: 'Reach floor 3 of the tower and report the first signs of corruption.',

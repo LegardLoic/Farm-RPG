@@ -211,6 +211,31 @@ function createShopDatabaseStub({ unlocked, worldFlags, initialGold = 120, inven
   };
 }
 
+function createQuestProgressRecorder() {
+  return {
+    harvestCalls: [],
+    deliveryCalls: [],
+    async recordFarmHarvest(_executor, userId, input) {
+      this.harvestCalls.push({
+        userId,
+        input: {
+          cropKey: input.cropKey,
+          quantity: input.quantity,
+        },
+      });
+    },
+    async recordVillageDelivery(_executor, userId, input) {
+      this.deliveryCalls.push({
+        userId,
+        input: {
+          cropKey: input.cropKey,
+          quantity: input.quantity,
+        },
+      });
+    },
+  };
+}
+
 function createSavesService() {
   return new SavesService({
     async query() {
@@ -910,6 +935,30 @@ test('village market buy and sell operations update gold and inventory', async (
   assert.equal(db.state.inventory.get('turnip'), 1);
 });
 
+test('village market sale reports village delivery quest progression', async () => {
+  const db = createShopDatabaseStub({
+    worldFlags: ['intro_farm_assigned', 'floor_3_cleared'],
+    initialGold: 50,
+    inventory: {
+      turnip: 3,
+    },
+  });
+  const quests = createQuestProgressRecorder();
+  const service = new ShopsService(db, quests);
+
+  const sale = await service.sellVillageCrop('user-1', 'turnip', 2);
+
+  assert.equal(sale.quantitySold, 2);
+  assert.equal(quests.deliveryCalls.length, 1);
+  assert.deepEqual(quests.deliveryCalls[0], {
+    userId: 'user-1',
+    input: {
+      cropKey: 'turnip',
+      quantity: 2,
+    },
+  });
+});
+
 test('save snapshot parsing normalizes version 1 data and legacy autosaves', () => {
   const service = createSavesService();
 
@@ -1250,6 +1299,39 @@ test('gameplay farm harvest grants crop item and resets plot', async () => {
   assert.equal(harvestedPlot?.cropKey, null);
   assert.equal(harvestedPlot?.plantedDay, null);
   assert.equal(harvestedPlot?.wateredToday, false);
+});
+
+test('gameplay farm harvest reports farm quest progression', async () => {
+  const db = createGameplayDatabaseStub(
+    ['intro_farm_assigned'],
+    [
+      {
+        plot_key: 'plot_r1_c1',
+        row_index: 1,
+        col_index: 1,
+        crop_key: 'turnip',
+        planted_day: 1,
+        growth_days: 2,
+        watered_today: true,
+      },
+    ],
+    {},
+  );
+  db.state.world.day = 3;
+  const quests = createQuestProgressRecorder();
+  const service = new GameplayService(db, quests);
+
+  const result = await service.harvestFarmPlot('user-1', 'plot_r1_c1');
+
+  assert.equal(result.harvest.quantityGained, 1);
+  assert.equal(quests.harvestCalls.length, 1);
+  assert.deepEqual(quests.harvestCalls[0], {
+    userId: 'user-1',
+    input: {
+      cropKey: 'turnip',
+      quantity: 1,
+    },
+  });
 });
 
 test('gameplay sleep advances day and resets watered farm plots', async () => {

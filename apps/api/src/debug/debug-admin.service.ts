@@ -855,6 +855,10 @@ export class DebugAdminService {
         nextProgress.victoriesTotal = completed.victoriesTotal;
         nextProgress.enemyVictories = completed.enemyVictories;
         nextProgress.towerHighestFloor = completed.towerHighestFloor;
+        nextProgress.cropsHarvestedTotal = completed.cropsHarvestedTotal;
+        nextProgress.harvestedCrops = completed.harvestedCrops;
+        nextProgress.cropsDeliveredTotal = completed.cropsDeliveredTotal;
+        nextProgress.deliveredCrops = completed.deliveredCrops;
         nextProgress.lastVictoryAt = completed.lastVictoryAt;
         nextProgress.completedAt = completed.completedAt;
         nextProgress.claimedAt = null;
@@ -863,6 +867,10 @@ export class DebugAdminService {
         nextProgress.victoriesTotal = completed.victoriesTotal;
         nextProgress.enemyVictories = completed.enemyVictories;
         nextProgress.towerHighestFloor = completed.towerHighestFloor;
+        nextProgress.cropsHarvestedTotal = completed.cropsHarvestedTotal;
+        nextProgress.harvestedCrops = completed.harvestedCrops;
+        nextProgress.cropsDeliveredTotal = completed.cropsDeliveredTotal;
+        nextProgress.deliveredCrops = completed.deliveredCrops;
         nextProgress.lastVictoryAt = completed.lastVictoryAt;
         nextProgress.completedAt = completed.completedAt;
         nextProgress.claimedAt = now;
@@ -1141,6 +1149,8 @@ export class DebugAdminService {
     const completed: QuestProgressState = {
       ...progress,
       enemyVictories: { ...progress.enemyVictories },
+      harvestedCrops: { ...progress.harvestedCrops },
+      deliveredCrops: { ...progress.deliveredCrops },
     };
 
     for (const objective of definition.objectives) {
@@ -1151,6 +1161,28 @@ export class DebugAdminService {
 
       if (objective.metric === 'tower_highest_floor') {
         completed.towerHighestFloor = Math.max(completed.towerHighestFloor, objective.target);
+        continue;
+      }
+
+      if (objective.metric === 'farm_harvest_total') {
+        completed.cropsHarvestedTotal = Math.max(completed.cropsHarvestedTotal, objective.target);
+        continue;
+      }
+
+      if (objective.metric === 'village_delivery_total') {
+        completed.cropsDeliveredTotal = Math.max(completed.cropsDeliveredTotal, objective.target);
+        continue;
+      }
+
+      if (objective.metric === 'farm_harvest_crop' && objective.cropKey) {
+        const currentHarvested = completed.harvestedCrops[objective.cropKey] ?? 0;
+        completed.harvestedCrops[objective.cropKey] = Math.max(currentHarvested, objective.target);
+        continue;
+      }
+
+      if (objective.metric === 'village_delivery_crop' && objective.cropKey) {
+        const currentDelivered = completed.deliveredCrops[objective.cropKey] ?? 0;
+        completed.deliveredCrops[objective.cropKey] = Math.max(currentDelivered, objective.target);
         continue;
       }
 
@@ -1179,11 +1211,17 @@ export class DebugAdminService {
     }
 
     const enemyVictories = parsed.enemyVictories ?? {};
+    const harvestedCrops = parsed.harvestedCrops ?? {};
+    const deliveredCrops = parsed.deliveredCrops ?? {};
 
     return {
       victoriesTotal: Math.max(0, Number(parsed.victoriesTotal ?? 0)),
       enemyVictories: { ...enemyVictories },
       towerHighestFloor: Math.max(1, Number(parsed.towerHighestFloor ?? 1)),
+      cropsHarvestedTotal: Math.max(0, Number(parsed.cropsHarvestedTotal ?? 0)),
+      harvestedCrops: { ...harvestedCrops },
+      cropsDeliveredTotal: Math.max(0, Number(parsed.cropsDeliveredTotal ?? 0)),
+      deliveredCrops: { ...deliveredCrops },
       lastVictoryAt: typeof parsed.lastVictoryAt === 'string' ? parsed.lastVictoryAt : null,
       completedAt: typeof parsed.completedAt === 'string' ? parsed.completedAt : null,
       claimedAt: typeof parsed.claimedAt === 'string' ? parsed.claimedAt : null,
@@ -1195,6 +1233,10 @@ export class DebugAdminService {
       victoriesTotal: 0,
       enemyVictories: {},
       towerHighestFloor: 1,
+      cropsHarvestedTotal: 0,
+      harvestedCrops: {},
+      cropsDeliveredTotal: 0,
+      deliveredCrops: {},
       lastVictoryAt: null,
       completedAt: null,
       claimedAt: null,
