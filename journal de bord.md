@@ -1283,6 +1283,29 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - initialisation layout ferme par defaut
     - calcul des timers de croissance et etat `readyToHarvest`.
 
+### Lot 89 - Ferme backend: endpoints `plant`, `water`, `harvest`
+- Backend gameplay:
+  - nouveaux endpoints proteges:
+    - `POST /gameplay/farm/plant`
+    - `POST /gameplay/farm/water`
+    - `POST /gameplay/farm/harvest`
+  - validations metier serveur:
+    - ferme debloquee (`intro_farm_assigned`) requise
+    - plot existant requis
+    - `plant`: plot vide + seed dispo en inventaire + crop debloquee
+    - `water`: plot plante + non arrose le jour courant
+    - `harvest`: plot plante + crop arrivee a maturite.
+  - operations transactionnelles:
+    - `plant`: consomme 1 seed et renseigne le plot (`cropKey/plantedDay/growthDays`)
+    - `water`: marque `wateredToday = true`
+    - `harvest`: ajoute la recolte en inventaire et reset le plot.
+  - chaque endpoint retourne aussi l'etat `farm` rafraichi pour faciliter le HUD du lot 90.
+- QA:
+  - tests API crosscut ajoutes:
+    - plantation (consommation seed + ecriture plot)
+    - arrosage (flag `wateredToday`)
+    - recolte (gain inventaire + reset plot).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1290,6 +1313,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Gameplay:
   - etat monde + progression joueur
   - data model ferme persistant (parcelles/cultures/arrosage/growth timers) via `gameplay/state`
+  - endpoints ferme transactionnels (`plant/water/harvest`) avec validations metier serveur
   - etat village par flags
   - etat intro scenario MVP pilote par flags monde + endpoint d'avance
   - etats PNJ village (maire/forgeron/marchand) derives des flags monde
@@ -1387,6 +1411,9 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `POST /auth/logout`
 - `GET /gameplay/state`
 - `POST /gameplay/intro/advance`
+- `POST /gameplay/farm/plant`
+- `POST /gameplay/farm/water`
+- `POST /gameplay/farm/harvest`
 - `GET /tower/state`
 - `GET /inventory`
 - `POST /inventory/add`
@@ -1448,17 +1475,16 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 89 - Ferme backend: endpoints `plant`, `water`, `harvest` avec validations metier serveur.
-2. Lot 90 - Ferme frontend: panneau ferme jouable (selection graine, plantation, arrosage, recolte).
-3. Lot 91 - Temps: cycle jour/nuit MVP + action `sleep` qui avance le jour et fait pousser les cultures.
-4. Lot 92 - Crafting ferme: recettes basiques (consommables combat) basees sur recoltes.
-5. Lot 93 - Quetes ferme/village: quetes secondaires simples liees aux recoltes et livraisons.
-6. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
-7. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
-8. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
-9. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
-10. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
-11. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
-12. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
+1. Lot 90 - Ferme frontend: panneau ferme jouable (selection graine, plantation, arrosage, recolte).
+2. Lot 91 - Temps: cycle jour/nuit MVP + action `sleep` qui avance le jour et fait pousser les cultures.
+3. Lot 92 - Crafting ferme: recettes basiques (consommables combat) basees sur recoltes.
+4. Lot 93 - Quetes ferme/village: quetes secondaires simples liees aux recoltes et livraisons.
+5. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
+6. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
+7. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
+8. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
+9. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
+10. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
+11. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
 
 

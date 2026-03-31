@@ -46,6 +46,30 @@ export interface GameplayFarmState {
   plots: GameplayFarmPlotState[];
 }
 
+export interface GameplayFarmPlantResult {
+  plotKey: string;
+  seedItemKey: string;
+  cropKey: string;
+  plantedDay: number;
+  growthDays: number;
+  remainingSeedQuantity: number;
+}
+
+export interface GameplayFarmWaterResult {
+  plotKey: string;
+  cropKey: string;
+  wateredToday: boolean;
+  day: number;
+}
+
+export interface GameplayFarmHarvestResult {
+  plotKey: string;
+  cropKey: string;
+  harvestItemKey: string;
+  quantityGained: number;
+  totalHarvestItemQuantity: number;
+}
+
 export interface GameplayVillageState {
   blacksmith: {
     unlocked: boolean;
