@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 
 import { DatabaseService, type TransactionClient } from '../database/database.service';
 import {
@@ -10,6 +10,7 @@ import {
   xpRequiredForLevel,
 } from '../gameplay/gameplay.constants';
 import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
+import { QuestsService } from '../quests/quests.service';
 import {
   BLACKSMITH_OFFERS,
   BLACKSMITH_SHOP_UNLOCK_FLAG,
@@ -47,7 +48,10 @@ type WorldFlagRow = {
 
 @Injectable()
 export class ShopsService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    @Optional() private readonly questsService?: QuestsService,
+  ) {}
 
   async getBlacksmithShop(userId: string): Promise<BlacksmithShopState> {
     const unlocked = await this.isShopUnlocked(this.databaseService, userId);
@@ -245,6 +249,13 @@ export class ShopsService {
       const totalGoldGained = buybackOffer.goldValue * quantity;
       const newGold = progression.gold + totalGoldGained;
       await this.updatePlayerGold(tx, userId, newGold);
+
+      if (this.questsService) {
+        await this.questsService.recordVillageDelivery(tx, userId, {
+          cropKey: buybackOffer.itemKey,
+          quantity,
+        });
+      }
 
       return {
         itemKey: buybackOffer.itemKey,

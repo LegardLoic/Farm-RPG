@@ -1,8 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 
 import { DatabaseService } from '../database/database.service';
 import type { TransactionClient } from '../database/database.service';
 import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
+import { QuestsService } from '../quests/quests.service';
 import {
   BASE_PLAYER_CURRENT_HP,
   BASE_PLAYER_CURRENT_MP,
@@ -80,7 +81,10 @@ type QueryExecutor = Pick<DatabaseService, 'query'> | TransactionClient;
 
 @Injectable()
 export class GameplayService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    @Optional() private readonly questsService?: QuestsService,
+  ) {}
 
   async getPlayerProgression(userId: string): Promise<PlayerProgressionState> {
     await this.databaseService.query(
@@ -413,6 +417,13 @@ export class GameplayService {
         `,
         [userId, plotKey],
       );
+
+      if (this.questsService) {
+        await this.questsService.recordFarmHarvest(tx, userId, {
+          cropKey: crop.cropKey,
+          quantity: 1,
+        });
+      }
 
       const farm = await this.getFarmStateWithExecutor(tx, userId, worldFlags, world.day);
       return {

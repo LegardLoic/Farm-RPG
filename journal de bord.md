@@ -1376,6 +1376,29 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - craft transactionnel (consommation recoltes + gain consommable combat).
   - regression web etendue pour verrouiller wiring HUD crafting ferme.
 
+### Lot 93 - Quetes ferme/village: recoltes et livraisons
+- Backend quetes:
+  - extension des metriques d'objectifs:
+    - `farm_harvest_total`
+    - `farm_harvest_crop`
+    - `village_delivery_total`
+    - `village_delivery_crop`
+  - extension du progress state persistant:
+    - `cropsHarvestedTotal`, `harvestedCrops`
+    - `cropsDeliveredTotal`, `deliveredCrops`
+  - nouvelles quetes secondaires:
+    - `farm_first_harvest`
+    - `turnip_delivery_request`
+    - `granary_restock`.
+- Backend integration:
+  - progression quetes branchee sur `POST /gameplay/farm/harvest`.
+  - progression quetes branchee sur `POST /shops/village-market/sell-crop`.
+  - debug admin aligne pour pouvoir completer correctement les nouvelles metriques en QA.
+- QA:
+  - tests API crosscut ajoutes pour verrouiller les hooks:
+    - harvest -> progression quete ferme
+    - sell crop -> progression quete livraison village.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1398,7 +1421,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Quetes:
   - definitions cote serveur
   - progression automatique sur victoires
-  - objectifs basees sur victoires et paliers de tour
+  - progression automatique sur recoltes ferme et livraisons marche village
+  - objectifs bases sur victoires, paliers de tour, recoltes et livraisons
   - claim explicite des recompenses
 - Shops:
   - boutique forgeron protegee
@@ -1553,13 +1577,13 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 93 - Quetes ferme/village: quetes secondaires simples liees aux recoltes et livraisons.
-2. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
-3. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
-4. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
-5. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
-6. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
-7. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
-8. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
+1. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
+2. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
+3. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
+4. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
+5. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
+6. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
+7. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
+8. Lot 101 - Quetes narratives village: premieres micro-quetes dialoguees reliees aux etats PNJ.
 
 

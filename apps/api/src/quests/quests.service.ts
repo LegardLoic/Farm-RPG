@@ -26,6 +26,16 @@ type RecordCombatVictoryInput = {
   towerHighestFloor: number;
 };
 
+type RecordFarmHarvestInput = {
+  cropKey: string;
+  quantity: number;
+};
+
+type RecordVillageDeliveryInput = {
+  cropKey: string;
+  quantity: number;
+};
+
 type QuestStateRow = {
   quest_key: string;
   status: QuestStatus;
@@ -104,9 +114,68 @@ export class QuestsService {
     userId: string,
     input: RecordCombatVictoryInput,
   ): Promise<void> {
+    const enemyKey = input.enemyKey.trim();
+    if (!enemyKey) {
+      return;
+    }
+
+    await this.recordProgressEvent(
+      executor,
+      userId,
+      Math.max(1, Number(input.towerHighestFloor ?? 1)),
+      (progress, now) => {
+        progress.victoriesTotal += 1;
+        progress.enemyVictories[enemyKey] = (progress.enemyVictories[enemyKey] ?? 0) + 1;
+        progress.lastVictoryAt = now;
+      },
+    );
+  }
+
+  async recordFarmHarvest(
+    executor: TransactionClient,
+    userId: string,
+    input: RecordFarmHarvestInput,
+  ): Promise<void> {
+    const cropKey = input.cropKey.trim();
+    if (!cropKey) {
+      return;
+    }
+
+    const quantity = Math.max(1, Math.floor(Number(input.quantity ?? 1)));
+    await this.recordProgressEvent(executor, userId, null, (progress) => {
+      progress.cropsHarvestedTotal += quantity;
+      progress.harvestedCrops[cropKey] = (progress.harvestedCrops[cropKey] ?? 0) + quantity;
+    });
+  }
+
+  async recordVillageDelivery(
+    executor: TransactionClient,
+    userId: string,
+    input: RecordVillageDeliveryInput,
+  ): Promise<void> {
+    const cropKey = input.cropKey.trim();
+    if (!cropKey) {
+      return;
+    }
+
+    const quantity = Math.max(1, Math.floor(Number(input.quantity ?? 1)));
+    await this.recordProgressEvent(executor, userId, null, (progress) => {
+      progress.cropsDeliveredTotal += quantity;
+      progress.deliveredCrops[cropKey] = (progress.deliveredCrops[cropKey] ?? 0) + quantity;
+    });
+  }
+
+  private async recordProgressEvent(
+    executor: TransactionClient,
+    userId: string,
+    towerHighestFloor: number | null,
+    applyProgress: (progress: QuestProgressState, now: string) => void,
+  ): Promise<void> {
     await this.ensureQuestRows(executor, userId);
     const rows = await this.getQuestRowsForUpdate(executor, userId);
     const now = new Date().toISOString();
+    const knownHighestFloor =
+      towerHighestFloor === null ? await this.getTowerHighestFloor(executor, userId) : Math.max(1, towerHighestFloor);
 
     for (const row of rows) {
       if (row.status === 'claimed') {
@@ -119,12 +188,9 @@ export class QuestsService {
       }
 
       const progress = this.normalizeProgress(row.progress_json);
-      progress.victoriesTotal += 1;
-      progress.enemyVictories[input.enemyKey] = (progress.enemyVictories[input.enemyKey] ?? 0) + 1;
-      progress.towerHighestFloor = Math.max(progress.towerHighestFloor, input.towerHighestFloor);
-      progress.lastVictoryAt = now;
-
-      const completed = this.isQuestCompleted(definition, progress, input.towerHighestFloor);
+      progress.towerHighestFloor = Math.max(progress.towerHighestFloor, knownHighestFloor);
+      applyProgress(progress, now);
+      const completed = this.isQuestCompleted(definition, progress, knownHighestFloor);
       const nextStatus: QuestStatus = completed ? 'completed' : 'active';
 
       if (completed && !progress.completedAt) {
@@ -402,6 +468,30 @@ export class QuestsService {
       return Math.max(progress.towerHighestFloor, towerHighestFloor);
     }
 
+    if (objective.metric === 'farm_harvest_total') {
+      return progress.cropsHarvestedTotal;
+    }
+
+    if (objective.metric === 'village_delivery_total') {
+      return progress.cropsDeliveredTotal;
+    }
+
+    if (objective.metric === 'farm_harvest_crop') {
+      if (!objective.cropKey) {
+        return 0;
+      }
+
+      return progress.harvestedCrops[objective.cropKey] ?? 0;
+    }
+
+    if (objective.metric === 'village_delivery_crop') {
+      if (!objective.cropKey) {
+        return 0;
+      }
+
+      return progress.deliveredCrops[objective.cropKey] ?? 0;
+    }
+
     if (!objective.enemyKey) {
       return 0;
     }
@@ -425,11 +515,17 @@ export class QuestsService {
 
     const parsed = typeof value === 'string' ? (JSON.parse(value) as Partial<QuestProgressState>) : value;
     const enemyVictories = parsed.enemyVictories ?? {};
+    const harvestedCrops = parsed.harvestedCrops ?? {};
+    const deliveredCrops = parsed.deliveredCrops ?? {};
 
     return {
       victoriesTotal: Math.max(0, Number(parsed.victoriesTotal ?? 0)),
       enemyVictories: { ...enemyVictories },
       towerHighestFloor: Math.max(1, Number(parsed.towerHighestFloor ?? 1)),
+      cropsHarvestedTotal: Math.max(0, Number(parsed.cropsHarvestedTotal ?? 0)),
+      harvestedCrops: { ...harvestedCrops },
+      cropsDeliveredTotal: Math.max(0, Number(parsed.cropsDeliveredTotal ?? 0)),
+      deliveredCrops: { ...deliveredCrops },
       lastVictoryAt: typeof parsed.lastVictoryAt === 'string' ? parsed.lastVictoryAt : null,
       completedAt: typeof parsed.completedAt === 'string' ? parsed.completedAt : null,
       claimedAt: typeof parsed.claimedAt === 'string' ? parsed.claimedAt : null,
@@ -441,6 +537,10 @@ export class QuestsService {
       victoriesTotal: 0,
       enemyVictories: {},
       towerHighestFloor: 1,
+      cropsHarvestedTotal: 0,
+      harvestedCrops: {},
+      cropsDeliveredTotal: 0,
+      deliveredCrops: {},
       lastVictoryAt: null,
       completedAt: null,
       claimedAt: null,
