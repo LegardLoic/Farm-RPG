@@ -651,6 +651,7 @@ export class GameScene extends Phaser.Scene {
   private villageMarketErrorValue: HTMLElement | null = null;
   private farmSummaryValue: HTMLElement | null = null;
   private farmSeedSelect: HTMLSelectElement | null = null;
+  private farmSleepButton: HTMLButtonElement | null = null;
   private farmPlotsRoot: HTMLElement | null = null;
   private farmErrorValue: HTMLElement | null = null;
   private villageNpcSummaryValue: HTMLElement | null = null;
@@ -937,6 +938,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    if (farmAction === 'sleep') {
+      void this.sleepAtFarm();
+      return;
+    }
+
     if (farmAction === 'plant' || farmAction === 'water' || farmAction === 'harvest') {
       const plotKey = button.dataset.plotKey;
       if (!plotKey) {
@@ -1199,6 +1205,7 @@ export class GameScene extends Phaser.Scene {
         <div class="hud-title">Journal de ferme</div>
         <div class="hud-grid">
           <div class="hud-stat"><span>Jour</span><strong data-hud="day"></strong></div>
+          <div class="hud-stat"><span>Cycle</span><strong data-hud="dayPhase"></strong></div>
           <div class="hud-stat"><span>Or</span><strong data-hud="gold"></strong></div>
           <div class="hud-stat"><span>Niveau</span><strong data-hud="level"></strong></div>
           <div class="hud-stat"><span>XP</span><strong data-hud="xp"></strong></div>
@@ -1389,6 +1396,9 @@ export class GameScene extends Phaser.Scene {
               <span>Selected seed</span>
               <select data-hud="farmSeedSelect"></select>
             </label>
+            <div class="hud-farm-actions">
+              <button class="hud-farm-action sleep" data-farm-action="sleep">Sleep (+1 day)</button>
+            </div>
           </div>
           <div class="hud-farm-error" data-hud="farmError" hidden></div>
           <ul class="hud-farm-plots" data-hud="farmPlots"></ul>
@@ -1590,6 +1600,7 @@ export class GameScene extends Phaser.Scene {
     this.villageMarketErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageMarketError"]');
     this.farmSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmSummary"]');
     this.farmSeedSelect = this.hudRoot.querySelector<HTMLSelectElement>('[data-hud="farmSeedSelect"]');
+    this.farmSleepButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-farm-action="sleep"]');
     this.farmPlotsRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmPlots"]');
     this.farmErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmError"]');
     this.villageNpcSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcSummary"]');
@@ -1773,6 +1784,7 @@ export class GameScene extends Phaser.Scene {
     this.villageMarketErrorValue = null;
     this.farmSummaryValue = null;
     this.farmSeedSelect = null;
+    this.farmSleepButton = null;
     this.farmPlotsRoot = null;
     this.farmErrorValue = null;
     this.villageNpcSummaryValue = null;
@@ -1889,6 +1901,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.setHudText('day', `Jour ${this.hudState.day}`);
+    this.setHudText('dayPhase', this.getDayPhaseLabel());
     this.setHudText('gold', `${this.hudState.gold} po`);
     this.setHudText('level', `${this.hudState.level}`);
     this.setHudText('xp', `${this.hudState.xp} / ${this.hudState.xpToNext}`);
@@ -1911,6 +1924,7 @@ export class GameScene extends Phaser.Scene {
     this.updateAutoSaveHud();
     this.updateSaveSlotsHud();
     this.updateDebugQaHud();
+    this.updateDayPhaseVisual();
 
     if (this.loginButton) {
       this.loginButton.hidden = this.isAuthenticated;
@@ -2018,6 +2032,12 @@ export class GameScene extends Phaser.Scene {
     if (this.farmErrorValue) {
       this.farmErrorValue.hidden = !this.farmError;
       this.farmErrorValue.textContent = this.farmError ?? '';
+    }
+
+    if (this.farmSleepButton) {
+      const canSleep = Boolean(this.isAuthenticated && this.farmState?.unlocked);
+      this.farmSleepButton.disabled = !canSleep || this.farmBusy;
+      this.farmSleepButton.textContent = this.farmBusy ? 'Sleeping...' : 'Sleep (+1 day)';
     }
 
     this.renderFarmPanel();
@@ -4862,6 +4882,36 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private async sleepAtFarm(): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.farmError = 'Login required to sleep at farm.';
+      this.updateHud();
+      return;
+    }
+
+    if (!this.farmState?.unlocked) {
+      this.farmError = 'Farm is locked.';
+      this.updateHud();
+      return;
+    }
+
+    this.farmBusy = true;
+    this.farmError = null;
+    this.updateHud();
+
+    try {
+      const payload = await this.fetchJson<unknown>('/gameplay/sleep', {
+        method: 'POST',
+      });
+      this.applyGameplaySnapshot(payload);
+    } catch (error) {
+      this.farmError = this.getErrorMessage(error, 'Unable to sleep right now.');
+    } finally {
+      this.farmBusy = false;
+      this.updateHud();
+    }
+  }
+
   private async plantFarmPlot(plotKey: string): Promise<void> {
     if (!this.isAuthenticated) {
       this.farmError = 'Login required to plant crops.';
@@ -7210,6 +7260,22 @@ export class GameScene extends Phaser.Scene {
       .filter((entry) => entry.length > 0);
 
     return [...new Set(values)];
+  }
+
+  private getDayPhaseKey(): 'day' | 'night' {
+    return this.hudState.day % 2 === 0 ? 'night' : 'day';
+  }
+
+  private getDayPhaseLabel(): string {
+    return this.getDayPhaseKey() === 'night' ? 'Nuit' : 'Jour';
+  }
+
+  private updateDayPhaseVisual(): void {
+    const phase = this.getDayPhaseKey();
+    const gameShell = document.getElementById('game-shell');
+    if (gameShell) {
+      gameShell.dataset.dayPhase = phase;
+    }
   }
 
   private getBlacksmithStatusLabel(): string {

@@ -48,6 +48,15 @@ export class GameplayController {
     };
   }
 
+  @Post('sleep')
+  async sleep(@Req() req: AuthenticatedRequest) {
+    const result = await this.gameplayService.sleep(req.authUser!.id);
+    return {
+      status: 'ok',
+      ...result,
+    };
+  }
+
   @Post('farm/plant')
   async plantFarmPlot(@Req() req: AuthenticatedRequest, @Body() body: PlantFarmPlotDto) {
     const result = await this.gameplayService.plantFarmPlot(

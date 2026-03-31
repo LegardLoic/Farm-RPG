@@ -334,6 +334,11 @@ function createGameplayDatabaseStub(initialFlags = [], initialFarmPlots = [], in
       return { rows: [] };
     }
 
+    if (text.includes('UPDATE world_state') && text.includes('SET day = $2')) {
+      state.world.day = values[1];
+      return { rows: [] };
+    }
+
     if (text.includes('INSERT INTO farm_plots')) {
       for (let index = 1; index < values.length; index += 3) {
         const plotKey = values[index];
@@ -383,6 +388,13 @@ function createGameplayDatabaseStub(initialFlags = [], initialFarmPlots = [], in
       const row = state.farmPlots.get(plotKey);
       if (row) {
         row.watered_today = true;
+      }
+      return { rows: [] };
+    }
+
+    if (text.includes('UPDATE farm_plots') && text.includes('SET watered_today = FALSE') && text.includes('AND watered_today = TRUE')) {
+      for (const row of state.farmPlots.values()) {
+        row.watered_today = false;
       }
       return { rows: [] };
     }
@@ -1220,4 +1232,48 @@ test('gameplay farm harvest grants crop item and resets plot', async () => {
   assert.equal(harvestedPlot?.cropKey, null);
   assert.equal(harvestedPlot?.plantedDay, null);
   assert.equal(harvestedPlot?.wateredToday, false);
+});
+
+test('gameplay sleep advances day and resets watered farm plots', async () => {
+  const db = createGameplayDatabaseStub(
+    ['intro_farm_assigned'],
+    [
+      {
+        plot_key: 'plot_r1_c1',
+        row_index: 1,
+        col_index: 1,
+        crop_key: 'turnip',
+        planted_day: 1,
+        growth_days: 2,
+        watered_today: true,
+      },
+      {
+        plot_key: 'plot_r1_c2',
+        row_index: 1,
+        col_index: 2,
+        crop_key: 'carrot',
+        planted_day: 2,
+        growth_days: 3,
+        watered_today: false,
+      },
+    ],
+  );
+  db.state.world.day = 2;
+
+  const service = new GameplayService(db);
+  const result = await service.sleep('user-1');
+
+  assert.equal(result.sleep.dayBefore, 2);
+  assert.equal(result.sleep.dayAfter, 3);
+  assert.equal(result.world.day, 3);
+  assert.equal(db.state.world.day, 3);
+
+  const turnipPlot = result.farm.plots.find((plot) => plot.plotKey === 'plot_r1_c1');
+  const carrotPlot = result.farm.plots.find((plot) => plot.plotKey === 'plot_r1_c2');
+
+  assert.equal(turnipPlot?.wateredToday, false);
+  assert.equal(turnipPlot?.readyToHarvest, true);
+  assert.equal(turnipPlot?.growthProgressDays, 2);
+  assert.equal(carrotPlot?.wateredToday, false);
+  assert.equal(carrotPlot?.growthProgressDays, 1);
 });

@@ -70,6 +70,11 @@ export interface GameplayFarmHarvestResult {
   totalHarvestItemQuantity: number;
 }
 
+export interface GameplaySleepResult {
+  dayBefore: number;
+  dayAfter: number;
+}
+
 export interface GameplayVillageState {
   blacksmith: {
     unlocked: boolean;

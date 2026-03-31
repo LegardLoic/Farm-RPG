@@ -30,6 +30,7 @@ import type {
   GameplayFarmHarvestResult,
   GameplayFarmPlantResult,
   GameplayFarmState,
+  GameplaySleepResult,
   GameplayFarmWaterResult,
   GameplayIntroState,
   GameplayVillageState,
@@ -359,6 +360,60 @@ export class GameplayService {
           quantityGained: 1,
           totalHarvestItemQuantity: inventoryRow.quantity,
         },
+        farm,
+      };
+    });
+  }
+
+  async sleep(userId: string): Promise<{
+    sleep: GameplaySleepResult;
+    world: GameplayWorldState;
+    farm: GameplayFarmState;
+  }> {
+    return this.databaseService.withTransaction(async (tx) => {
+      await this.ensureWorldState(tx, userId);
+      await this.ensureFarmPlots(tx, userId);
+
+      const worldFlags = new Set(await this.getWorldFlags(userId, tx));
+      this.assertFarmUnlocked(worldFlags);
+
+      const worldBefore = await this.getWorldStateForUpdate(tx, userId);
+      const dayBefore = worldBefore.day;
+      const dayAfter = dayBefore + 1;
+
+      await tx.query(
+        `
+          UPDATE ${WORLD_STATE_TABLE}
+          SET day = $2,
+              updated_at = NOW()
+          WHERE user_id = $1
+        `,
+        [userId, dayAfter],
+      );
+
+      await tx.query(
+        `
+          UPDATE ${FARM_PLOTS_TABLE}
+          SET watered_today = FALSE,
+              updated_at = NOW()
+          WHERE user_id = $1
+            AND watered_today = TRUE
+        `,
+        [userId],
+      );
+
+      const world: GameplayWorldState = {
+        zone: worldBefore.zone,
+        day: dayAfter,
+      };
+      const farm = await this.getFarmStateWithExecutor(tx, userId, worldFlags, dayAfter);
+
+      return {
+        sleep: {
+          dayBefore,
+          dayAfter,
+        },
+        world,
         farm,
       };
     });
