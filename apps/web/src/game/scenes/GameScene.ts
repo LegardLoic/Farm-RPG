@@ -507,6 +507,16 @@ const STRIP_CALIBRATION_PRESETS: StripCalibrationPreset[] = [
 
 const DEBUG_QA_REPLAY_AUTOPLAY_SPEED_STORAGE_KEY = 'farm-rpg.debugQa.replayAutoPlaySpeed';
 const DEBUG_QA_STRIP_CALIBRATION_STORAGE_KEY = 'farm-rpg.debugQa.stripCalibrationPreset';
+const GAMEPAD_BUTTON_A = 0;
+const GAMEPAD_BUTTON_B = 1;
+const GAMEPAD_BUTTON_X = 2;
+const GAMEPAD_BUTTON_Y = 3;
+const GAMEPAD_BUTTON_LEFT_BUMPER = 4;
+const GAMEPAD_BUTTON_RIGHT_BUMPER = 5;
+const GAMEPAD_BUTTON_DPAD_UP = 12;
+const GAMEPAD_BUTTON_DPAD_DOWN = 13;
+const GAMEPAD_BUTTON_DPAD_LEFT = 14;
+const GAMEPAD_BUTTON_DPAD_RIGHT = 15;
 
 function isDebugQaActionName(value: string): value is DebugQaActionName {
   return (
@@ -623,6 +633,9 @@ export class GameScene extends Phaser.Scene {
   private heroProfileMessage: string | null = null;
   private heroProfileNameDraft = '';
   private heroProfileAppearanceDraft: HeroAppearanceKey = 'default';
+  private gamepadPreviousButtonStates: boolean[] = [];
+  private gamepadHudFocusableElements: HTMLElement[] = [];
+  private gamepadHudFocusIndex = -1;
   private spriteManifest: SpriteManifest | null = null;
   private playerUsesStripAnimation = false;
   private playerStripActionTimer: Phaser.Time.TimerEvent | null = null;
@@ -943,6 +956,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.player.setTint(velocityX !== 0 || velocityY !== 0 ? 0xd8f1ff : 0xffffff);
+    this.updateGamepadInput();
     this.updateHud();
   }
 
@@ -1321,6 +1335,8 @@ export class GameScene extends Phaser.Scene {
         <div class="hud-help">
           Deplacement: fleches ou ZQSD
           <br />
+          Manette: D-pad/LB/RB navigue HUD, A valide, X Attack, Y Defend, B Fireball.
+          <br />
           Prototype: ferme, village et tour a venir
         </div>
       </div>
@@ -1449,6 +1465,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.stopEnemyHudStripPlayback();
     this.clearEnemyHudStripOverride();
+    this.resetGamepadInputState();
 
     if (this.debugQaImportFileInput) {
       this.debugQaImportFileInput.removeEventListener('change', this.onDebugQaImportFileChange);
@@ -1746,6 +1763,336 @@ export class GameScene extends Phaser.Scene {
       this.heroProfileErrorValue.hidden = !this.heroProfileError;
       this.heroProfileErrorValue.textContent = this.heroProfileError ?? '';
     }
+  }
+
+  private updateGamepadInput(): void {
+    const gamepad = this.getPrimaryConnectedGamepad();
+    if (!gamepad) {
+      if (this.gamepadPreviousButtonStates.length > 0 || this.gamepadHudFocusIndex !== -1) {
+        this.resetGamepadInputState();
+      }
+      return;
+    }
+
+    this.updateGamepadHudFocusables();
+    const justPressedButtons = this.consumeGamepadJustPressedButtons(gamepad);
+    if (justPressedButtons.size === 0) {
+      return;
+    }
+
+    this.handleGamepadHudNavigation(justPressedButtons);
+    this.handleGamepadCombatShortcuts(justPressedButtons);
+
+    if (justPressedButtons.has(GAMEPAD_BUTTON_A)) {
+      if (this.activateFocusedGamepadHudElement()) {
+        return;
+      }
+      if (this.tryHandleGamepadPrimaryCombatAction()) {
+        return;
+      }
+    }
+  }
+
+  private getPrimaryConnectedGamepad(): Gamepad | null {
+    const pads = navigator.getGamepads?.();
+    if (!pads) {
+      return null;
+    }
+
+    for (const pad of pads) {
+      if (pad?.connected) {
+        return pad;
+      }
+    }
+
+    return null;
+  }
+
+  private consumeGamepadJustPressedButtons(gamepad: Gamepad): Set<number> {
+    const justPressed = new Set<number>();
+    const nextStates: boolean[] = [];
+
+    gamepad.buttons.forEach((button, index) => {
+      const pressed = Boolean(button.pressed);
+      const previous = this.gamepadPreviousButtonStates[index] ?? false;
+      nextStates[index] = pressed;
+      if (pressed && !previous) {
+        justPressed.add(index);
+      }
+    });
+
+    this.gamepadPreviousButtonStates = nextStates;
+    return justPressed;
+  }
+
+  private handleGamepadHudNavigation(justPressedButtons: Set<number>): void {
+    let step = 0;
+    if (justPressedButtons.has(GAMEPAD_BUTTON_DPAD_UP) || justPressedButtons.has(GAMEPAD_BUTTON_DPAD_LEFT)) {
+      step -= 1;
+    }
+    if (justPressedButtons.has(GAMEPAD_BUTTON_DPAD_DOWN) || justPressedButtons.has(GAMEPAD_BUTTON_DPAD_RIGHT)) {
+      step += 1;
+    }
+    if (justPressedButtons.has(GAMEPAD_BUTTON_LEFT_BUMPER)) {
+      step -= 1;
+    }
+    if (justPressedButtons.has(GAMEPAD_BUTTON_RIGHT_BUMPER)) {
+      step += 1;
+    }
+
+    if (step < 0) {
+      this.moveGamepadHudFocus(-1);
+      return;
+    }
+    if (step > 0) {
+      this.moveGamepadHudFocus(1);
+    }
+  }
+
+  private handleGamepadCombatShortcuts(justPressedButtons: Set<number>): void {
+    if (!this.isAuthenticated) {
+      return;
+    }
+
+    if (
+      !this.combatState ||
+      this.combatState.status !== 'active' ||
+      this.combatState.turn !== 'player'
+    ) {
+      if (
+        justPressedButtons.has(GAMEPAD_BUTTON_Y) &&
+        this.combatStartButton &&
+        !this.combatStartButton.disabled
+      ) {
+        void this.startCombat();
+      }
+      return;
+    }
+
+    if (justPressedButtons.has(GAMEPAD_BUTTON_X)) {
+      this.tryPerformCombatActionFromGamepad('attack');
+    }
+    if (justPressedButtons.has(GAMEPAD_BUTTON_Y)) {
+      this.tryPerformCombatActionFromGamepad('defend');
+    }
+    if (justPressedButtons.has(GAMEPAD_BUTTON_B)) {
+      this.tryPerformCombatActionFromGamepad('fireball');
+    }
+  }
+
+  private tryHandleGamepadPrimaryCombatAction(): boolean {
+    if (!this.isAuthenticated) {
+      return false;
+    }
+
+    if (
+      this.combatState &&
+      this.combatState.status === 'active' &&
+      this.combatState.turn === 'player'
+    ) {
+      return this.tryPerformCombatActionFromGamepad('attack');
+    }
+
+    if (this.combatStartButton && !this.combatStartButton.disabled) {
+      void this.startCombat();
+      return true;
+    }
+
+    return false;
+  }
+
+  private tryPerformCombatActionFromGamepad(action: CombatActionName): boolean {
+    const buttonByAction: Partial<Record<CombatActionName, HTMLButtonElement | null>> = {
+      attack: this.combatAttackButton,
+      defend: this.combatDefendButton,
+      fireball: this.combatFireballButton,
+      rally: this.combatRallyButton,
+      sunder: this.combatSunderButton,
+      mend: this.combatMendButton,
+      cleanse: this.combatCleanseButton,
+      interrupt: this.combatInterruptButton,
+    };
+
+    const button = buttonByAction[action];
+    if (!button || button.disabled) {
+      return false;
+    }
+
+    void this.performCombatAction(action);
+    return true;
+  }
+
+  private updateGamepadHudFocusables(): void {
+    if (!this.hudRoot) {
+      this.clearGamepadHudFocus(true);
+      this.gamepadHudFocusableElements = [];
+      return;
+    }
+
+    const previousFocusedElement =
+      this.gamepadHudFocusIndex >= 0 ? this.gamepadHudFocusableElements[this.gamepadHudFocusIndex] : null;
+    const focusables = this.getGamepadHudFocusableElements();
+    this.gamepadHudFocusableElements = focusables;
+
+    if (focusables.length === 0) {
+      this.clearGamepadHudFocus(true);
+      return;
+    }
+
+    if (previousFocusedElement) {
+      const retainedIndex = focusables.indexOf(previousFocusedElement);
+      if (retainedIndex >= 0) {
+        this.gamepadHudFocusIndex = retainedIndex;
+      } else if (this.gamepadHudFocusIndex >= focusables.length) {
+        this.gamepadHudFocusIndex = focusables.length - 1;
+      }
+    } else if (this.gamepadHudFocusIndex >= focusables.length) {
+      this.gamepadHudFocusIndex = focusables.length - 1;
+    }
+
+    this.applyGamepadHudFocusState(false);
+  }
+
+  private getGamepadHudFocusableElements(): HTMLElement[] {
+    if (!this.hudRoot) {
+      return [];
+    }
+
+    const selector = [
+      'button',
+      'select',
+      'input:not([type="hidden"]):not([type="file"])',
+      'textarea',
+    ].join(', ');
+
+    return Array.from(this.hudRoot.querySelectorAll<HTMLElement>(selector)).filter((element) =>
+      this.isHudElementGamepadFocusable(element),
+    );
+  }
+
+  private isHudElementGamepadFocusable(element: HTMLElement): boolean {
+    const isFormControl = element instanceof HTMLButtonElement ||
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLSelectElement ||
+      element instanceof HTMLTextAreaElement
+    const disabled = isFormControl ? element.disabled : element.hasAttribute('disabled');
+    if (disabled) {
+      return false;
+    }
+
+    if (element.matches('[hidden]')) {
+      return false;
+    }
+
+    const style = window.getComputedStyle(element);
+    return style.display !== 'none' && style.visibility !== 'hidden';
+  }
+
+  private moveGamepadHudFocus(step: number): void {
+    this.updateGamepadHudFocusables();
+    const total = this.gamepadHudFocusableElements.length;
+    if (total === 0) {
+      return;
+    }
+
+    if (this.gamepadHudFocusIndex < 0) {
+      this.gamepadHudFocusIndex = step > 0 ? 0 : total - 1;
+    } else {
+      this.gamepadHudFocusIndex = (this.gamepadHudFocusIndex + step + total) % total;
+    }
+
+    this.focusGamepadHudElement(this.gamepadHudFocusIndex, true);
+  }
+
+  private focusGamepadHudElement(index: number, focusDomElement: boolean): void {
+    if (index < 0 || index >= this.gamepadHudFocusableElements.length) {
+      return;
+    }
+
+    this.gamepadHudFocusIndex = index;
+    this.applyGamepadHudFocusState(focusDomElement);
+  }
+
+  private applyGamepadHudFocusState(focusDomElement: boolean): void {
+    this.gamepadHudFocusableElements.forEach((element, index) => {
+      if (index === this.gamepadHudFocusIndex) {
+        element.dataset.gamepadFocused = '1';
+      } else {
+        delete element.dataset.gamepadFocused;
+      }
+    });
+
+    if (!focusDomElement || this.gamepadHudFocusIndex < 0) {
+      return;
+    }
+
+    const active = this.gamepadHudFocusableElements[this.gamepadHudFocusIndex];
+    if (!active) {
+      return;
+    }
+
+    active.focus({ preventScroll: true });
+    active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  private activateFocusedGamepadHudElement(): boolean {
+    this.updateGamepadHudFocusables();
+    const total = this.gamepadHudFocusableElements.length;
+    if (total === 0) {
+      return false;
+    }
+
+    if (this.gamepadHudFocusIndex < 0 || this.gamepadHudFocusIndex >= total) {
+      this.focusGamepadHudElement(0, true);
+      return false;
+    }
+
+    const active = this.gamepadHudFocusableElements[this.gamepadHudFocusIndex];
+    if (!active) {
+      return false;
+    }
+
+    if (active instanceof HTMLButtonElement) {
+      active.click();
+      return true;
+    }
+
+    if (active instanceof HTMLSelectElement) {
+      if (active.options.length === 0) {
+        return false;
+      }
+      const nextIndex = (active.selectedIndex + 1 + active.options.length) % active.options.length;
+      active.selectedIndex = nextIndex;
+      active.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    }
+
+    if (active instanceof HTMLInputElement && active.type === 'checkbox') {
+      active.checked = !active.checked;
+      active.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    }
+
+    active.focus({ preventScroll: true });
+    return true;
+  }
+
+  private clearGamepadHudFocus(resetIndex: boolean): void {
+    if (this.hudRoot) {
+      this.hudRoot.querySelectorAll<HTMLElement>('[data-gamepad-focused="1"]').forEach((element) => {
+        delete element.dataset.gamepadFocused;
+      });
+    }
+
+    if (resetIndex) {
+      this.gamepadHudFocusIndex = -1;
+    }
+  }
+
+  private resetGamepadInputState(): void {
+    this.gamepadPreviousButtonStates = [];
+    this.gamepadHudFocusableElements = [];
+    this.clearGamepadHudFocus(true);
   }
 
   private updateDebugQaHud(): void {

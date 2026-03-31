@@ -177,3 +177,14 @@ test('hero profile creation panel exposes expected controls and wiring', () => {
   assert.equal(stylesSource.includes('.hud-hero-profile-field'), true);
   assert.equal(stylesSource.includes('.hud-hero-profile-button'), true);
 });
+
+test('HUD gamepad first-pass controls keep wiring and focus styles', () => {
+  assert.equal(gameSceneSource.includes('GAMEPAD_BUTTON_A = 0'), true);
+  assert.equal(gameSceneSource.includes('GAMEPAD_BUTTON_DPAD_UP = 12'), true);
+  assert.equal(gameSceneSource.includes('private updateGamepadInput(): void'), true);
+  assert.equal(gameSceneSource.includes('private handleGamepadCombatShortcuts(justPressedButtons: Set<number>): void'), true);
+  assert.equal(gameSceneSource.includes('private moveGamepadHudFocus(step: number): void'), true);
+  assert.equal(gameSceneSource.includes('private activateFocusedGamepadHudElement(): boolean'), true);
+  assert.equal(gameSceneSource.includes("Manette: D-pad/LB/RB navigue HUD, A valide, X Attack, Y Defend, B Fireball."), true);
+  assert.equal(stylesSource.includes('.hud-panel [data-gamepad-focused="1"]'), true);
+});
