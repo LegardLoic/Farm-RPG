@@ -132,3 +132,4 @@ Use `.env.example` templates and repository secrets for CI.
 - Animation polish pass: hero/boss strips retuned (timings + cast/hit readability) with stronger combat HUD visual states.
 - Combat status balance pass: `Poison`, `Cecite`, and `Obscurite` now scale by floor tiers (`3/5/8/10` milestones) for duration and application chance.
 - Economy progression pass: village crop sales now grant calibrated XP by crop type and story tier (`story_floor_3/5/8` + `story_act_1_complete`).
+- Combat recap UX pass: recap is now structured as multi-line summary for better readability on desktop and mobile HUD.

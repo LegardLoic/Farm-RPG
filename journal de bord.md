@@ -1552,6 +1552,19 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - vérification gains XP sur vente standard
     - vérification scaling XP selon tier story.
 
+### Lot 100 - QA ergonomie combat: recap HUD lisible desktop/mobile
+- Frontend combat HUD:
+  - recap combat réordonné pour lecture rapide:
+    - ligne 1: outcome + round + DMG/Heal/MP
+    - ligne 2: statuts appliqués + cleanse + blind misses
+    - ligne 3: rewards (XP/Gold/Loot)
+    - ligne 4 conditionnelle: penalties en cas de défaite/fuite.
+  - format recap multi-lignes via `white-space: pre-line` pour réduire la densité horizontale.
+  - ajustements responsive du bloc recap (padding/font-size/line-height) sous 700px pour meilleure lisibilité mobile.
+- QA:
+  - régression web validée (`@farm-rpg/web`).
+  - suite globale validée (`npm run test`).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1740,13 +1753,13 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
-2. Lot 101 - Quetes narratives village: premieres micro-quetes dialoguees reliees aux etats PNJ.
-3. Lot 102 - Premiere passe dialogues contextuels PNJ relies au tier de relation.
-4. Lot 103 - Hook scenario ferme: premiers evenements declenches par jour + progression recoltes.
-5. Lot 104 - Trigger scenario tour: premiers beats narratifs relies aux paliers 3/5/8/10.
-6. Lot 105 - Passe accessibilite HUD combat (contraste, focus, lisibilite mobile).
-7. Lot 106 - Telemetrie balancing: extraction KPI debuffs/reactions pour iterations tuning.
-8. Lot 107 - Economie UI: affichage explicite des gains XP de vente dans le panneau Market.
+1. Lot 101 - Quetes narratives village: premieres micro-quetes dialoguees reliees aux etats PNJ.
+2. Lot 102 - Premiere passe dialogues contextuels PNJ relies au tier de relation.
+3. Lot 103 - Hook scenario ferme: premiers evenements declenches par jour + progression recoltes.
+4. Lot 104 - Trigger scenario tour: premiers beats narratifs relies aux paliers 3/5/8/10.
+5. Lot 105 - Passe accessibilite HUD combat (contraste, focus, lisibilite mobile).
+6. Lot 106 - Telemetrie balancing: extraction KPI debuffs/reactions pour iterations tuning.
+7. Lot 107 - Economie UI: affichage explicite des gains XP de vente dans le panneau Market.
+8. Lot 108 - QA mobile touch: revue interactions combat/farm en viewport reduit.
 
 
