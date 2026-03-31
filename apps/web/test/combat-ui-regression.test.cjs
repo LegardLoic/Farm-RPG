@@ -188,3 +188,16 @@ test('HUD gamepad first-pass controls keep wiring and focus styles', () => {
   assert.equal(gameSceneSource.includes("Manette: D-pad/LB/RB navigue HUD, A valide, X Attack, Y Defend, B Fireball."), true);
   assert.equal(stylesSource.includes('.hud-panel [data-gamepad-focused="1"]'), true);
 });
+
+test('intro narrative panel wiring exists for lot 85', () => {
+  assert.equal(gameSceneSource.includes('data-hud="introSummary"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="introNarrative"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="introHint"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="introProgress"'), true);
+  assert.equal(gameSceneSource.includes('data-intro-action="advance"'), true);
+  assert.equal(gameSceneSource.includes('private updateIntroHud(): void'), true);
+  assert.equal(gameSceneSource.includes('private async advanceIntroNarrative(): Promise<void>'), true);
+  assert.equal(gameSceneSource.includes('private normalizeGameplayIntroPayload(payload: unknown): IntroNarrativeState | null'), true);
+  assert.equal(stylesSource.includes('.hud-intro'), true);
+  assert.equal(stylesSource.includes('.hud-intro-button'), true);
+});

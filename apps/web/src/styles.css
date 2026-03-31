@@ -217,6 +217,7 @@ body::before {
 
 .hud-auth,
 .hud-hero-profile,
+.hud-intro,
 .hud-combat,
 .hud-quests,
 .hud-blacksmith,
@@ -308,6 +309,12 @@ body::before {
 }
 
 .hud-hero-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hud-intro {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -581,7 +588,21 @@ body::before {
   gap: 12px;
 }
 
+.hud-intro-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
 .hud-hero-profile-header span {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.hud-intro-header span {
   font-size: 0.76rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -593,10 +614,67 @@ body::before {
   color: var(--accent-2);
 }
 
+.hud-intro-header strong {
+  font-size: 0.75rem;
+  color: var(--accent);
+}
+
 .hud-hero-profile-field {
   display: flex;
   flex-direction: column;
   gap: 5px;
+}
+
+.hud-intro-narrative {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #d7e1ef;
+  line-height: 1.45;
+}
+
+.hud-intro-hint {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.42;
+}
+
+.hud-intro-progress {
+  margin: 0;
+  font-size: 0.73rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+
+.hud-intro-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.hud-intro-button {
+  border: 1px solid rgba(226, 182, 109, 0.45);
+  background: rgba(226, 182, 109, 0.2);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 7px 10px;
+  font-size: 0.77rem;
+  cursor: pointer;
+}
+
+.hud-intro-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.hud-intro-error {
+  border: 1px solid rgba(242, 111, 111, 0.4);
+  background: rgba(242, 111, 111, 0.14);
+  color: #ffd1d1;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .hud-hero-profile-field span {
@@ -1626,7 +1704,8 @@ body::before {
 
   .hud-auth-button,
   .hud-combat-button,
-  .hud-hero-profile-button {
+  .hud-hero-profile-button,
+  .hud-intro-button {
     flex: 1 1 100%;
   }
 }

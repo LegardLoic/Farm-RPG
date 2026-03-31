@@ -1164,6 +1164,36 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - presence du hint HUD
     - presence du style focus manette.
 
+### Lot 85 - Narration: intro MVP (arrivee village -> maire -> attribution ferme)
+- Backend API:
+  - etat intro integre a `GET /gameplay/state`:
+    - `intro.currentStep` (`arrive_village|meet_mayor|farm_assignment|completed`)
+    - `intro.completed`
+    - `intro.steps` detaille.
+  - nouvel endpoint protege:
+    - `POST /gameplay/intro/advance` pour avancer d'une etape narrative.
+  - progression intro pilotee par flags monde dedies:
+    - `intro_arrived_village`
+    - `intro_met_mayor`
+    - `intro_farm_assigned`.
+  - effets monde:
+    - arrivee village -> zone forcee a `Village`
+    - attribution ferme -> zone retour `Ferme`.
+- Frontend HUD (Phaser):
+  - nouveau panneau `Intro scenario`:
+    - resume d'etape
+    - texte narratif court
+    - hint contextuel
+    - progression `x/3`
+    - action `Continuer intro`.
+  - wiring:
+    - lecture etat intro depuis `gameplay/state`
+    - bouton branche sur `POST /gameplay/intro/advance`
+    - etats UI: disabled hors auth, loading, message erreur.
+- QA:
+  - extension tests API (`api-crosscut`) sur le flux complet de progression intro.
+  - extension regression web pour verrouiller wiring HUD intro + styles.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1171,6 +1201,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - Gameplay:
   - etat monde + progression joueur
   - etat village par flags
+  - etat intro scenario MVP pilote par flags monde + endpoint d'avance
 - Combat:
   - simulation tour par tour serveur
   - persistence encounter
@@ -1235,6 +1266,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - portraits fallback avec variantes d'etat (`normal/hit/cast`) pour ennemis non-boss frequents
   - strips runtime actifs (`idle/hit/cast`) pour player et bosses, avec animation HUD cote ennemi
   - tuning animation centralise dans le manifest (sequences + timings par strip)
+  - panneau intro scenario MVP (3 etapes narratives + progression)
 - Chargement web optimise:
   - entree legere
   - bootstrap asynchrone
@@ -1260,6 +1292,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `POST /auth/refresh`
 - `POST /auth/logout`
 - `GET /gameplay/state`
+- `POST /gameplay/intro/advance`
 - `GET /tower/state`
 - `GET /inventory`
 - `POST /inventory/add`
@@ -1318,21 +1351,20 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 85 - Narration: sequence d'intro MVP (arrivee village, maire, attribution ferme) en mode textuel/cinematique simple.
-2. Lot 86 - PNJ: systeme d'etats PNJ (maire, forgeron, marchand) pilote par flags monde.
-3. Lot 87 - Village economy: boutique graines + rachat recoltes (API + HUD) pour demarrer la boucle ferme.
-4. Lot 88 - Ferme data model: parcelles, cultures plantees, etats arrose/non arrose, timers de croissance.
-5. Lot 89 - Ferme backend: endpoints `plant`, `water`, `harvest` avec validations metier serveur.
-6. Lot 90 - Ferme frontend: panneau ferme jouable (selection graine, plantation, arrosage, recolte).
-7. Lot 91 - Temps: cycle jour/nuit MVP + action `sleep` qui avance le jour et fait pousser les cultures.
-8. Lot 92 - Crafting ferme: recettes basiques (consommables combat) basees sur recoltes.
-9. Lot 93 - Quetes ferme/village: quetes secondaires simples liees aux recoltes et livraisons.
-10. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
-11. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
-12. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
-13. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
-14. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
-15. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
-16. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
+1. Lot 86 - PNJ: systeme d'etats PNJ (maire, forgeron, marchand) pilote par flags monde.
+2. Lot 87 - Village economy: boutique graines + rachat recoltes (API + HUD) pour demarrer la boucle ferme.
+3. Lot 88 - Ferme data model: parcelles, cultures plantees, etats arrose/non arrose, timers de croissance.
+4. Lot 89 - Ferme backend: endpoints `plant`, `water`, `harvest` avec validations metier serveur.
+5. Lot 90 - Ferme frontend: panneau ferme jouable (selection graine, plantation, arrosage, recolte).
+6. Lot 91 - Temps: cycle jour/nuit MVP + action `sleep` qui avance le jour et fait pousser les cultures.
+7. Lot 92 - Crafting ferme: recettes basiques (consommables combat) basees sur recoltes.
+8. Lot 93 - Quetes ferme/village: quetes secondaires simples liees aux recoltes et livraisons.
+9. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
+10. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
+11. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
+12. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
+13. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
+14. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
+15. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
 
 

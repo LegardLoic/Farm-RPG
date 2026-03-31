@@ -1,4 +1,4 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/auth.types';
@@ -15,11 +15,12 @@ export class GameplayController {
 
   @Get('state')
   async getState(@Req() req: AuthenticatedRequest) {
-    const [progression, village, tower, world] = await Promise.all([
+    const [progression, village, tower, world, intro] = await Promise.all([
       this.gameplayService.getPlayerProgression(req.authUser!.id),
       this.gameplayService.getVillageState(req.authUser!.id),
       this.towerService.getState(req.authUser!.id),
       this.gameplayService.getWorldState(req.authUser!.id),
+      this.gameplayService.getIntroState(req.authUser!.id),
     ]);
 
     return {
@@ -29,6 +30,16 @@ export class GameplayController {
       progression,
       village,
       tower,
+      intro,
+    };
+  }
+
+  @Post('intro/advance')
+  async advanceIntroState(@Req() req: AuthenticatedRequest) {
+    const intro = await this.gameplayService.advanceIntroState(req.authUser!.id);
+    return {
+      status: 'ok',
+      intro,
     };
   }
 }

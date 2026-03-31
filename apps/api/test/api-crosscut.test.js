@@ -15,6 +15,7 @@ const {
   parseDebugForceCombatEnemyFlag,
 } = require('../dist/debug/debug-admin.constants.js');
 const { CombatService } = require('../dist/combat/combat.service.js');
+const { GameplayService } = require('../dist/gameplay/gameplay.service.js');
 const { ProfileService } = require('../dist/profile/profile.service.js');
 const { SavesService } = require('../dist/saves/saves.service.js');
 const { BLACKSMITH_SHOP_UNLOCK_FLAG } = require('../dist/shops/shops.constants.js');
@@ -192,6 +193,57 @@ function createProfileDatabaseStub(initialProfile = null) {
       }
 
       throw new Error(`Unexpected profile query: ${text}`);
+    },
+  };
+}
+
+function createGameplayDatabaseStub(initialFlags = []) {
+  const state = {
+    worldFlags: new Set(initialFlags),
+    world: {
+      zone: 'Ferme',
+      day: 1,
+    },
+  };
+
+  const executeQuery = async (text, values = []) => {
+    if (text.includes('INSERT INTO world_state')) {
+      return { rows: [] };
+    }
+
+    if (text.includes('SELECT flag_key') && text.includes('FROM world_flags')) {
+      return {
+        rows: Array.from(state.worldFlags)
+          .sort((left, right) => left.localeCompare(right))
+          .map((flag_key) => ({ flag_key })),
+      };
+    }
+
+    if (text.includes('INSERT INTO world_flags')) {
+      const flagKey = values[1];
+      state.worldFlags.add(flagKey);
+      return { rows: [] };
+    }
+
+    if (text.includes('UPDATE world_state') && text.includes('SET zone = $2')) {
+      state.world.zone = values[1];
+      return { rows: [] };
+    }
+
+    throw new Error(`Unexpected gameplay query: ${text}`);
+  };
+
+  return {
+    state,
+    async query(text, values = []) {
+      return executeQuery(text, values);
+    },
+    async withTransaction(callback) {
+      return callback({
+        async query(text, values = []) {
+          return executeQuery(text, values);
+        },
+      });
     },
   };
 }
@@ -669,4 +721,58 @@ test('profile service returns null when no profile exists', async () => {
   const service = new ProfileService(createProfileDatabaseStub(null));
   const profile = await service.getProfile('user-1');
   assert.equal(profile, null);
+});
+
+test('gameplay intro state progresses through village arrival, mayor, and farm assignment', async () => {
+  const db = createGameplayDatabaseStub();
+  const service = new GameplayService(db);
+
+  const initial = await service.getIntroState('user-1');
+  assert.deepEqual(initial, {
+    currentStep: 'arrive_village',
+    completed: false,
+    steps: {
+      arriveVillage: false,
+      metMayor: false,
+      farmAssigned: false,
+    },
+  });
+
+  const afterArrival = await service.advanceIntroState('user-1');
+  assert.deepEqual(afterArrival, {
+    currentStep: 'meet_mayor',
+    completed: false,
+    steps: {
+      arriveVillage: true,
+      metMayor: false,
+      farmAssigned: false,
+    },
+  });
+  assert.equal(db.state.world.zone, 'Village');
+
+  const afterMayor = await service.advanceIntroState('user-1');
+  assert.deepEqual(afterMayor, {
+    currentStep: 'farm_assignment',
+    completed: false,
+    steps: {
+      arriveVillage: true,
+      metMayor: true,
+      farmAssigned: false,
+    },
+  });
+
+  const afterFarmAssignment = await service.advanceIntroState('user-1');
+  assert.deepEqual(afterFarmAssignment, {
+    currentStep: 'completed',
+    completed: true,
+    steps: {
+      arriveVillage: true,
+      metMayor: true,
+      farmAssigned: true,
+    },
+  });
+  assert.equal(db.state.world.zone, 'Ferme');
+
+  const noOpAfterCompletion = await service.advanceIntroState('user-1');
+  assert.deepEqual(noOpAfterCompletion, afterFarmAssignment);
 });
