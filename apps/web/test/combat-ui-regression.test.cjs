@@ -234,3 +234,24 @@ test('village market panel wiring exists for lot 87', () => {
   assert.equal(stylesSource.includes('.hud-village-market-list'), true);
   assert.equal(stylesSource.includes('.hud-village-market-subtitle'), true);
 });
+
+test('farm panel wiring exists for lot 90', () => {
+  assert.equal(gameSceneSource.includes('data-hud="farmSummary"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="farmSeedSelect"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="farmPlots"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="farmError"'), true);
+  assert.equal(gameSceneSource.includes("plantButton.dataset.farmAction = 'plant'"), true);
+  assert.equal(gameSceneSource.includes("waterButton.dataset.farmAction = 'water'"), true);
+  assert.equal(gameSceneSource.includes("harvestButton.dataset.farmAction = 'harvest'"), true);
+  assert.equal(gameSceneSource.includes('private updateFarmHud(): void'), true);
+  assert.equal(gameSceneSource.includes('private renderFarmPanel(): void'), true);
+  assert.equal(gameSceneSource.includes('private getFarmSummaryLabel(): string'), true);
+  assert.equal(gameSceneSource.includes('private normalizeGameplayFarmPayload(payload: unknown): FarmState | null'), true);
+  assert.equal(gameSceneSource.includes('private async plantFarmPlot(plotKey: string): Promise<void>'), true);
+  assert.equal(gameSceneSource.includes('private async waterFarmPlot(plotKey: string): Promise<void>'), true);
+  assert.equal(gameSceneSource.includes('private async harvestFarmPlot(plotKey: string): Promise<void>'), true);
+  assert.equal(stylesSource.includes('.hud-farm'), true);
+  assert.equal(stylesSource.includes('.hud-farm-plots'), true);
+  assert.equal(stylesSource.includes('.farm-plot-item'), true);
+  assert.equal(stylesSource.includes('.hud-farm-action'), true);
+});
