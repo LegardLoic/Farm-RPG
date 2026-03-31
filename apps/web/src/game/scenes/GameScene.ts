@@ -847,6 +847,7 @@ export class GameScene extends Phaser.Scene {
   private spriteManifest: SpriteManifest | null = null;
   private playerUsesStripAnimation = false;
   private playerStripActionTimer: Phaser.Time.TimerEvent | null = null;
+  private playerStripAccentTimer: Phaser.Time.TimerEvent | null = null;
   private enemyHudStripPlayback: HudStripPlaybackState | null = null;
   private enemyHudStripIntervalId: number | null = null;
   private enemyHudStripOverrideAnimation: StripAnimationName | null = null;
@@ -1902,6 +1903,13 @@ export class GameScene extends Phaser.Scene {
     if (this.playerStripActionTimer) {
       this.playerStripActionTimer.remove(false);
       this.playerStripActionTimer = null;
+    }
+    if (this.playerStripAccentTimer) {
+      this.playerStripAccentTimer.remove(false);
+      this.playerStripAccentTimer = null;
+    }
+    if (this.player) {
+      this.player.clearTint();
     }
     this.stopEnemyHudStripPlayback();
     this.clearEnemyHudStripOverride();
@@ -4377,6 +4385,13 @@ export class GameScene extends Phaser.Scene {
       window.clearInterval(this.enemyHudStripIntervalId);
       this.enemyHudStripIntervalId = null;
     }
+
+    const stripElement = this.hudRoot?.querySelector<HTMLElement>('[data-hud="combatEnemyStrip"]');
+    if (stripElement) {
+      stripElement.dataset.enemyKey = '';
+      stripElement.dataset.stripAnimation = '';
+    }
+
     this.enemyHudStripPlayback = null;
   }
 
@@ -4568,9 +4583,30 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.playPlayerStripAnimation(animation, true);
+    this.triggerPlayerStripAccent(animation, durationMs);
     this.playerStripActionTimer = this.time.delayedCall(durationMs, () => {
       this.playerStripActionTimer = null;
       this.playPlayerStripAnimation('idle', true);
+    });
+  }
+
+  private triggerPlayerStripAccent(animation: Exclude<StripAnimationName, 'idle'>, durationMs: number): void {
+    if (!this.player) {
+      return;
+    }
+
+    if (this.playerStripAccentTimer) {
+      this.playerStripAccentTimer.remove(false);
+      this.playerStripAccentTimer = null;
+    }
+
+    const tint = animation === 'hit' ? 0xff8c8c : 0x8cb8ff;
+    this.player.setTint(tint);
+    const clearDelay = Math.max(90, Math.min(220, Math.round(durationMs * 0.45)));
+
+    this.playerStripAccentTimer = this.time.delayedCall(clearDelay, () => {
+      this.playerStripAccentTimer = null;
+      this.player.clearTint();
     });
   }
 
@@ -5218,7 +5254,7 @@ export class GameScene extends Phaser.Scene {
     const playerStrip = this.getStripManifestEntry('player-hero');
     const playerTimings = this.getStripPlayerTimings(playerStrip);
 
-    if (action === 'attack' || action === 'defend') {
+    if (action === 'attack' || action === 'sunder' || action === 'interrupt') {
       this.triggerPlayerStripAction('hit', playerTimings.hitDurationMs);
       return;
     }

@@ -1922,6 +1922,19 @@ body::before {
   image-rendering: auto;
   border-color: rgba(127, 209, 199, 0.34);
   background: radial-gradient(circle at 30% 30%, rgba(127, 209, 199, 0.18), rgba(3, 7, 12, 0.82));
+  transition: transform 150ms ease, filter 150ms ease, box-shadow 150ms ease;
+}
+
+.combat-enemy-visual img[data-visual-type="portrait"][data-visual-state="hit"] {
+  transform: scale(1.08);
+  filter: saturate(1.2);
+  box-shadow: 0 0 0 1px rgba(242, 111, 111, 0.32), 0 0 14px rgba(242, 111, 111, 0.28);
+}
+
+.combat-enemy-visual img[data-visual-type="portrait"][data-visual-state="cast"] {
+  transform: scale(1.05);
+  filter: saturate(1.14);
+  box-shadow: 0 0 0 1px rgba(226, 182, 109, 0.34), 0 0 14px rgba(226, 182, 109, 0.28);
 }
 
 .combat-enemy-strip {
@@ -1931,6 +1944,50 @@ body::before {
   border: 1px solid rgba(185, 195, 212, 0.22);
   background-color: rgba(3, 7, 12, 0.75);
   image-rendering: pixelated;
+  transform-origin: center;
+  transition: transform 150ms ease, filter 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+}
+
+.combat-enemy-strip[data-strip-animation="idle"] {
+  border-color: rgba(185, 195, 212, 0.22);
+}
+
+.combat-enemy-strip[data-strip-animation="cast"] {
+  border-color: rgba(226, 182, 109, 0.5);
+  box-shadow: 0 0 0 1px rgba(226, 182, 109, 0.22), 0 0 12px rgba(226, 182, 109, 0.24);
+  animation: combat-enemy-strip-cast 0.55s ease-in-out infinite alternate;
+}
+
+.combat-enemy-strip[data-strip-animation="hit"] {
+  border-color: rgba(242, 111, 111, 0.55);
+  box-shadow: 0 0 0 1px rgba(242, 111, 111, 0.25), 0 0 14px rgba(242, 111, 111, 0.28);
+  animation: combat-enemy-strip-hit 0.26s ease-out infinite alternate;
+}
+
+@keyframes combat-enemy-strip-cast {
+  0% {
+    transform: scale(1);
+    filter: saturate(1);
+  }
+  100% {
+    transform: scale(1.06);
+    filter: saturate(1.18);
+  }
+}
+
+@keyframes combat-enemy-strip-hit {
+  0% {
+    transform: translateX(0) scale(1);
+    filter: saturate(1.06);
+  }
+  50% {
+    transform: translateX(1px) scale(1.08);
+    filter: saturate(1.24);
+  }
+  100% {
+    transform: translateX(-1px) scale(1.02);
+    filter: saturate(1.1);
+  }
 }
 
 .combat-enemy-visual span {

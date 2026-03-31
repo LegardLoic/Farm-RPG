@@ -318,3 +318,15 @@ test('combat preparation loop panel wiring exists for lot 95', () => {
   assert.equal(stylesSource.includes('.hud-loop-button'), true);
   assert.equal(stylesSource.includes('.hud-loop-error'), true);
 });
+
+test('animation polish wiring exists for lot 97', () => {
+  assert.equal(gameSceneSource.includes("if (action === 'attack' || action === 'sunder' || action === 'interrupt')"), true);
+  assert.equal(gameSceneSource.includes('private triggerPlayerStripAccent(animation: Exclude<StripAnimationName, \'idle\'>, durationMs: number): void'), true);
+  assert.equal(gameSceneSource.includes('this.player.setTint(tint);'), true);
+  assert.equal(stylesSource.includes('.combat-enemy-strip[data-strip-animation="cast"]'), true);
+  assert.equal(stylesSource.includes('.combat-enemy-strip[data-strip-animation="hit"]'), true);
+  assert.equal(stylesSource.includes('@keyframes combat-enemy-strip-cast'), true);
+  assert.equal(stylesSource.includes('@keyframes combat-enemy-strip-hit'), true);
+  assert.equal(stylesSource.includes('.combat-enemy-visual img[data-visual-type="portrait"][data-visual-state="hit"]'), true);
+  assert.equal(stylesSource.includes('.combat-enemy-visual img[data-visual-type="portrait"][data-visual-state="cast"]'), true);
+});

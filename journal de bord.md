@@ -1481,6 +1481,31 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - checklist manuelle verticale (intro, farm, crafting, prep combat, start combat, save/load, HUD)
   - Definition of Done explicite du gate.
 
+### Lot 97 - Review animation: peaufinage hero/boss (timings + lisibilite)
+- Assets/tuning strips:
+  - retuning des sequences `idle/hit/cast` dans `manifest.json` pour:
+    - meilleure lecture des impacts (`hit`)
+    - meilleur maintien des phases de cast (`cast`)
+    - idle moins hache sur hero + boss.
+  - retuning des timings hero et boss (fps/interval/duration) pour rendre les beats plus lisibles.
+- Runtime frontend:
+  - mapping actions hero ajuste:
+    - `attack/sunder/interrupt` -> profil `hit`
+    - autres skills -> profil `cast`
+  - accent visuel hero en combat:
+    - tint rouge sur impact
+    - tint bleu sur cast
+    - clear automatique court pour eviter les etats bloques.
+  - nettoyage du dataset strip HUD a l'arret pour eviter la persistance de style stale.
+- UI/CSS:
+  - etats visuels explicites sur strip HUD ennemi:
+    - `data-strip-animation="cast"` (glow/pulse)
+    - `data-strip-animation="hit"` (impact/shake)
+  - etats portraits fallback:
+    - `data-visual-state="hit"` et `cast` avec accent de lisibilite.
+- QA:
+  - regression web etendue avec assertions lot 97 (mapping action + selectors CSS + keyframes).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1570,6 +1595,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - panneau Farm Crafting (recettes recoltes -> consommables combat)
   - panneau Combat Loop (stage vertical + preparation combat one-shot)
   - cycle jour/nuit MVP + action `Sleep (+1 day)` sur la ferme
+  - animation review lot 97: accents visuels strips/portraits + timings hero/boss retunes
 - Chargement web optimise:
   - entree legere
   - bootstrap asynchrone
@@ -1666,13 +1692,13 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
-2. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
-3. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
-4. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
-5. Lot 101 - Quetes narratives village: premieres micro-quetes dialoguees reliees aux etats PNJ.
-6. Lot 102 - Premiere passe dialogues contextuels PNJ relies au tier de relation.
-7. Lot 103 - Hook scenario ferme: premiers evenements declenches par jour + progression recoltes.
-8. Lot 104 - Trigger scenario tour: premiers beats narratifs relies aux paliers 3/5/8/10.
+1. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
+2. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
+3. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
+4. Lot 101 - Quetes narratives village: premieres micro-quetes dialoguees reliees aux etats PNJ.
+5. Lot 102 - Premiere passe dialogues contextuels PNJ relies au tier de relation.
+6. Lot 103 - Hook scenario ferme: premiers evenements declenches par jour + progression recoltes.
+7. Lot 104 - Trigger scenario tour: premiers beats narratifs relies aux paliers 3/5/8/10.
+8. Lot 105 - Passe accessibilite HUD combat (contraste, focus, lisibilite mobile).
 
 
