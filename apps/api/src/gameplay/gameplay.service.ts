@@ -108,11 +108,18 @@ export class GameplayService {
 
   async getVillageState(userId: string): Promise<GameplayVillageState> {
     const flags = new Set(await this.getWorldFlags(userId));
+    const blacksmithUnlocked = flags.has('blacksmith_shop_tier_1_unlocked');
+    const blacksmithCurseLifted = flags.has('blacksmith_curse_lifted');
 
     return {
       blacksmith: {
-        unlocked: flags.has('blacksmith_shop_tier_1_unlocked'),
-        curseLifted: flags.has('blacksmith_curse_lifted'),
+        unlocked: blacksmithUnlocked,
+        curseLifted: blacksmithCurseLifted,
+      },
+      npcs: {
+        mayor: this.resolveMayorNpcState(flags),
+        blacksmith: this.resolveBlacksmithNpcState(flags, blacksmithUnlocked, blacksmithCurseLifted),
+        merchant: this.resolveMerchantNpcState(flags),
       },
     };
   }
@@ -258,6 +265,106 @@ export class GameplayService {
         metMayor,
         farmAssigned,
       },
+    };
+  }
+
+  private resolveMayorNpcState(flags: Set<string>): GameplayVillageState['npcs']['mayor'] {
+    const arrivedVillage = flags.has(INTRO_FLAG_ARRIVED_VILLAGE);
+    const metMayor = flags.has(INTRO_FLAG_MET_MAYOR);
+    const farmAssigned = flags.has(INTRO_FLAG_FARM_ASSIGNED);
+    const reachedStoryFloor5 = flags.has('story_floor_5_cleared');
+
+    if (!arrivedVillage) {
+      return {
+        stateKey: 'offscreen',
+        available: false,
+      };
+    }
+
+    if (!metMayor) {
+      return {
+        stateKey: 'awaiting_meeting',
+        available: true,
+      };
+    }
+
+    if (!farmAssigned) {
+      return {
+        stateKey: 'briefing',
+        available: true,
+      };
+    }
+
+    if (!reachedStoryFloor5) {
+      return {
+        stateKey: 'village_overseer',
+        available: true,
+      };
+    }
+
+    return {
+      stateKey: 'tower_strategist',
+      available: true,
+    };
+  }
+
+  private resolveBlacksmithNpcState(
+    flags: Set<string>,
+    unlocked: boolean,
+    curseLifted: boolean,
+  ): GameplayVillageState['npcs']['blacksmith'] {
+    if (!curseLifted) {
+      return {
+        stateKey: 'cursed',
+        available: false,
+      };
+    }
+
+    if (!unlocked) {
+      return {
+        stateKey: 'recovering',
+        available: false,
+      };
+    }
+
+    if (flags.has('story_floor_8_cleared')) {
+      return {
+        stateKey: 'masterwork_ready',
+        available: true,
+      };
+    }
+
+    return {
+      stateKey: 'open',
+      available: true,
+    };
+  }
+
+  private resolveMerchantNpcState(flags: Set<string>): GameplayVillageState['npcs']['merchant'] {
+    if (!flags.has(INTRO_FLAG_FARM_ASSIGNED)) {
+      return {
+        stateKey: 'absent',
+        available: false,
+      };
+    }
+
+    if (!flags.has('floor_3_cleared')) {
+      return {
+        stateKey: 'setting_stall',
+        available: false,
+      };
+    }
+
+    if (!flags.has('story_floor_5_cleared')) {
+      return {
+        stateKey: 'open',
+        available: true,
+      };
+    }
+
+    return {
+      stateKey: 'traveling_buyer',
+      available: true,
     };
   }
 }

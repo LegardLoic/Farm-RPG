@@ -218,6 +218,7 @@ body::before {
 .hud-auth,
 .hud-hero-profile,
 .hud-intro,
+.hud-village-npcs,
 .hud-combat,
 .hud-quests,
 .hud-blacksmith,
@@ -315,6 +316,12 @@ body::before {
 }
 
 .hud-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hud-village-npcs {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -595,6 +602,13 @@ body::before {
   gap: 12px;
 }
 
+.hud-village-npcs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
 .hud-hero-profile-header span {
   font-size: 0.76rem;
   text-transform: uppercase;
@@ -609,6 +623,13 @@ body::before {
   color: var(--muted);
 }
 
+.hud-village-npcs-header span {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
 .hud-hero-profile-header strong {
   font-size: 0.75rem;
   color: var(--accent-2);
@@ -617,6 +638,11 @@ body::before {
 .hud-intro-header strong {
   font-size: 0.75rem;
   color: var(--accent);
+}
+
+.hud-village-npcs-header strong {
+  font-size: 0.75rem;
+  color: var(--accent-2);
 }
 
 .hud-hero-profile-field {
@@ -645,6 +671,36 @@ body::before {
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--accent-2);
+}
+
+.hud-village-npc-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.hud-village-npc-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(185, 195, 212, 0.18);
+  background: rgba(6, 10, 16, 0.38);
+}
+
+.hud-village-npc-line span {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.hud-village-npc-line strong {
+  font-size: 0.75rem;
+  color: #d6e3f5;
+  text-align: right;
 }
 
 .hud-intro-actions {

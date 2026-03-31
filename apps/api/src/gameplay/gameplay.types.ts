@@ -19,6 +19,16 @@ export interface GameplayVillageState {
     unlocked: boolean;
     curseLifted: boolean;
   };
+  npcs: {
+    mayor: GameplayVillageNpcState;
+    blacksmith: GameplayVillageNpcState;
+    merchant: GameplayVillageNpcState;
+  };
+}
+
+export interface GameplayVillageNpcState {
+  stateKey: string;
+  available: boolean;
 }
 
 export type GameplayIntroStepKey =
