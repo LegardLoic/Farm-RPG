@@ -281,7 +281,7 @@ function createProfileDatabaseStub(initialProfile = null) {
   };
 }
 
-function createGameplayDatabaseStub(initialFlags = [], initialFarmPlots = []) {
+function createGameplayDatabaseStub(initialFlags = [], initialFarmPlots = [], initialInventory = {}) {
   const state = {
     worldFlags: new Set(initialFlags),
     world: {
@@ -289,6 +289,7 @@ function createGameplayDatabaseStub(initialFlags = [], initialFarmPlots = []) {
       day: 1,
     },
     farmPlots: new Map(),
+    inventory: new Map(Object.entries(initialInventory)),
   };
 
   for (const plot of initialFarmPlots) {
@@ -306,6 +307,12 @@ function createGameplayDatabaseStub(initialFlags = [], initialFarmPlots = []) {
   const executeQuery = async (text, values = []) => {
     if (text.includes('INSERT INTO world_state')) {
       return { rows: [] };
+    }
+
+    if (text.includes('SELECT zone, day') && text.includes('FROM world_state')) {
+      return {
+        rows: [{ ...state.world }],
+      };
     }
 
     if (text.includes('SELECT flag_key') && text.includes('FROM world_flags')) {
@@ -347,11 +354,95 @@ function createGameplayDatabaseStub(initialFlags = [], initialFarmPlots = []) {
       return { rows: [] };
     }
 
+    if (
+      text.includes('SELECT plot_key, row_index, col_index, crop_key, planted_day, growth_days, watered_today') &&
+      text.includes('AND plot_key = $2') &&
+      text.includes('FOR UPDATE')
+    ) {
+      const plotKey = values[1];
+      const row = state.farmPlots.get(plotKey);
+      return {
+        rows: row ? [{ ...row }] : [],
+      };
+    }
+
+    if (text.includes('UPDATE farm_plots') && text.includes('SET crop_key = $3')) {
+      const plotKey = values[1];
+      const row = state.farmPlots.get(plotKey);
+      if (row) {
+        row.crop_key = values[2];
+        row.planted_day = values[3];
+        row.growth_days = values[4];
+        row.watered_today = false;
+      }
+      return { rows: [] };
+    }
+
+    if (text.includes('UPDATE farm_plots') && text.includes('SET watered_today = TRUE')) {
+      const plotKey = values[1];
+      const row = state.farmPlots.get(plotKey);
+      if (row) {
+        row.watered_today = true;
+      }
+      return { rows: [] };
+    }
+
+    if (text.includes('UPDATE farm_plots') && text.includes('SET crop_key = NULL')) {
+      const plotKey = values[1];
+      const row = state.farmPlots.get(plotKey);
+      if (row) {
+        row.crop_key = null;
+        row.planted_day = null;
+        row.growth_days = null;
+        row.watered_today = false;
+      }
+      return { rows: [] };
+    }
+
     if (text.includes('SELECT plot_key, row_index, col_index, crop_key, planted_day, growth_days, watered_today')) {
       const rows = Array.from(state.farmPlots.values())
         .sort((left, right) => left.row_index - right.row_index || left.col_index - right.col_index)
         .map((entry) => ({ ...entry }));
       return { rows };
+    }
+
+    if (text.includes('SELECT item_key, quantity') && text.includes('FROM inventory_items') && text.includes('FOR UPDATE')) {
+      const itemKey = values[1];
+      const quantity = state.inventory.get(itemKey);
+      if (typeof quantity !== 'number') {
+        return { rows: [] };
+      }
+
+      return {
+        rows: [{ item_key: itemKey, quantity }],
+      };
+    }
+
+    if (text.includes('UPDATE inventory_items') && text.includes('SET quantity = $3')) {
+      const itemKey = values[1];
+      const quantity = values[2];
+      if (quantity > 0) {
+        state.inventory.set(itemKey, quantity);
+      } else {
+        state.inventory.delete(itemKey);
+      }
+      return { rows: [] };
+    }
+
+    if (text.includes('DELETE FROM inventory_items')) {
+      const itemKey = values[1];
+      state.inventory.delete(itemKey);
+      return { rows: [] };
+    }
+
+    if (text.includes('INSERT INTO inventory_items')) {
+      const itemKey = values[1];
+      const quantity = values[2];
+      const nextQuantity = (state.inventory.get(itemKey) ?? 0) + quantity;
+      state.inventory.set(itemKey, nextQuantity);
+      return {
+        rows: [{ item_key: itemKey, quantity: nextQuantity }],
+      };
     }
 
     throw new Error(`Unexpected gameplay query: ${text}`);
@@ -1055,4 +1146,78 @@ test('gameplay farm state computes growth timers and ready-to-harvest summary', 
   assert.equal(growingCarrot?.growthProgressDays, 1);
   assert.equal(growingCarrot?.daysToMaturity, 2);
   assert.equal(farm.cropCatalog.find((entry) => entry.cropKey === 'wheat')?.unlocked, true);
+});
+
+test('gameplay farm plant consumes seed and writes planted crop state', async () => {
+  const db = createGameplayDatabaseStub(['intro_farm_assigned'], [], {
+    turnip_seed: 2,
+  });
+  const service = new GameplayService(db);
+
+  const result = await service.plantFarmPlot('user-1', 'plot_r1_c1', 'turnip_seed');
+  const plantedPlot = result.farm.plots.find((plot) => plot.plotKey === 'plot_r1_c1');
+
+  assert.equal(result.plant.cropKey, 'turnip');
+  assert.equal(result.plant.remainingSeedQuantity, 1);
+  assert.equal(db.state.inventory.get('turnip_seed'), 1);
+  assert.equal(plantedPlot?.cropKey, 'turnip');
+  assert.equal(plantedPlot?.plantedDay, 1);
+  assert.equal(plantedPlot?.growthDays, 2);
+  assert.equal(plantedPlot?.readyToHarvest, false);
+});
+
+test('gameplay farm water marks planted plot as watered for current day', async () => {
+  const db = createGameplayDatabaseStub(
+    ['intro_farm_assigned'],
+    [
+      {
+        plot_key: 'plot_r1_c1',
+        row_index: 1,
+        col_index: 1,
+        crop_key: 'turnip',
+        planted_day: 1,
+        growth_days: 2,
+        watered_today: false,
+      },
+    ],
+  );
+  const service = new GameplayService(db);
+
+  const result = await service.waterFarmPlot('user-1', 'plot_r1_c1');
+  const wateredPlot = result.farm.plots.find((plot) => plot.plotKey === 'plot_r1_c1');
+
+  assert.equal(result.water.cropKey, 'turnip');
+  assert.equal(result.water.wateredToday, true);
+  assert.equal(wateredPlot?.wateredToday, true);
+});
+
+test('gameplay farm harvest grants crop item and resets plot', async () => {
+  const db = createGameplayDatabaseStub(
+    ['intro_farm_assigned'],
+    [
+      {
+        plot_key: 'plot_r1_c1',
+        row_index: 1,
+        col_index: 1,
+        crop_key: 'turnip',
+        planted_day: 1,
+        growth_days: 2,
+        watered_today: true,
+      },
+    ],
+    {},
+  );
+  db.state.world.day = 3;
+  const service = new GameplayService(db);
+
+  const result = await service.harvestFarmPlot('user-1', 'plot_r1_c1');
+  const harvestedPlot = result.farm.plots.find((plot) => plot.plotKey === 'plot_r1_c1');
+
+  assert.equal(result.harvest.cropKey, 'turnip');
+  assert.equal(result.harvest.harvestItemKey, 'turnip');
+  assert.equal(result.harvest.totalHarvestItemQuantity, 1);
+  assert.equal(db.state.inventory.get('turnip'), 1);
+  assert.equal(harvestedPlot?.cropKey, null);
+  assert.equal(harvestedPlot?.plantedDay, null);
+  assert.equal(harvestedPlot?.wateredToday, false);
 });

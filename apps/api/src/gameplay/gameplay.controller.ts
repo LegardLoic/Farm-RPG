@@ -1,9 +1,12 @@
-import { Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/auth.types';
 import { GameplayService } from './gameplay.service';
 import { TowerService } from '../tower/tower.service';
+import { HarvestFarmPlotDto } from './dto/harvest-farm-plot.dto';
+import { PlantFarmPlotDto } from './dto/plant-farm-plot.dto';
+import { WaterFarmPlotDto } from './dto/water-farm-plot.dto';
 
 @Controller('gameplay')
 @UseGuards(AccessTokenGuard)
@@ -42,6 +45,37 @@ export class GameplayController {
     return {
       status: 'ok',
       intro,
+    };
+  }
+
+  @Post('farm/plant')
+  async plantFarmPlot(@Req() req: AuthenticatedRequest, @Body() body: PlantFarmPlotDto) {
+    const result = await this.gameplayService.plantFarmPlot(
+      req.authUser!.id,
+      body.plotKey,
+      body.seedItemKey,
+    );
+    return {
+      status: 'ok',
+      ...result,
+    };
+  }
+
+  @Post('farm/water')
+  async waterFarmPlot(@Req() req: AuthenticatedRequest, @Body() body: WaterFarmPlotDto) {
+    const result = await this.gameplayService.waterFarmPlot(req.authUser!.id, body.plotKey);
+    return {
+      status: 'ok',
+      ...result,
+    };
+  }
+
+  @Post('farm/harvest')
+  async harvestFarmPlot(@Req() req: AuthenticatedRequest, @Body() body: HarvestFarmPlotDto) {
+    const result = await this.gameplayService.harvestFarmPlot(req.authUser!.id, body.plotKey);
+    return {
+      status: 'ok',
+      ...result,
     };
   }
 }

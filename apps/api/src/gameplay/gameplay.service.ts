@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 
 import { DatabaseService } from '../database/database.service';
 import type { TransactionClient } from '../database/database.service';
+import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
 import {
   BASE_PLAYER_CURRENT_HP,
   BASE_PLAYER_CURRENT_MP,
@@ -26,7 +27,10 @@ import {
   xpRequiredForLevel,
 } from './gameplay.constants';
 import type {
+  GameplayFarmHarvestResult,
+  GameplayFarmPlantResult,
   GameplayFarmState,
+  GameplayFarmWaterResult,
   GameplayIntroState,
   GameplayVillageState,
   GameplayWorldState,
@@ -61,6 +65,11 @@ type FarmPlotRow = {
   planted_day: number | null;
   growth_days: number | null;
   watered_today: boolean;
+};
+
+type InventoryRow = {
+  item_key: string;
+  quantity: number;
 };
 
 type QueryExecutor = Pick<DatabaseService, 'query'> | TransactionClient;
@@ -183,72 +192,176 @@ export class GameplayService {
   }
 
   async getFarmState(userId: string, currentDay?: number): Promise<GameplayFarmState> {
-    const worldFlags = new Set(await this.getWorldFlags(userId));
-    const unlocked = worldFlags.has(INTRO_FLAG_FARM_ASSIGNED);
     await this.ensureFarmPlots(this.databaseService, userId);
+    const worldFlags = new Set(await this.getWorldFlags(userId));
     const day = typeof currentDay === 'number' && Number.isFinite(currentDay) && currentDay > 0
       ? Math.floor(currentDay)
       : (await this.getWorldState(userId)).day;
 
-    const plotsResult = await this.databaseService.query<FarmPlotRow>(
-      `
-        SELECT plot_key, row_index, col_index, crop_key, planted_day, growth_days, watered_today
-        FROM ${FARM_PLOTS_TABLE}
-        WHERE user_id = $1
-        ORDER BY row_index ASC, col_index ASC
-      `,
-      [userId],
-    );
+    return this.getFarmStateWithExecutor(this.databaseService, userId, worldFlags, day);
+  }
 
-    const plots = plotsResult.rows.map((row) => {
-      const plantedDay = typeof row.planted_day === 'number' && row.planted_day > 0
-        ? Math.floor(row.planted_day)
-        : null;
-      const growthDays = typeof row.growth_days === 'number' && row.growth_days > 0
-        ? Math.floor(row.growth_days)
-        : null;
-      const growthProgressDays = plantedDay !== null
-        ? Math.max(0, day - plantedDay)
-        : 0;
-      const daysToMaturity = growthDays !== null
-        ? Math.max(0, growthDays - growthProgressDays)
-        : null;
-      const readyToHarvest = growthDays !== null && growthProgressDays >= growthDays;
+  async plantFarmPlot(userId: string, plotKey: string, seedItemKey: string): Promise<{
+    plant: GameplayFarmPlantResult;
+    farm: GameplayFarmState;
+  }> {
+    return this.databaseService.withTransaction(async (tx) => {
+      await this.ensureWorldState(tx, userId);
+      await this.ensureFarmPlots(tx, userId);
 
+      const worldFlags = new Set(await this.getWorldFlags(userId, tx));
+      this.assertFarmUnlocked(worldFlags);
+
+      const world = await this.getWorldStateForUpdate(tx, userId);
+      const plot = await this.getFarmPlotForUpdate(tx, userId, plotKey);
+      if (!plot) {
+        throw new NotFoundException(`Farm plot not found: ${plotKey}`);
+      }
+      if (plot.crop_key) {
+        throw new BadRequestException(`Plot ${plotKey} is already planted`);
+      }
+
+      const crop = this.resolveCropBySeedItem(seedItemKey, worldFlags);
+      const seedRow = await this.getInventoryItemForUpdate(tx, userId, seedItemKey);
+      if (!seedRow || seedRow.quantity < 1) {
+        throw new BadRequestException(`Missing seed item: ${seedItemKey}`);
+      }
+
+      const remainingSeedQuantity = seedRow.quantity - 1;
+      await this.setInventoryItemQuantity(tx, userId, seedItemKey, remainingSeedQuantity);
+
+      await tx.query(
+        `
+          UPDATE ${FARM_PLOTS_TABLE}
+          SET crop_key = $3,
+              planted_day = $4,
+              growth_days = $5,
+              watered_today = FALSE,
+              updated_at = NOW()
+          WHERE user_id = $1
+            AND plot_key = $2
+        `,
+        [userId, plotKey, crop.cropKey, world.day, crop.growthDays],
+      );
+
+      const farm = await this.getFarmStateWithExecutor(tx, userId, worldFlags, world.day);
       return {
-        plotKey: row.plot_key,
-        row: Math.max(1, Math.floor(row.row_index)),
-        col: Math.max(1, Math.floor(row.col_index)),
-        cropKey: row.crop_key,
-        plantedDay,
-        growthDays,
-        wateredToday: Boolean(row.watered_today),
-        growthProgressDays,
-        daysToMaturity,
-        readyToHarvest,
+        plant: {
+          plotKey,
+          seedItemKey,
+          cropKey: crop.cropKey,
+          plantedDay: world.day,
+          growthDays: crop.growthDays,
+          remainingSeedQuantity,
+        },
+        farm,
       };
     });
+  }
 
-    const plantedPlots = plots.filter((plot) => plot.cropKey !== null).length;
-    const wateredPlots = plots.filter((plot) => plot.wateredToday).length;
-    const readyPlots = plots.filter((plot) => plot.readyToHarvest).length;
+  async waterFarmPlot(userId: string, plotKey: string): Promise<{
+    water: GameplayFarmWaterResult;
+    farm: GameplayFarmState;
+  }> {
+    return this.databaseService.withTransaction(async (tx) => {
+      await this.ensureWorldState(tx, userId);
+      await this.ensureFarmPlots(tx, userId);
 
-    return {
-      unlocked,
-      totalPlots: plots.length,
-      plantedPlots,
-      wateredPlots,
-      readyPlots,
-      cropCatalog: FARM_CROP_CATALOG.map((crop) => ({
-        cropKey: crop.cropKey,
-        seedItemKey: crop.seedItemKey,
-        harvestItemKey: crop.harvestItemKey,
-        growthDays: crop.growthDays,
-        requiredFlags: [...crop.requiredFlags],
-        unlocked: crop.requiredFlags.every((flag) => worldFlags.has(flag)),
-      })),
-      plots,
-    };
+      const worldFlags = new Set(await this.getWorldFlags(userId, tx));
+      this.assertFarmUnlocked(worldFlags);
+
+      const world = await this.getWorldStateForUpdate(tx, userId);
+      const plot = await this.getFarmPlotForUpdate(tx, userId, plotKey);
+      if (!plot) {
+        throw new NotFoundException(`Farm plot not found: ${plotKey}`);
+      }
+      if (!plot.crop_key) {
+        throw new BadRequestException(`Plot ${plotKey} is empty`);
+      }
+      if (plot.watered_today) {
+        throw new BadRequestException(`Plot ${plotKey} is already watered today`);
+      }
+
+      await tx.query(
+        `
+          UPDATE ${FARM_PLOTS_TABLE}
+          SET watered_today = TRUE,
+              updated_at = NOW()
+          WHERE user_id = $1
+            AND plot_key = $2
+        `,
+        [userId, plotKey],
+      );
+
+      const farm = await this.getFarmStateWithExecutor(tx, userId, worldFlags, world.day);
+      return {
+        water: {
+          plotKey,
+          cropKey: plot.crop_key,
+          wateredToday: true,
+          day: world.day,
+        },
+        farm,
+      };
+    });
+  }
+
+  async harvestFarmPlot(userId: string, plotKey: string): Promise<{
+    harvest: GameplayFarmHarvestResult;
+    farm: GameplayFarmState;
+  }> {
+    return this.databaseService.withTransaction(async (tx) => {
+      await this.ensureWorldState(tx, userId);
+      await this.ensureFarmPlots(tx, userId);
+
+      const worldFlags = new Set(await this.getWorldFlags(userId, tx));
+      this.assertFarmUnlocked(worldFlags);
+
+      const world = await this.getWorldStateForUpdate(tx, userId);
+      const plot = await this.getFarmPlotForUpdate(tx, userId, plotKey);
+      if (!plot) {
+        throw new NotFoundException(`Farm plot not found: ${plotKey}`);
+      }
+      if (!plot.crop_key) {
+        throw new BadRequestException(`Plot ${plotKey} has no crop to harvest`);
+      }
+
+      const maturity = this.toFarmPlotMaturity(plot, world.day);
+      if (!maturity.readyToHarvest) {
+        throw new BadRequestException(
+          `Crop on ${plotKey} is not ready (${maturity.daysToMaturity ?? 0} day(s) remaining)`,
+        );
+      }
+
+      const crop = this.resolveCropByCropKey(plot.crop_key);
+      const inventoryRow = await this.addInventoryQuantity(tx, userId, crop.harvestItemKey, 1);
+
+      await tx.query(
+        `
+          UPDATE ${FARM_PLOTS_TABLE}
+          SET crop_key = NULL,
+              planted_day = NULL,
+              growth_days = NULL,
+              watered_today = FALSE,
+              updated_at = NOW()
+          WHERE user_id = $1
+            AND plot_key = $2
+        `,
+        [userId, plotKey],
+      );
+
+      const farm = await this.getFarmStateWithExecutor(tx, userId, worldFlags, world.day);
+      return {
+        harvest: {
+          plotKey,
+          cropKey: crop.cropKey,
+          harvestItemKey: crop.harvestItemKey,
+          quantityGained: 1,
+          totalHarvestItemQuantity: inventoryRow.quantity,
+        },
+        farm,
+      };
+    });
   }
 
   async advanceIntroState(userId: string): Promise<GameplayIntroState> {
@@ -324,6 +437,236 @@ export class GameplayService {
       `,
       values,
     );
+  }
+
+  private async getFarmStateWithExecutor(
+    executor: QueryExecutor,
+    userId: string,
+    worldFlags: Set<string>,
+    day: number,
+  ): Promise<GameplayFarmState> {
+    const plotsResult = await executor.query<FarmPlotRow>(
+      `
+        SELECT plot_key, row_index, col_index, crop_key, planted_day, growth_days, watered_today
+        FROM ${FARM_PLOTS_TABLE}
+        WHERE user_id = $1
+        ORDER BY row_index ASC, col_index ASC
+      `,
+      [userId],
+    );
+
+    const plots = plotsResult.rows.map((row) => this.toFarmPlotState(row, day));
+    const plantedPlots = plots.filter((plot) => plot.cropKey !== null).length;
+    const wateredPlots = plots.filter((plot) => plot.wateredToday).length;
+    const readyPlots = plots.filter((plot) => plot.readyToHarvest).length;
+
+    return {
+      unlocked: worldFlags.has(INTRO_FLAG_FARM_ASSIGNED),
+      totalPlots: plots.length,
+      plantedPlots,
+      wateredPlots,
+      readyPlots,
+      cropCatalog: FARM_CROP_CATALOG.map((crop) => ({
+        cropKey: crop.cropKey,
+        seedItemKey: crop.seedItemKey,
+        harvestItemKey: crop.harvestItemKey,
+        growthDays: crop.growthDays,
+        requiredFlags: [...crop.requiredFlags],
+        unlocked: crop.requiredFlags.every((flag) => worldFlags.has(flag)),
+      })),
+      plots,
+    };
+  }
+
+  private toFarmPlotState(row: FarmPlotRow, day: number): GameplayFarmState['plots'][number] {
+    const maturity = this.toFarmPlotMaturity(row, day);
+
+    return {
+      plotKey: row.plot_key,
+      row: Math.max(1, Math.floor(row.row_index)),
+      col: Math.max(1, Math.floor(row.col_index)),
+      cropKey: row.crop_key,
+      plantedDay: maturity.plantedDay,
+      growthDays: maturity.growthDays,
+      wateredToday: Boolean(row.watered_today),
+      growthProgressDays: maturity.growthProgressDays,
+      daysToMaturity: maturity.daysToMaturity,
+      readyToHarvest: maturity.readyToHarvest,
+    };
+  }
+
+  private toFarmPlotMaturity(
+    plot: Pick<FarmPlotRow, 'planted_day' | 'growth_days'>,
+    day: number,
+  ): {
+    plantedDay: number | null;
+    growthDays: number | null;
+    growthProgressDays: number;
+    daysToMaturity: number | null;
+    readyToHarvest: boolean;
+  } {
+    const plantedDay = typeof plot.planted_day === 'number' && plot.planted_day > 0
+      ? Math.floor(plot.planted_day)
+      : null;
+    const growthDays = typeof plot.growth_days === 'number' && plot.growth_days > 0
+      ? Math.floor(plot.growth_days)
+      : null;
+    const growthProgressDays = plantedDay !== null ? Math.max(0, day - plantedDay) : 0;
+    const daysToMaturity = growthDays !== null ? Math.max(0, growthDays - growthProgressDays) : null;
+    const readyToHarvest = growthDays !== null && growthProgressDays >= growthDays;
+
+    return {
+      plantedDay,
+      growthDays,
+      growthProgressDays,
+      daysToMaturity,
+      readyToHarvest,
+    };
+  }
+
+  private assertFarmUnlocked(worldFlags: Set<string>): void {
+    if (!worldFlags.has(INTRO_FLAG_FARM_ASSIGNED)) {
+      throw new ForbiddenException('Farm is locked');
+    }
+  }
+
+  private resolveCropBySeedItem(seedItemKey: string, worldFlags: Set<string>) {
+    const crop = FARM_CROP_CATALOG.find((entry) => entry.seedItemKey === seedItemKey);
+    if (!crop) {
+      throw new NotFoundException(`Unknown seed item: ${seedItemKey}`);
+    }
+    if (!crop.requiredFlags.every((flag) => worldFlags.has(flag))) {
+      throw new ForbiddenException(`Crop is locked for seed item: ${seedItemKey}`);
+    }
+
+    return crop;
+  }
+
+  private resolveCropByCropKey(cropKey: string) {
+    const crop = FARM_CROP_CATALOG.find((entry) => entry.cropKey === cropKey);
+    if (!crop) {
+      throw new NotFoundException(`Unknown crop key: ${cropKey}`);
+    }
+
+    return crop;
+  }
+
+  private async getWorldStateForUpdate(executor: TransactionClient, userId: string): Promise<GameplayWorldState> {
+    const result = await executor.query<WorldStateRow>(
+      `
+        SELECT zone, day
+        FROM ${WORLD_STATE_TABLE}
+        WHERE user_id = $1
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [userId],
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      return {
+        zone: BASE_WORLD_ZONE,
+        day: BASE_WORLD_DAY,
+      };
+    }
+
+    return {
+      zone: row.zone?.trim() ? row.zone.trim() : BASE_WORLD_ZONE,
+      day: Number.isFinite(row.day) && row.day > 0 ? Math.floor(row.day) : BASE_WORLD_DAY,
+    };
+  }
+
+  private async getFarmPlotForUpdate(
+    executor: TransactionClient,
+    userId: string,
+    plotKey: string,
+  ): Promise<FarmPlotRow | null> {
+    const result = await executor.query<FarmPlotRow>(
+      `
+        SELECT plot_key, row_index, col_index, crop_key, planted_day, growth_days, watered_today
+        FROM ${FARM_PLOTS_TABLE}
+        WHERE user_id = $1
+          AND plot_key = $2
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [userId, plotKey],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  private async getInventoryItemForUpdate(
+    executor: TransactionClient,
+    userId: string,
+    itemKey: string,
+  ): Promise<InventoryRow | null> {
+    const result = await executor.query<InventoryRow>(
+      `
+        SELECT item_key, quantity
+        FROM ${INVENTORY_ITEMS_TABLE}
+        WHERE user_id = $1
+          AND item_key = $2
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [userId, itemKey],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  private async setInventoryItemQuantity(
+    executor: TransactionClient,
+    userId: string,
+    itemKey: string,
+    quantity: number,
+  ): Promise<void> {
+    if (quantity > 0) {
+      await executor.query(
+        `
+          UPDATE ${INVENTORY_ITEMS_TABLE}
+          SET quantity = $3,
+              updated_at = NOW()
+          WHERE user_id = $1
+            AND item_key = $2
+        `,
+        [userId, itemKey, quantity],
+      );
+      return;
+    }
+
+    await executor.query(
+      `
+        DELETE FROM ${INVENTORY_ITEMS_TABLE}
+        WHERE user_id = $1
+          AND item_key = $2
+      `,
+      [userId, itemKey],
+    );
+  }
+
+  private async addInventoryQuantity(
+    executor: TransactionClient,
+    userId: string,
+    itemKey: string,
+    quantity: number,
+  ): Promise<InventoryRow> {
+    const result = await executor.query<InventoryRow>(
+      `
+        INSERT INTO ${INVENTORY_ITEMS_TABLE} (user_id, item_key, quantity)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (user_id, item_key)
+        DO UPDATE
+          SET quantity = ${INVENTORY_ITEMS_TABLE}.quantity + EXCLUDED.quantity,
+              updated_at = NOW()
+        RETURNING item_key, quantity
+      `,
+      [userId, itemKey, quantity],
+    );
+
+    return result.rows[0];
   }
 
   private async getWorldFlags(userId: string, executor: QueryExecutor = this.databaseService): Promise<string[]> {
