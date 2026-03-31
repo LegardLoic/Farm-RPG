@@ -17,6 +17,7 @@ import {
   INTRO_FLAG_FARM_ASSIGNED,
   INTRO_FLAG_MET_MAYOR,
   INTRO_PROGRESS_FLAGS,
+  FARM_CRAFT_RECIPES,
   FARM_CROP_CATALOG,
   FARM_PLOTS_TABLE,
   FARM_PLOT_LAYOUT,
@@ -28,6 +29,8 @@ import {
 } from './gameplay.constants';
 import type {
   GameplayFarmHarvestResult,
+  GameplayFarmCraftingState,
+  GameplayFarmCraftResult,
   GameplayFarmPlantResult,
   GameplayFarmState,
   GameplaySleepResult,
@@ -202,6 +205,66 @@ export class GameplayService {
     return this.getFarmStateWithExecutor(this.databaseService, userId, worldFlags, day);
   }
 
+  async getFarmCraftingState(userId: string): Promise<GameplayFarmCraftingState> {
+    await this.ensureFarmPlots(this.databaseService, userId);
+    const worldFlags = new Set(await this.getWorldFlags(userId));
+    return this.getFarmCraftingStateWithExecutor(this.databaseService, userId, worldFlags);
+  }
+
+  async craftFarmRecipe(userId: string, recipeKey: string, quantity: number): Promise<{
+    craft: GameplayFarmCraftResult;
+    crafting: GameplayFarmCraftingState;
+  }> {
+    return this.databaseService.withTransaction(async (tx) => {
+      await this.ensureWorldState(tx, userId);
+      await this.ensureFarmPlots(tx, userId);
+
+      const worldFlags = new Set(await this.getWorldFlags(userId, tx));
+      this.assertFarmUnlocked(worldFlags);
+
+      const parsedQuantity = Number.isFinite(quantity) ? Math.floor(quantity) : 1;
+      const safeQuantity = Math.max(1, parsedQuantity);
+      const recipe = this.resolveCraftRecipe(recipeKey, worldFlags);
+
+      const consumedIngredients: GameplayFarmCraftResult['consumedIngredients'] = [];
+      for (const ingredient of recipe.ingredients) {
+        const inventoryRow = await this.getInventoryItemForUpdate(tx, userId, ingredient.itemKey);
+        const requiredQuantity = ingredient.quantity * safeQuantity;
+        const availableQuantity = inventoryRow?.quantity ?? 0;
+        if (availableQuantity < requiredQuantity) {
+          throw new BadRequestException(
+            `Not enough ${ingredient.itemKey} (${requiredQuantity} required, ${availableQuantity} available)`,
+          );
+        }
+
+        const remainingQuantity = availableQuantity - requiredQuantity;
+        await this.setInventoryItemQuantity(tx, userId, ingredient.itemKey, remainingQuantity);
+        consumedIngredients.push({
+          itemKey: ingredient.itemKey,
+          quantityConsumed: requiredQuantity,
+          remainingQuantity,
+        });
+      }
+
+      const totalOutputQuantity = recipe.outputQuantity * safeQuantity;
+      const outputRow = await this.addInventoryQuantity(tx, userId, recipe.outputItemKey, totalOutputQuantity);
+      const crafting = await this.getFarmCraftingStateWithExecutor(tx, userId, worldFlags);
+
+      return {
+        craft: {
+          recipeKey: recipe.recipeKey,
+          craftedQuantity: safeQuantity,
+          outputItemKey: recipe.outputItemKey,
+          outputQuantityPerCraft: recipe.outputQuantity,
+          totalOutputQuantity,
+          totalOutputInventoryQuantity: outputRow.quantity,
+          consumedIngredients,
+        },
+        crafting,
+      };
+    });
+  }
+
   async plantFarmPlot(userId: string, plotKey: string, seedItemKey: string): Promise<{
     plant: GameplayFarmPlantResult;
     farm: GameplayFarmState;
@@ -369,6 +432,7 @@ export class GameplayService {
     sleep: GameplaySleepResult;
     world: GameplayWorldState;
     farm: GameplayFarmState;
+    crafting: GameplayFarmCraftingState;
   }> {
     return this.databaseService.withTransaction(async (tx) => {
       await this.ensureWorldState(tx, userId);
@@ -407,6 +471,7 @@ export class GameplayService {
         day: dayAfter,
       };
       const farm = await this.getFarmStateWithExecutor(tx, userId, worldFlags, dayAfter);
+      const crafting = await this.getFarmCraftingStateWithExecutor(tx, userId, worldFlags);
 
       return {
         sleep: {
@@ -415,6 +480,7 @@ export class GameplayService {
         },
         world,
         farm,
+        crafting,
       };
     });
   }
@@ -533,6 +599,55 @@ export class GameplayService {
     };
   }
 
+  private async getFarmCraftingStateWithExecutor(
+    executor: QueryExecutor,
+    userId: string,
+    worldFlags: Set<string>,
+  ): Promise<GameplayFarmCraftingState> {
+    const farmUnlocked = worldFlags.has(INTRO_FLAG_FARM_ASSIGNED);
+    if (!farmUnlocked) {
+      return {
+        unlocked: false,
+        recipes: [],
+        craftableRecipes: 0,
+      };
+    }
+
+    const ingredientKeys = [...new Set(FARM_CRAFT_RECIPES.flatMap((recipe) => recipe.ingredients.map((entry) => entry.itemKey)))];
+    const inventoryByItemKey = await this.getInventoryQuantitiesByItemKeys(executor, userId, ingredientKeys);
+
+    const recipes = FARM_CRAFT_RECIPES.map((recipe) => {
+      const unlocked = recipe.requiredFlags.every((flag) => worldFlags.has(flag));
+      const ingredients = recipe.ingredients.map((ingredient) => ({
+        itemKey: ingredient.itemKey,
+        requiredQuantity: ingredient.quantity,
+        ownedQuantity: inventoryByItemKey.get(ingredient.itemKey) ?? 0,
+      }));
+      const maxCraftable = ingredients.reduce((min, ingredient) => {
+        const craftableForIngredient = Math.floor(ingredient.ownedQuantity / ingredient.requiredQuantity);
+        return Math.min(min, craftableForIngredient);
+      }, Number.POSITIVE_INFINITY);
+
+      return {
+        recipeKey: recipe.recipeKey,
+        name: recipe.name,
+        description: recipe.description,
+        outputItemKey: recipe.outputItemKey,
+        outputQuantity: recipe.outputQuantity,
+        requiredFlags: [...recipe.requiredFlags],
+        unlocked,
+        ingredients,
+        maxCraftable: unlocked ? (Number.isFinite(maxCraftable) ? maxCraftable : 0) : 0,
+      };
+    });
+
+    return {
+      unlocked: true,
+      craftableRecipes: recipes.filter((recipe) => recipe.unlocked && recipe.maxCraftable > 0).length,
+      recipes,
+    };
+  }
+
   private toFarmPlotState(row: FarmPlotRow, day: number): GameplayFarmState['plots'][number] {
     const maturity = this.toFarmPlotMaturity(row, day);
 
@@ -583,6 +698,19 @@ export class GameplayService {
     if (!worldFlags.has(INTRO_FLAG_FARM_ASSIGNED)) {
       throw new ForbiddenException('Farm is locked');
     }
+  }
+
+  private resolveCraftRecipe(recipeKey: string, worldFlags: Set<string>) {
+    const recipe = FARM_CRAFT_RECIPES.find((entry) => entry.recipeKey === recipeKey);
+    if (!recipe) {
+      throw new NotFoundException(`Unknown farm craft recipe: ${recipeKey}`);
+    }
+
+    if (!recipe.requiredFlags.every((flag) => worldFlags.has(flag))) {
+      throw new ForbiddenException(`Farm craft recipe is locked: ${recipeKey}`);
+    }
+
+    return recipe;
   }
 
   private resolveCropBySeedItem(seedItemKey: string, worldFlags: Set<string>) {
@@ -722,6 +850,33 @@ export class GameplayService {
     );
 
     return result.rows[0];
+  }
+
+  private async getInventoryQuantitiesByItemKeys(
+    executor: QueryExecutor,
+    userId: string,
+    itemKeys: string[],
+  ): Promise<Map<string, number>> {
+    const inventoryByItemKey = new Map<string, number>();
+    if (itemKeys.length === 0) {
+      return inventoryByItemKey;
+    }
+
+    const result = await executor.query<InventoryRow>(
+      `
+        SELECT item_key, quantity
+        FROM ${INVENTORY_ITEMS_TABLE}
+        WHERE user_id = $1
+          AND item_key = ANY($2::text[])
+      `,
+      [userId, itemKeys],
+    );
+
+    for (const row of result.rows) {
+      inventoryByItemKey.set(row.item_key, row.quantity);
+    }
+
+    return inventoryByItemKey;
   }
 
   private async getWorldFlags(userId: string, executor: QueryExecutor = this.databaseService): Promise<string[]> {

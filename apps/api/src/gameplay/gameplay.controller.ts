@@ -4,6 +4,7 @@ import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/auth.types';
 import { GameplayService } from './gameplay.service';
 import { TowerService } from '../tower/tower.service';
+import { CraftFarmRecipeDto } from './dto/craft-farm-recipe.dto';
 import { HarvestFarmPlotDto } from './dto/harvest-farm-plot.dto';
 import { PlantFarmPlotDto } from './dto/plant-farm-plot.dto';
 import { WaterFarmPlotDto } from './dto/water-farm-plot.dto';
@@ -25,7 +26,10 @@ export class GameplayController {
       this.gameplayService.getWorldState(req.authUser!.id),
       this.gameplayService.getIntroState(req.authUser!.id),
     ]);
-    const farm = await this.gameplayService.getFarmState(req.authUser!.id, world.day);
+    const [farm, crafting] = await Promise.all([
+      this.gameplayService.getFarmState(req.authUser!.id, world.day),
+      this.gameplayService.getFarmCraftingState(req.authUser!.id),
+    ]);
 
     return {
       status: 'ok',
@@ -36,6 +40,7 @@ export class GameplayController {
       tower,
       intro,
       farm,
+      crafting,
     };
   }
 
@@ -51,6 +56,23 @@ export class GameplayController {
   @Post('sleep')
   async sleep(@Req() req: AuthenticatedRequest) {
     const result = await this.gameplayService.sleep(req.authUser!.id);
+    return {
+      status: 'ok',
+      ...result,
+    };
+  }
+
+  @Get('crafting')
+  async getFarmCrafting(@Req() req: AuthenticatedRequest) {
+    return {
+      status: 'ok',
+      crafting: await this.gameplayService.getFarmCraftingState(req.authUser!.id),
+    };
+  }
+
+  @Post('crafting/craft')
+  async craftFarmRecipe(@Req() req: AuthenticatedRequest, @Body() body: CraftFarmRecipeDto) {
+    const result = await this.gameplayService.craftFarmRecipe(req.authUser!.id, body.recipeKey, body.quantity);
     return {
       status: 'ok',
       ...result,

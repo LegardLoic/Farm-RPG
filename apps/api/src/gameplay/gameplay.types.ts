@@ -46,6 +46,30 @@ export interface GameplayFarmState {
   plots: GameplayFarmPlotState[];
 }
 
+export interface GameplayFarmCraftIngredientState {
+  itemKey: string;
+  requiredQuantity: number;
+  ownedQuantity: number;
+}
+
+export interface GameplayFarmCraftRecipeState {
+  recipeKey: string;
+  name: string;
+  description: string;
+  outputItemKey: string;
+  outputQuantity: number;
+  requiredFlags: string[];
+  unlocked: boolean;
+  ingredients: GameplayFarmCraftIngredientState[];
+  maxCraftable: number;
+}
+
+export interface GameplayFarmCraftingState {
+  unlocked: boolean;
+  recipes: GameplayFarmCraftRecipeState[];
+  craftableRecipes: number;
+}
+
 export interface GameplayFarmPlantResult {
   plotKey: string;
   seedItemKey: string;
@@ -73,6 +97,20 @@ export interface GameplayFarmHarvestResult {
 export interface GameplaySleepResult {
   dayBefore: number;
   dayAfter: number;
+}
+
+export interface GameplayFarmCraftResult {
+  recipeKey: string;
+  craftedQuantity: number;
+  outputItemKey: string;
+  outputQuantityPerCraft: number;
+  totalOutputQuantity: number;
+  totalOutputInventoryQuantity: number;
+  consumedIngredients: Array<{
+    itemKey: string;
+    quantityConsumed: number;
+    remainingQuantity: number;
+  }>;
 }
 
 export interface GameplayVillageState {

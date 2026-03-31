@@ -45,6 +45,21 @@ export type FarmCropDefinition = {
   requiredFlags: string[];
 };
 
+export type FarmCraftIngredientDefinition = {
+  itemKey: string;
+  quantity: number;
+};
+
+export type FarmCraftRecipeDefinition = {
+  recipeKey: string;
+  name: string;
+  description: string;
+  outputItemKey: string;
+  outputQuantity: number;
+  ingredients: FarmCraftIngredientDefinition[];
+  requiredFlags: string[];
+};
+
 export const FARM_CROP_CATALOG: FarmCropDefinition[] = [
   {
     cropKey: 'turnip',
@@ -65,6 +80,33 @@ export const FARM_CROP_CATALOG: FarmCropDefinition[] = [
     seedItemKey: 'wheat_seed',
     harvestItemKey: 'wheat',
     growthDays: 4,
+    requiredFlags: ['story_floor_5_cleared'],
+  },
+];
+
+export const FARM_CRAFT_RECIPES: FarmCraftRecipeDefinition[] = [
+  {
+    recipeKey: 'field_medicine',
+    name: 'Field Medicine',
+    description: 'Turnips and carrots pressed into a basic combat healing herb.',
+    outputItemKey: 'healing_herb',
+    outputQuantity: 1,
+    ingredients: [
+      { itemKey: 'turnip', quantity: 2 },
+      { itemKey: 'carrot', quantity: 1 },
+    ],
+    requiredFlags: [],
+  },
+  {
+    recipeKey: 'focus_tonic',
+    name: 'Focus Tonic',
+    description: 'A stronger village brew that restores focus and mana.',
+    outputItemKey: 'mana_tonic',
+    outputQuantity: 1,
+    ingredients: [
+      { itemKey: 'carrot', quantity: 2 },
+      { itemKey: 'wheat', quantity: 1 },
+    ],
     requiredFlags: ['story_floor_5_cleared'],
   },
 ];
