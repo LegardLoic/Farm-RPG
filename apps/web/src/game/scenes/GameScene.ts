@@ -291,6 +291,22 @@ type BlacksmithOfferState = {
   goldPrice: number;
 };
 
+type VillageSeedOfferState = {
+  offerKey: string;
+  itemKey: string;
+  name: string;
+  description: string;
+  goldPrice: number;
+};
+
+type VillageCropBuybackOfferState = {
+  itemKey: string;
+  name: string;
+  description: string;
+  goldValue: number;
+  ownedQuantity: number;
+};
+
 type AutoSaveState = {
   version: number;
   reason: string;
@@ -597,6 +613,10 @@ export class GameScene extends Phaser.Scene {
   private blacksmithSummaryValue: HTMLElement | null = null;
   private blacksmithOffersRoot: HTMLElement | null = null;
   private blacksmithErrorValue: HTMLElement | null = null;
+  private villageMarketSummaryValue: HTMLElement | null = null;
+  private villageMarketSeedsRoot: HTMLElement | null = null;
+  private villageMarketBuybackRoot: HTMLElement | null = null;
+  private villageMarketErrorValue: HTMLElement | null = null;
   private villageNpcSummaryValue: HTMLElement | null = null;
   private villageNpcMayorValue: HTMLElement | null = null;
   private villageNpcBlacksmithValue: HTMLElement | null = null;
@@ -657,6 +677,12 @@ export class GameScene extends Phaser.Scene {
   private blacksmithBusy = false;
   private blacksmithError: string | null = null;
   private blacksmithRenderSignature = '';
+  private villageMarketUnlocked = false;
+  private villageMarketSeedOffers: VillageSeedOfferState[] = [];
+  private villageMarketBuybackOffers: VillageCropBuybackOfferState[] = [];
+  private villageMarketBusy = false;
+  private villageMarketError: string | null = null;
+  private villageMarketRenderSignature = '';
   private villageNpcState: VillageNpcHudState = {
     mayor: { stateKey: 'offscreen', available: false },
     blacksmith: { stateKey: 'cursed', available: false },
@@ -792,6 +818,7 @@ export class GameScene extends Phaser.Scene {
     const combatAction = button.dataset.combatAction;
     const questAction = button.dataset.questAction;
     const shopAction = button.dataset.shopAction;
+    const marketAction = button.dataset.marketAction;
     const saveAction = button.dataset.saveAction;
     const profileAction = button.dataset.profileAction;
     const introAction = button.dataset.introAction;
@@ -843,6 +870,22 @@ export class GameScene extends Phaser.Scene {
       const offerKey = button.dataset.offerKey;
       if (offerKey) {
         void this.buyBlacksmithOffer(offerKey);
+      }
+      return;
+    }
+
+    if (marketAction === 'buy-seed') {
+      const offerKey = button.dataset.offerKey;
+      if (offerKey) {
+        void this.buyVillageSeedOffer(offerKey);
+      }
+      return;
+    }
+
+    if (marketAction === 'sell-crop') {
+      const itemKey = button.dataset.itemKey;
+      if (itemKey) {
+        void this.sellVillageCrop(itemKey);
       }
       return;
     }
@@ -1260,6 +1303,17 @@ export class GameScene extends Phaser.Scene {
           <div class="hud-blacksmith-error" data-hud="blacksmithError" hidden></div>
           <ul class="hud-blacksmith-list" data-hud="blacksmithOffers"></ul>
         </div>
+        <div class="hud-village-market">
+          <div class="hud-village-market-header">
+            <span>Village Market</span>
+            <strong data-hud="villageMarketSummary">Locked</strong>
+          </div>
+          <div class="hud-village-market-error" data-hud="villageMarketError" hidden></div>
+          <p class="hud-village-market-subtitle">Seeds</p>
+          <ul class="hud-village-market-list" data-hud="villageMarketSeedOffers"></ul>
+          <p class="hud-village-market-subtitle">Crop Buyback</p>
+          <ul class="hud-village-market-list" data-hud="villageMarketBuybackOffers"></ul>
+        </div>
         <div class="hud-autosave">
           <div class="hud-autosave-header">
             <span>Autosave</span>
@@ -1451,6 +1505,10 @@ export class GameScene extends Phaser.Scene {
     this.blacksmithSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="blacksmithSummary"]');
     this.blacksmithOffersRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="blacksmithOffers"]');
     this.blacksmithErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="blacksmithError"]');
+    this.villageMarketSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageMarketSummary"]');
+    this.villageMarketSeedsRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageMarketSeedOffers"]');
+    this.villageMarketBuybackRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageMarketBuybackOffers"]');
+    this.villageMarketErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageMarketError"]');
     this.villageNpcSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcSummary"]');
     this.villageNpcMayorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcMayor"]');
     this.villageNpcBlacksmithValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcBlacksmith"]');
@@ -1620,6 +1678,10 @@ export class GameScene extends Phaser.Scene {
     this.blacksmithSummaryValue = null;
     this.blacksmithOffersRoot = null;
     this.blacksmithErrorValue = null;
+    this.villageMarketSummaryValue = null;
+    this.villageMarketSeedsRoot = null;
+    this.villageMarketBuybackRoot = null;
+    this.villageMarketErrorValue = null;
     this.villageNpcSummaryValue = null;
     this.villageNpcMayorValue = null;
     this.villageNpcBlacksmithValue = null;
@@ -1683,6 +1745,12 @@ export class GameScene extends Phaser.Scene {
     this.debugQaExportMarkdownButton = null;
     this.questsRenderSignature = '';
     this.blacksmithRenderSignature = '';
+    this.villageMarketRenderSignature = '';
+    this.villageMarketUnlocked = false;
+    this.villageMarketSeedOffers = [];
+    this.villageMarketBuybackOffers = [];
+    this.villageMarketBusy = false;
+    this.villageMarketError = null;
     this.villageNpcState = {
       mayor: { stateKey: 'offscreen', available: false },
       blacksmith: { stateKey: 'cursed', available: false },
@@ -1740,6 +1808,7 @@ export class GameScene extends Phaser.Scene {
     this.updateQuestHud();
     this.updateVillageNpcHud();
     this.updateBlacksmithHud();
+    this.updateVillageMarketHud();
     this.updateAutoSaveHud();
     this.updateSaveSlotsHud();
     this.updateDebugQaHud();
@@ -1827,6 +1896,19 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.renderBlacksmithOffers();
+  }
+
+  private updateVillageMarketHud(): void {
+    if (this.villageMarketSummaryValue) {
+      this.villageMarketSummaryValue.textContent = this.getVillageMarketSummaryLabel();
+    }
+
+    if (this.villageMarketErrorValue) {
+      this.villageMarketErrorValue.hidden = !this.villageMarketError;
+      this.villageMarketErrorValue.textContent = this.villageMarketError ?? '';
+    }
+
+    this.renderVillageMarketOffers();
   }
 
   private updateAutoSaveHud(): void {
@@ -2685,6 +2767,136 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private renderVillageMarketOffers(): void {
+    const seedsRoot = this.villageMarketSeedsRoot;
+    const buybackRoot = this.villageMarketBuybackRoot;
+    if (!seedsRoot || !buybackRoot) {
+      return;
+    }
+
+    const signature = this.computeVillageMarketRenderSignature();
+    if (signature === this.villageMarketRenderSignature) {
+      return;
+    }
+    this.villageMarketRenderSignature = signature;
+
+    seedsRoot.replaceChildren();
+    buybackRoot.replaceChildren();
+
+    if (!this.isAuthenticated) {
+      const seedItem = document.createElement('li');
+      seedItem.classList.add('shop-item', 'empty');
+      seedItem.textContent = 'Connect to access seed offers.';
+      seedsRoot.appendChild(seedItem);
+
+      const buybackItem = document.createElement('li');
+      buybackItem.classList.add('shop-item', 'empty');
+      buybackItem.textContent = 'Connect to access crop buyback.';
+      buybackRoot.appendChild(buybackItem);
+      return;
+    }
+
+    if (!this.villageMarketUnlocked) {
+      const lockMessage = this.villageMarketBusy
+        ? 'Checking market unlock...'
+        : 'Market locked. Progress intro and floor milestones.';
+
+      const seedItem = document.createElement('li');
+      seedItem.classList.add('shop-item', 'empty');
+      seedItem.textContent = lockMessage;
+      seedsRoot.appendChild(seedItem);
+
+      const buybackItem = document.createElement('li');
+      buybackItem.classList.add('shop-item', 'empty');
+      buybackItem.textContent = 'Crop buyback unavailable while market is locked.';
+      buybackRoot.appendChild(buybackItem);
+      return;
+    }
+
+    if (this.villageMarketSeedOffers.length === 0) {
+      const seedItem = document.createElement('li');
+      seedItem.classList.add('shop-item', 'empty');
+      seedItem.textContent = this.villageMarketBusy ? 'Loading seed offers...' : 'No seed offers available.';
+      seedsRoot.appendChild(seedItem);
+    } else {
+      for (const offer of this.villageMarketSeedOffers) {
+        const item = document.createElement('li');
+        item.classList.add('shop-item');
+
+        const header = document.createElement('div');
+        header.classList.add('shop-item-header');
+
+        const name = document.createElement('strong');
+        name.textContent = offer.name;
+        header.appendChild(name);
+
+        const price = document.createElement('span');
+        price.classList.add('shop-price');
+        price.textContent = `${offer.goldPrice}g`;
+        header.appendChild(price);
+        item.appendChild(header);
+
+        const description = document.createElement('p');
+        description.classList.add('shop-description');
+        description.textContent = offer.description;
+        item.appendChild(description);
+
+        const buyButton = document.createElement('button');
+        buyButton.classList.add('hud-shop-buy');
+        buyButton.textContent = `Buy x1 (${offer.goldPrice}g)`;
+        buyButton.dataset.marketAction = 'buy-seed';
+        buyButton.dataset.offerKey = offer.offerKey;
+        buyButton.disabled = this.villageMarketBusy || this.hudState.gold < offer.goldPrice;
+        item.appendChild(buyButton);
+
+        seedsRoot.appendChild(item);
+      }
+    }
+
+    if (this.villageMarketBuybackOffers.length === 0) {
+      const buybackItem = document.createElement('li');
+      buybackItem.classList.add('shop-item', 'empty');
+      buybackItem.textContent = this.villageMarketBusy
+        ? 'Loading crop buyback offers...'
+        : 'No crop buyback offers available.';
+      buybackRoot.appendChild(buybackItem);
+      return;
+    }
+
+    for (const offer of this.villageMarketBuybackOffers) {
+      const item = document.createElement('li');
+      item.classList.add('shop-item');
+
+      const header = document.createElement('div');
+      header.classList.add('shop-item-header');
+
+      const name = document.createElement('strong');
+      name.textContent = offer.name;
+      header.appendChild(name);
+
+      const price = document.createElement('span');
+      price.classList.add('shop-price');
+      price.textContent = `Sell ${offer.goldValue}g`;
+      header.appendChild(price);
+      item.appendChild(header);
+
+      const description = document.createElement('p');
+      description.classList.add('shop-description');
+      description.textContent = `${offer.description} | Owned ${offer.ownedQuantity}`;
+      item.appendChild(description);
+
+      const sellButton = document.createElement('button');
+      sellButton.classList.add('hud-shop-buy');
+      sellButton.textContent = `Sell x1 (${offer.goldValue}g)`;
+      sellButton.dataset.marketAction = 'sell-crop';
+      sellButton.dataset.itemKey = offer.itemKey;
+      sellButton.disabled = this.villageMarketBusy || offer.ownedQuantity < 1;
+      item.appendChild(sellButton);
+
+      buybackRoot.appendChild(item);
+    }
+  }
+
   private renderQuestList(): void {
     if (!this.questsListRoot) {
       return;
@@ -2791,6 +3003,20 @@ export class GameScene extends Phaser.Scene {
     return this.blacksmithBusy
       ? 'Refreshing...'
       : `${this.blacksmithOffers.length} offers | Gold ${this.hudState.gold}`;
+  }
+
+  private getVillageMarketSummaryLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Login required';
+    }
+
+    if (!this.villageMarketUnlocked) {
+      return this.villageMarketBusy ? 'Checking unlock...' : 'Locked';
+    }
+
+    return this.villageMarketBusy
+      ? 'Refreshing...'
+      : `${this.villageMarketSeedOffers.length} seeds | ${this.villageMarketBuybackOffers.length} crops`;
   }
 
   private getAutoSaveSummaryLabel(): string {
@@ -2943,6 +3169,25 @@ export class GameScene extends Phaser.Scene {
       this.hudState.gold,
       this.blacksmithError ?? '',
       offers.join(';'),
+    ].join('|');
+  }
+
+  private computeVillageMarketRenderSignature(): string {
+    const seedParts = this.villageMarketSeedOffers.map((offer) => (
+      `${offer.offerKey}:${offer.goldPrice}:${offer.name}:${offer.description}`
+    ));
+    const buybackParts = this.villageMarketBuybackOffers.map((offer) => (
+      `${offer.itemKey}:${offer.goldValue}:${offer.ownedQuantity}:${offer.name}`
+    ));
+
+    return [
+      this.isAuthenticated ? '1' : '0',
+      this.villageMarketUnlocked ? '1' : '0',
+      this.villageMarketBusy ? '1' : '0',
+      this.hudState.gold,
+      this.villageMarketError ?? '',
+      seedParts.join(';'),
+      buybackParts.join(';'),
     ].join('|');
   }
 
@@ -3584,6 +3829,7 @@ export class GameScene extends Phaser.Scene {
       await this.refreshAutoSaveState();
       await this.refreshSaveSlotsState();
       await this.refreshBlacksmithState();
+      await this.refreshVillageMarketState();
       await this.refreshQuestState();
       await this.refreshCombatState();
       return;
@@ -3595,6 +3841,7 @@ export class GameScene extends Phaser.Scene {
     this.resetAutoSaveState();
     this.resetSaveSlotsState();
     this.resetBlacksmithState();
+    this.resetVillageMarketState();
     this.resetQuestState();
     this.resetCombatState();
     this.updateHud();
@@ -3721,6 +3968,40 @@ export class GameScene extends Phaser.Scene {
       }
     } finally {
       this.blacksmithBusy = false;
+      this.updateHud();
+    }
+  }
+
+  private async refreshVillageMarketState(): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.resetVillageMarketState();
+      this.updateHud();
+      return;
+    }
+
+    this.villageMarketBusy = true;
+    this.villageMarketError = null;
+    this.updateHud();
+
+    try {
+      const payload = await this.fetchJson<unknown>('/shops/village-market', {
+        method: 'GET',
+      });
+      const parsed = this.normalizeVillageMarketPayload(payload);
+      this.villageMarketUnlocked = parsed.unlocked;
+      this.villageMarketSeedOffers = parsed.seedOffers;
+      this.villageMarketBuybackOffers = parsed.cropBuybackOffers;
+    } catch (error) {
+      this.villageMarketError = this.getErrorMessage(error, 'Unable to load village market.');
+      this.villageMarketUnlocked = false;
+      if (this.villageMarketSeedOffers.length === 0) {
+        this.villageMarketSeedOffers = [];
+      }
+      if (this.villageMarketBuybackOffers.length === 0) {
+        this.villageMarketBuybackOffers = [];
+      }
+    } finally {
+      this.villageMarketBusy = false;
       this.updateHud();
     }
   }
@@ -3878,6 +4159,7 @@ export class GameScene extends Phaser.Scene {
       await this.refreshGameplayState();
       await this.refreshAutoSaveState();
       await this.refreshBlacksmithState();
+      await this.refreshVillageMarketState();
       await this.refreshQuestState();
     } catch (error) {
       this.setCombatError(this.getErrorMessage(error, 'Impossible de demarrer le combat.'));
@@ -4003,6 +4285,7 @@ export class GameScene extends Phaser.Scene {
       await this.refreshGameplayState();
       await this.refreshAutoSaveState();
       await this.refreshBlacksmithState();
+      await this.refreshVillageMarketState();
       await this.refreshQuestState();
     } catch (error) {
       this.setCombatError(this.getErrorMessage(error, 'Impossible de jouer cette action.'));
@@ -4055,6 +4338,7 @@ export class GameScene extends Phaser.Scene {
       await this.refreshGameplayState();
       await this.refreshAutoSaveState();
       await this.refreshBlacksmithState();
+      await this.refreshVillageMarketState();
       await this.refreshQuestState();
     } catch (error) {
       this.setCombatError(this.getErrorMessage(error, 'Impossible de fuir le combat.'));
@@ -4113,6 +4397,7 @@ export class GameScene extends Phaser.Scene {
       });
       await this.refreshGameplayState();
       await this.refreshBlacksmithState();
+      await this.refreshVillageMarketState();
       await this.refreshQuestState();
     } catch (error) {
       this.questError = this.getErrorMessage(error, 'Unable to claim this quest.');
@@ -4149,10 +4434,83 @@ export class GameScene extends Phaser.Scene {
       });
       await this.refreshGameplayState();
       await this.refreshBlacksmithState();
+      await this.refreshVillageMarketState();
     } catch (error) {
       this.blacksmithError = this.getErrorMessage(error, 'Unable to buy this item.');
     } finally {
       this.blacksmithBusy = false;
+      this.updateHud();
+    }
+  }
+
+  private async buyVillageSeedOffer(offerKey: string): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.villageMarketError = 'Login required to buy seeds.';
+      this.updateHud();
+      return;
+    }
+
+    if (!this.villageMarketUnlocked) {
+      this.villageMarketError = 'Village market is locked.';
+      this.updateHud();
+      return;
+    }
+
+    this.villageMarketBusy = true;
+    this.villageMarketError = null;
+    this.updateHud();
+
+    try {
+      await this.fetchJson('/shops/village-market/buy-seed', {
+        method: 'POST',
+        body: JSON.stringify({
+          offerKey,
+          quantity: 1,
+        }),
+      });
+      await this.refreshGameplayState();
+      await this.refreshVillageMarketState();
+      await this.refreshBlacksmithState();
+    } catch (error) {
+      this.villageMarketError = this.getErrorMessage(error, 'Unable to buy this seed offer.');
+    } finally {
+      this.villageMarketBusy = false;
+      this.updateHud();
+    }
+  }
+
+  private async sellVillageCrop(itemKey: string): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.villageMarketError = 'Login required to sell crops.';
+      this.updateHud();
+      return;
+    }
+
+    if (!this.villageMarketUnlocked) {
+      this.villageMarketError = 'Village market is locked.';
+      this.updateHud();
+      return;
+    }
+
+    this.villageMarketBusy = true;
+    this.villageMarketError = null;
+    this.updateHud();
+
+    try {
+      await this.fetchJson('/shops/village-market/sell-crop', {
+        method: 'POST',
+        body: JSON.stringify({
+          itemKey,
+          quantity: 1,
+        }),
+      });
+      await this.refreshGameplayState();
+      await this.refreshVillageMarketState();
+      await this.refreshBlacksmithState();
+    } catch (error) {
+      this.villageMarketError = this.getErrorMessage(error, 'Unable to sell this crop.');
+    } finally {
+      this.villageMarketBusy = false;
       this.updateHud();
     }
   }
@@ -4277,6 +4635,7 @@ export class GameScene extends Phaser.Scene {
       await this.refreshCombatState();
       await this.refreshQuestState();
       await this.refreshBlacksmithState();
+      await this.refreshVillageMarketState();
       await this.refreshAutoSaveState();
       await this.refreshSaveSlotsState();
     } catch (error) {
@@ -4561,6 +4920,15 @@ export class GameScene extends Phaser.Scene {
     this.blacksmithBusy = false;
     this.blacksmithError = null;
     this.blacksmithRenderSignature = '';
+  }
+
+  private resetVillageMarketState(): void {
+    this.villageMarketUnlocked = false;
+    this.villageMarketSeedOffers = [];
+    this.villageMarketBuybackOffers = [];
+    this.villageMarketBusy = false;
+    this.villageMarketError = null;
+    this.villageMarketRenderSignature = '';
   }
 
   private resetQuestState(): void {
@@ -6671,6 +7039,42 @@ export class GameScene extends Phaser.Scene {
     return { offers };
   }
 
+  private normalizeVillageMarketPayload(payload: unknown): {
+    unlocked: boolean;
+    seedOffers: VillageSeedOfferState[];
+    cropBuybackOffers: VillageCropBuybackOfferState[];
+  } {
+    if (!this.isRecord(payload)) {
+      return {
+        unlocked: false,
+        seedOffers: [],
+        cropBuybackOffers: [],
+      };
+    }
+
+    const shop = this.asRecord(payload.shop);
+    if (!shop) {
+      return {
+        unlocked: false,
+        seedOffers: [],
+        cropBuybackOffers: [],
+      };
+    }
+
+    const rawSeedOffers = Array.isArray(shop.seedOffers) ? shop.seedOffers : [];
+    const rawBuybackOffers = Array.isArray(shop.cropBuybackOffers) ? shop.cropBuybackOffers : [];
+
+    return {
+      unlocked: Boolean(shop.unlocked),
+      seedOffers: rawSeedOffers
+        .map((entry) => this.normalizeVillageSeedOffer(entry))
+        .filter((entry): entry is VillageSeedOfferState => entry !== null),
+      cropBuybackOffers: rawBuybackOffers
+        .map((entry) => this.normalizeVillageCropBuybackOffer(entry))
+        .filter((entry): entry is VillageCropBuybackOfferState => entry !== null),
+    };
+  }
+
   private normalizeSaveSlotsPayload(payload: unknown): SaveSlotState[] {
     if (!this.isRecord(payload)) {
       return [];
@@ -6884,6 +7288,54 @@ export class GameScene extends Phaser.Scene {
       name,
       description,
       goldPrice: Math.max(0, Math.round(goldPrice)),
+    };
+  }
+
+  private normalizeVillageSeedOffer(value: unknown): VillageSeedOfferState | null {
+    if (!this.isRecord(value)) {
+      return null;
+    }
+
+    const offerKey = this.asString(value.offerKey);
+    const itemKey = this.asString(value.itemKey);
+    const name = this.asString(value.name);
+    const description = this.asString(value.description);
+    const goldPrice = this.asNumber(value.goldPrice);
+
+    if (!offerKey || !itemKey || !name || !description || goldPrice === null) {
+      return null;
+    }
+
+    return {
+      offerKey,
+      itemKey,
+      name,
+      description,
+      goldPrice: Math.max(0, Math.round(goldPrice)),
+    };
+  }
+
+  private normalizeVillageCropBuybackOffer(value: unknown): VillageCropBuybackOfferState | null {
+    if (!this.isRecord(value)) {
+      return null;
+    }
+
+    const itemKey = this.asString(value.itemKey);
+    const name = this.asString(value.name);
+    const description = this.asString(value.description);
+    const goldValue = this.asNumber(value.goldValue);
+    const ownedQuantity = this.asNumber(value.ownedQuantity);
+
+    if (!itemKey || !name || !description || goldValue === null || ownedQuantity === null) {
+      return null;
+    }
+
+    return {
+      itemKey,
+      name,
+      description,
+      goldValue: Math.max(0, Math.round(goldValue)),
+      ownedQuantity: Math.max(0, Math.round(ownedQuantity)),
     };
   }
 

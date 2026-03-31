@@ -212,3 +212,25 @@ test('village NPC state panel wiring exists for lot 86', () => {
   assert.equal(stylesSource.includes('.hud-village-npcs'), true);
   assert.equal(stylesSource.includes('.hud-village-npc-line'), true);
 });
+
+test('village market panel wiring exists for lot 87', () => {
+  assert.equal(gameSceneSource.includes('data-hud="villageMarketSummary"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="villageMarketError"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="villageMarketSeedOffers"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="villageMarketBuybackOffers"'), true);
+  assert.equal(gameSceneSource.includes("buyButton.dataset.marketAction = 'buy-seed'"), true);
+  assert.equal(gameSceneSource.includes("sellButton.dataset.marketAction = 'sell-crop'"), true);
+  assert.equal(gameSceneSource.includes('private updateVillageMarketHud(): void'), true);
+  assert.equal(gameSceneSource.includes('private renderVillageMarketOffers(): void'), true);
+  assert.equal(gameSceneSource.includes('private getVillageMarketSummaryLabel(): string'), true);
+  assert.equal(
+    gameSceneSource.includes('private normalizeVillageMarketPayload(payload: unknown): {'),
+    true,
+  );
+  assert.equal(gameSceneSource.includes('private async refreshVillageMarketState(): Promise<void>'), true);
+  assert.equal(gameSceneSource.includes('private async buyVillageSeedOffer(offerKey: string): Promise<void>'), true);
+  assert.equal(gameSceneSource.includes('private async sellVillageCrop(itemKey: string): Promise<void>'), true);
+  assert.equal(stylesSource.includes('.hud-village-market'), true);
+  assert.equal(stylesSource.includes('.hud-village-market-list'), true);
+  assert.equal(stylesSource.includes('.hud-village-market-subtitle'), true);
+});

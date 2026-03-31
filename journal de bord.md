@@ -1217,6 +1217,49 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - extension tests API pour valider les etats PNJ selon combinaison de flags.
   - extension regression web pour verrouiller wiring HUD + styles PNJ.
 
+### Lot 87 - Village economy: boutique graines + rachat recoltes (API + HUD)
+- Backend API (`shops`):
+  - nouveaux endpoints proteges:
+    - `GET /shops/village-market`
+    - `POST /shops/village-market/buy-seed`
+    - `POST /shops/village-market/sell-crop`
+  - verrouillage du marche via flags progression:
+    - `intro_farm_assigned`
+    - `floor_3_cleared`
+  - offres graines serveur (achat transactionnel):
+    - deduction or
+    - ajout inventaire graines
+    - validation lock/offre inconnue/or insuffisant.
+  - rachat recoltes serveur (vente transactionnelle):
+    - verification stock inventaire
+    - retrait inventaire recoltes
+    - ajout or
+    - retour du stock restant.
+  - support d'offres progressives par flags (`story_floor_5_cleared`).
+- Frontend HUD (Phaser):
+  - nouveau panneau `Village Market`:
+    - section `Seeds` (achat x1)
+    - section `Crop Buyback` (vente x1)
+    - affichage quantite possedee par recolte.
+  - etats UX:
+    - `locked/loading/error`
+    - boutons disables selon or dispo (achat) ou stock dispo (vente).
+  - refresh automatique du panel apres:
+    - start/action/forfeit combat
+    - claim de quete
+    - achat forgeron
+    - load de slot
+    - actions du marche.
+- QA:
+  - tests API crosscut ajoutes:
+    - lock du marche
+    - offres + quantites possedees
+    - flux achat/vente avec verification or + inventaire.
+  - regression web test etendue:
+    - wiring HUD village market
+    - handlers/actions market
+    - styles dedies.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1242,6 +1285,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - offres par tiers (1/2/3) avec prerequis flags
   - achat serveur autoritaire
   - deduction or + ajout item en transaction
+  - marche village protege (graines + rachat recoltes) avec economie serveur autoritaire
 - Tour:
   - progression des etages persistee
   - endpoint de lecture d'etat
@@ -1292,6 +1336,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - tuning animation centralise dans le manifest (sequences + timings par strip)
   - panneau intro scenario MVP (3 etapes narratives + progression)
   - panneau Village PNJ (etats maire/forgeron/marchand pilotés par flags)
+  - panneau Village Market (achat graines + vente recoltes)
 - Chargement web optimise:
   - entree legere
   - bootstrap asynchrone
@@ -1335,6 +1380,9 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - `POST /quests/:questKey/claim`
 - `GET /shops/blacksmith`
 - `POST /shops/blacksmith/buy`
+- `GET /shops/village-market`
+- `POST /shops/village-market/buy-seed`
+- `POST /shops/village-market/sell-crop`
 - `GET /saves`
 - `GET /saves/auto/latest`
 - `POST /saves/auto/restore/:slot`
@@ -1376,19 +1424,18 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 87 - Village economy: boutique graines + rachat recoltes (API + HUD) pour demarrer la boucle ferme.
-2. Lot 88 - Ferme data model: parcelles, cultures plantees, etats arrose/non arrose, timers de croissance.
-3. Lot 89 - Ferme backend: endpoints `plant`, `water`, `harvest` avec validations metier serveur.
-4. Lot 90 - Ferme frontend: panneau ferme jouable (selection graine, plantation, arrosage, recolte).
-5. Lot 91 - Temps: cycle jour/nuit MVP + action `sleep` qui avance le jour et fait pousser les cultures.
-6. Lot 92 - Crafting ferme: recettes basiques (consommables combat) basees sur recoltes.
-7. Lot 93 - Quetes ferme/village: quetes secondaires simples liees aux recoltes et livraisons.
-8. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
-9. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
-10. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
-11. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
-12. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
-13. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
-14. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
+1. Lot 88 - Ferme data model: parcelles, cultures plantees, etats arrose/non arrose, timers de croissance.
+2. Lot 89 - Ferme backend: endpoints `plant`, `water`, `harvest` avec validations metier serveur.
+3. Lot 90 - Ferme frontend: panneau ferme jouable (selection graine, plantation, arrosage, recolte).
+4. Lot 91 - Temps: cycle jour/nuit MVP + action `sleep` qui avance le jour et fait pousser les cultures.
+5. Lot 92 - Crafting ferme: recettes basiques (consommables combat) basees sur recoltes.
+6. Lot 93 - Quetes ferme/village: quetes secondaires simples liees aux recoltes et livraisons.
+7. Lot 94 - Relations PNJ MVP: score relationnel basique (amitie) avec 2-3 PNJ du village.
+8. Lot 95 - Boucle complete: lier explicitement progression tour -> deblocages village -> progression ferme -> preparation combat.
+9. Lot 96 - Gate MVP: campagne QA complete et checklist de validation verticale "Ferme + RPG + Intro scenario".
+10. Lot 97 - Review animation: ajustement et peaufinage des animations hero/boss existantes (timings, lisibilite, impact visuel).
+11. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
+12. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
+13. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
 
 

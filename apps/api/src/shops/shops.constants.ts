@@ -1,8 +1,9 @@
-import type { BlacksmithOffer } from './shops.types';
+import type { BlacksmithOffer, VillageCropBuybackOffer, VillageSeedOffer } from './shops.types';
 
 export const BLACKSMITH_SHOP_UNLOCK_FLAG = 'blacksmith_shop_tier_1_unlocked';
 export const BLACKSMITH_TIER_2_UNLOCK_FLAGS = ['story_floor_5_cleared'] as const;
 export const BLACKSMITH_TIER_3_UNLOCK_FLAGS = ['story_floor_8_cleared'] as const;
+export const VILLAGE_MARKET_UNLOCK_FLAGS = ['intro_farm_assigned', 'floor_3_cleared'] as const;
 
 export const BLACKSMITH_OFFERS: BlacksmithOffer[] = [
   {
@@ -85,5 +86,56 @@ export const BLACKSMITH_OFFERS: BlacksmithOffer[] = [
     goldPrice: 96,
     tier: 3,
     requiredFlags: [...BLACKSMITH_TIER_3_UNLOCK_FLAGS],
+  },
+];
+
+export const VILLAGE_SEED_OFFERS: VillageSeedOffer[] = [
+  {
+    offerKey: 'turnip_seed_packet',
+    itemKey: 'turnip_seed',
+    name: 'Turnip Seeds',
+    description: 'Fast-growing seeds ideal for first harvest cycles.',
+    goldPrice: 8,
+    requiredFlags: [],
+  },
+  {
+    offerKey: 'carrot_seed_packet',
+    itemKey: 'carrot_seed',
+    name: 'Carrot Seeds',
+    description: 'Balanced seeds for steady village demand.',
+    goldPrice: 12,
+    requiredFlags: [],
+  },
+  {
+    offerKey: 'wheat_seed_packet',
+    itemKey: 'wheat_seed',
+    name: 'Wheat Seeds',
+    description: 'Bulk crop seeds useful for crafting and trade.',
+    goldPrice: 15,
+    requiredFlags: ['story_floor_5_cleared'],
+  },
+];
+
+export const VILLAGE_CROP_BUYBACK_OFFERS: VillageCropBuybackOffer[] = [
+  {
+    itemKey: 'turnip',
+    name: 'Turnip',
+    description: 'Village staple crop.',
+    goldValue: 10,
+    requiredFlags: [],
+  },
+  {
+    itemKey: 'carrot',
+    name: 'Carrot',
+    description: 'Reliable produce for village kitchens.',
+    goldValue: 15,
+    requiredFlags: [],
+  },
+  {
+    itemKey: 'wheat',
+    name: 'Wheat',
+    description: 'High-demand grain for reserves and feed.',
+    goldValue: 18,
+    requiredFlags: ['story_floor_5_cleared'],
   },
 ];
