@@ -314,6 +314,22 @@ type HeroProfileState = {
   updatedAt: string;
 };
 
+type IntroNarrativeStepKey =
+  | 'arrive_village'
+  | 'meet_mayor'
+  | 'farm_assignment'
+  | 'completed';
+
+type IntroNarrativeState = {
+  currentStep: IntroNarrativeStepKey;
+  completed: boolean;
+  steps: {
+    arriveVillage: boolean;
+    metMayor: boolean;
+    farmAssigned: boolean;
+  };
+};
+
 type DebugQaPresetOption = {
   key: string;
   label: string;
@@ -534,6 +550,10 @@ function isHeroAppearanceKey(value: string): value is HeroAppearanceKey {
   return HERO_APPEARANCE_OPTIONS.some((option) => option.key === value);
 }
 
+function isIntroNarrativeStepKey(value: string): value is IntroNarrativeStepKey {
+  return value === 'arrive_village' || value === 'meet_mayor' || value === 'farm_assignment' || value === 'completed';
+}
+
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -579,6 +599,12 @@ export class GameScene extends Phaser.Scene {
   private heroProfileSaveButton: HTMLButtonElement | null = null;
   private heroProfileMessageValue: HTMLElement | null = null;
   private heroProfileErrorValue: HTMLElement | null = null;
+  private introSummaryValue: HTMLElement | null = null;
+  private introNarrativeValue: HTMLElement | null = null;
+  private introHintValue: HTMLElement | null = null;
+  private introProgressValue: HTMLElement | null = null;
+  private introAdvanceButton: HTMLButtonElement | null = null;
+  private introErrorValue: HTMLElement | null = null;
 
   private authStatus = 'Verification...';
   private isAuthenticated = false;
@@ -633,6 +659,9 @@ export class GameScene extends Phaser.Scene {
   private heroProfileMessage: string | null = null;
   private heroProfileNameDraft = '';
   private heroProfileAppearanceDraft: HeroAppearanceKey = 'default';
+  private introNarrativeState: IntroNarrativeState | null = null;
+  private introNarrativeBusy = false;
+  private introNarrativeError: string | null = null;
   private gamepadPreviousButtonStates: boolean[] = [];
   private gamepadHudFocusableElements: HTMLElement[] = [];
   private gamepadHudFocusIndex = -1;
@@ -745,6 +774,7 @@ export class GameScene extends Phaser.Scene {
     const shopAction = button.dataset.shopAction;
     const saveAction = button.dataset.saveAction;
     const profileAction = button.dataset.profileAction;
+    const introAction = button.dataset.introAction;
     const debugAction = button.dataset.debugAction;
 
     if (hudAction === 'login') {
@@ -836,6 +866,11 @@ export class GameScene extends Phaser.Scene {
 
     if (profileAction === 'save') {
       void this.saveHeroProfile();
+      return;
+    }
+
+    if (introAction === 'advance') {
+      void this.advanceIntroNarrative();
       return;
     }
 
@@ -1077,6 +1112,19 @@ export class GameScene extends Phaser.Scene {
           </div>
           <div class="hud-hero-profile-message" data-hud="heroProfileMessage" hidden></div>
           <div class="hud-hero-profile-error" data-hud="heroProfileError" hidden></div>
+        </div>
+        <div class="hud-intro">
+          <div class="hud-intro-header">
+            <span>Intro scenario</span>
+            <strong data-hud="introSummary">Connexion requise</strong>
+          </div>
+          <p class="hud-intro-narrative" data-hud="introNarrative">Connecte toi pour lancer la sequence d'intro.</p>
+          <p class="hud-intro-hint" data-hud="introHint">MVP: arrivee au village, rencontre du maire, attribution de la ferme.</p>
+          <div class="hud-intro-actions">
+            <button class="hud-intro-button" data-intro-action="advance">Continuer intro</button>
+          </div>
+          <p class="hud-intro-progress" data-hud="introProgress">Progression: 0/3</p>
+          <div class="hud-intro-error" data-hud="introError" hidden></div>
         </div>
         <div class="hud-combat">
           <div class="hud-combat-header">
@@ -1376,6 +1424,12 @@ export class GameScene extends Phaser.Scene {
     this.heroProfileSaveButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-profile-action="save"]');
     this.heroProfileMessageValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="heroProfileMessage"]');
     this.heroProfileErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="heroProfileError"]');
+    this.introSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="introSummary"]');
+    this.introNarrativeValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="introNarrative"]');
+    this.introHintValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="introHint"]');
+    this.introProgressValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="introProgress"]');
+    this.introAdvanceButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-intro-action="advance"]');
+    this.introErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="introError"]');
     this.debugQaPanelRoot = this.hudRoot.querySelector<HTMLElement>('.hud-debug-qa');
     this.debugQaStatusValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="debugQaStatus"]');
     this.debugQaMessageValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="debugQaMessage"]');
@@ -1535,6 +1589,12 @@ export class GameScene extends Phaser.Scene {
     this.heroProfileSaveButton = null;
     this.heroProfileMessageValue = null;
     this.heroProfileErrorValue = null;
+    this.introSummaryValue = null;
+    this.introNarrativeValue = null;
+    this.introHintValue = null;
+    this.introProgressValue = null;
+    this.introAdvanceButton = null;
+    this.introErrorValue = null;
     this.debugQaPanelRoot = null;
     this.debugQaStatusValue = null;
     this.debugQaMessageValue = null;
@@ -1583,6 +1643,9 @@ export class GameScene extends Phaser.Scene {
     this.heroProfileMessage = null;
     this.heroProfileNameDraft = '';
     this.heroProfileAppearanceDraft = 'default';
+    this.introNarrativeState = null;
+    this.introNarrativeBusy = false;
+    this.introNarrativeError = null;
     this.debugQaBusyAction = null;
     this.debugQaStatus = 'idle';
     this.debugQaMessage = null;
@@ -1619,6 +1682,7 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('area', this.hudState.area);
     this.setHudText('authStatus', this.authStatus);
     this.updateHeroProfileHud();
+    this.updateIntroHud();
     this.updateCombatHud();
     this.updateQuestHud();
     this.updateBlacksmithHud();
@@ -1762,6 +1826,37 @@ export class GameScene extends Phaser.Scene {
     if (this.heroProfileErrorValue) {
       this.heroProfileErrorValue.hidden = !this.heroProfileError;
       this.heroProfileErrorValue.textContent = this.heroProfileError ?? '';
+    }
+  }
+
+  private updateIntroHud(): void {
+    const state = this.introNarrativeState;
+    const disabled = !this.isAuthenticated || this.introNarrativeBusy || Boolean(state?.completed);
+
+    if (this.introSummaryValue) {
+      this.introSummaryValue.textContent = this.getIntroSummaryLabel();
+    }
+
+    if (this.introNarrativeValue) {
+      this.introNarrativeValue.textContent = this.getIntroNarrativeLabel();
+    }
+
+    if (this.introHintValue) {
+      this.introHintValue.textContent = this.getIntroHintLabel();
+    }
+
+    if (this.introProgressValue) {
+      this.introProgressValue.textContent = this.getIntroProgressLabel();
+    }
+
+    if (this.introAdvanceButton) {
+      this.introAdvanceButton.disabled = disabled;
+      this.introAdvanceButton.textContent = this.introNarrativeBusy ? 'Avance...' : this.getIntroAdvanceButtonLabel();
+    }
+
+    if (this.introErrorValue) {
+      this.introErrorValue.hidden = !this.introNarrativeError;
+      this.introErrorValue.textContent = this.introNarrativeError ?? '';
     }
   }
 
@@ -3423,6 +3518,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.resetGameplayHudState();
+    this.resetIntroNarrativeState();
     this.resetHeroProfileState();
     this.resetAutoSaveState();
     this.resetSaveSlotsState();
@@ -3454,6 +3550,7 @@ export class GameScene extends Phaser.Scene {
   private async refreshGameplayState(): Promise<void> {
     if (!this.isAuthenticated) {
       this.resetGameplayHudState();
+      this.resetIntroNarrativeState();
       this.updateHud();
       return;
     }
@@ -4191,9 +4288,48 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private async advanceIntroNarrative(): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.introNarrativeError = 'Login required to continue intro.';
+      this.updateHud();
+      return;
+    }
+
+    if (this.introNarrativeBusy || this.introNarrativeState?.completed) {
+      return;
+    }
+
+    this.introNarrativeBusy = true;
+    this.introNarrativeError = null;
+    this.updateHud();
+
+    try {
+      const payload = await this.fetchJson<unknown>('/gameplay/intro/advance', {
+        method: 'POST',
+      });
+      const introState = this.normalizeGameplayIntroPayload(payload);
+      if (introState) {
+        this.introNarrativeState = introState;
+      }
+
+      await this.refreshGameplayState();
+    } catch (error) {
+      this.introNarrativeError = this.getErrorMessage(error, 'Unable to continue intro sequence.');
+    } finally {
+      this.introNarrativeBusy = false;
+      this.updateHud();
+    }
+  }
+
   private applyGameplaySnapshot(payload: unknown): void {
     if (!this.isRecord(payload)) {
       return;
+    }
+
+    const introNarrativeState = this.normalizeGameplayIntroPayload(payload);
+    if (introNarrativeState) {
+      this.introNarrativeState = introNarrativeState;
+      this.introNarrativeError = null;
     }
 
     const world = this.asRecord(payload.world);
@@ -4301,6 +4437,12 @@ export class GameScene extends Phaser.Scene {
     this.heroProfileMessage = null;
     this.heroProfileNameDraft = '';
     this.heroProfileAppearanceDraft = 'default';
+  }
+
+  private resetIntroNarrativeState(): void {
+    this.introNarrativeState = null;
+    this.introNarrativeBusy = false;
+    this.introNarrativeError = null;
   }
 
   private resetAutoSaveState(): void {
@@ -6125,6 +6267,92 @@ export class GameScene extends Phaser.Scene {
     return 'Unlocked';
   }
 
+  private getIntroSummaryLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Connexion requise';
+    }
+
+    if (this.introNarrativeBusy && !this.introNarrativeState) {
+      return 'Chargement...';
+    }
+
+    if (!this.introNarrativeState) {
+      return 'Pre-intro';
+    }
+
+    if (this.introNarrativeState.completed) {
+      return 'Intro terminee';
+    }
+
+    if (this.introNarrativeState.currentStep === 'arrive_village') {
+      return 'Acte 1/3';
+    }
+
+    if (this.introNarrativeState.currentStep === 'meet_mayor') {
+      return 'Acte 2/3';
+    }
+
+    return 'Acte 3/3';
+  }
+
+  private getIntroNarrativeLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Connecte toi pour lancer la sequence d intro.';
+    }
+
+    const state = this.introNarrativeState;
+    if (!state || state.currentStep === 'arrive_village') {
+      return 'Tu arrives au village de Briseterre. Les habitants observent ton chariot charge de graines et de vieux outils.';
+    }
+
+    if (state.currentStep === 'meet_mayor') {
+      return 'Le maire Elric te recoit sur la place. Il te presente la Tour maudite et te demande de renforcer les defenses du village.';
+    }
+
+    if (state.currentStep === 'farm_assignment') {
+      return 'Le maire t attribue une parcelle a la lisiere du village. Cette ferme deviendra ta base entre deux expeditions.';
+    }
+
+    return 'Intro completee. Tu peux desormais alterner progression tour et preparation de ferme.';
+  }
+
+  private getIntroHintLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Connecte ton compte puis clique sur "Continuer intro".';
+    }
+
+    if (this.introNarrativeState?.completed) {
+      return 'Prochaine etape: lot ferme/village pour rendre la parcelle jouable.';
+    }
+
+    return 'Clique sur "Continuer intro" pour valider la prochaine scene narrative.';
+  }
+
+  private getIntroProgressLabel(): string {
+    const state = this.introNarrativeState;
+    if (!state) {
+      return 'Progression: 0/3';
+    }
+
+    const completedSteps =
+      Number(state.steps.arriveVillage) +
+      Number(state.steps.metMayor) +
+      Number(state.steps.farmAssigned);
+    return `Progression: ${completedSteps}/3`;
+  }
+
+  private getIntroAdvanceButtonLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Connexion requise';
+    }
+
+    if (this.introNarrativeState?.completed) {
+      return 'Intro completee';
+    }
+
+    return 'Continuer intro';
+  }
+
   private getHeroProfileSummaryLabel(): string {
     if (!this.isAuthenticated) {
       return 'Connexion requise';
@@ -6144,6 +6372,30 @@ export class GameScene extends Phaser.Scene {
   private getHeroAppearanceLabel(key: HeroAppearanceKey): string {
     const option = HERO_APPEARANCE_OPTIONS.find((entry) => entry.key === key);
     return option ? option.label : 'Fermier classique';
+  }
+
+  private normalizeGameplayIntroPayload(payload: unknown): IntroNarrativeState | null {
+    const root = this.asRecord(payload);
+    if (!root) {
+      return null;
+    }
+
+    const introRecord = this.asRecord(root.intro) ?? root;
+    const currentStepRaw = this.asString(introRecord.currentStep);
+    if (!currentStepRaw || !isIntroNarrativeStepKey(currentStepRaw)) {
+      return null;
+    }
+
+    const steps = this.asRecord(introRecord.steps);
+    return {
+      currentStep: currentStepRaw,
+      completed: Boolean(introRecord.completed),
+      steps: {
+        arriveVillage: Boolean(steps?.arriveVillage),
+        metMayor: Boolean(steps?.metMayor),
+        farmAssigned: Boolean(steps?.farmAssigned),
+      },
+    };
   }
 
   private async fetchJson<T>(path: string, init: RequestInit = {}): Promise<T> {

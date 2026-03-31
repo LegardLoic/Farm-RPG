@@ -12,6 +12,14 @@ export const BASE_PLAYER_CURRENT_MP = BASE_PLAYER_MAX_MP;
 export const BASE_WORLD_ZONE = 'Ferme';
 export const BASE_WORLD_DAY = 1;
 export const PLAYER_MAX_LEVEL = 10;
+export const INTRO_FLAG_ARRIVED_VILLAGE = 'intro_arrived_village';
+export const INTRO_FLAG_MET_MAYOR = 'intro_met_mayor';
+export const INTRO_FLAG_FARM_ASSIGNED = 'intro_farm_assigned';
+export const INTRO_PROGRESS_FLAGS = [
+  INTRO_FLAG_ARRIVED_VILLAGE,
+  INTRO_FLAG_MET_MAYOR,
+  INTRO_FLAG_FARM_ASSIGNED,
+] as const;
 
 const PLAYER_XP_TO_NEXT_BY_LEVEL: Record<number, number> = {
   1: 100,

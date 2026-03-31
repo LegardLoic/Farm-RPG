@@ -21,6 +21,22 @@ export interface GameplayVillageState {
   };
 }
 
+export type GameplayIntroStepKey =
+  | 'arrive_village'
+  | 'meet_mayor'
+  | 'farm_assignment'
+  | 'completed';
+
+export interface GameplayIntroState {
+  currentStep: GameplayIntroStepKey;
+  completed: boolean;
+  steps: {
+    arriveVillage: boolean;
+    metMayor: boolean;
+    farmAssigned: boolean;
+  };
+}
+
 export interface GameplayTowerState {
   currentFloor: number;
   highestFloor: number;
