@@ -63,6 +63,7 @@ Create local env files before starting:
 - `POST /equipment/unequip`
 - `GET /gameplay/state`
 - `POST /gameplay/intro/advance`
+- `POST /gameplay/village/npc/interact`
 - `POST /gameplay/sleep`
 - `GET /gameplay/crafting`
 - `POST /gameplay/crafting/craft`
@@ -123,3 +124,4 @@ Use `.env.example` templates and repository secrets for CI.
 - Combat loot now includes floor-based loot tables with rarity tags and boss-specific bonus drops.
 - Blacksmith shop now supports tiered offers with per-offer flag prerequisites.
 - Debug QA supports one-click state presets (`village_open`, `mid_tower`, `act1_done`).
+- Village NPC relationship MVP: friendship score + daily interaction with mayor, blacksmith, and merchant.

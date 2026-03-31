@@ -306,7 +306,12 @@ function createProfileDatabaseStub(initialProfile = null) {
   };
 }
 
-function createGameplayDatabaseStub(initialFlags = [], initialFarmPlots = [], initialInventory = {}) {
+function createGameplayDatabaseStub(
+  initialFlags = [],
+  initialFarmPlots = [],
+  initialInventory = {},
+  initialRelationships = {},
+) {
   const state = {
     worldFlags: new Set(initialFlags),
     world: {
@@ -315,7 +320,20 @@ function createGameplayDatabaseStub(initialFlags = [], initialFarmPlots = [], in
     },
     farmPlots: new Map(),
     inventory: new Map(Object.entries(initialInventory)),
+    relationships: new Map(),
   };
+
+  for (const npcKey of ['mayor', 'blacksmith', 'merchant']) {
+    const initial = initialRelationships[npcKey];
+    state.relationships.set(npcKey, {
+      npc_key: npcKey,
+      friendship: Math.max(0, Math.floor(initial?.friendship ?? 0)),
+      last_interaction_day:
+        Number.isInteger(initial?.last_interaction_day) && initial.last_interaction_day > 0
+          ? initial.last_interaction_day
+          : null,
+    });
+  }
 
   for (const plot of initialFarmPlots) {
     state.farmPlots.set(plot.plot_key, {
@@ -380,6 +398,52 @@ function createGameplayDatabaseStub(initialFlags = [], initialFarmPlots = [], in
             watered_today: false,
           });
         }
+      }
+      return { rows: [] };
+    }
+
+    if (text.includes('INSERT INTO village_npc_relationships')) {
+      const npcKey = values[1];
+      if (!state.relationships.has(npcKey)) {
+        state.relationships.set(npcKey, {
+          npc_key: npcKey,
+          friendship: 0,
+          last_interaction_day: null,
+        });
+      }
+      return { rows: [] };
+    }
+
+    if (
+      text.includes('SELECT npc_key, friendship, last_interaction_day') &&
+      text.includes('FROM village_npc_relationships') &&
+      text.includes('npc_key = $2') &&
+      text.includes('FOR UPDATE')
+    ) {
+      const npcKey = values[1];
+      const row = state.relationships.get(npcKey);
+      return {
+        rows: row ? [{ ...row }] : [],
+      };
+    }
+
+    if (
+      text.includes('SELECT npc_key, friendship, last_interaction_day') &&
+      text.includes('FROM village_npc_relationships')
+    ) {
+      return {
+        rows: Array.from(state.relationships.values())
+          .sort((left, right) => left.npc_key.localeCompare(right.npc_key))
+          .map((entry) => ({ ...entry })),
+      };
+    }
+
+    if (text.includes('UPDATE village_npc_relationships')) {
+      const npcKey = values[1];
+      const row = state.relationships.get(npcKey);
+      if (row) {
+        row.friendship = values[2];
+        row.last_interaction_day = values[3];
       }
       return { rows: [] };
     }
@@ -1146,6 +1210,10 @@ test('gameplay village NPC states are derived from world flags', async () => {
     blacksmith: { stateKey: 'cursed', available: false },
     merchant: { stateKey: 'absent', available: false },
   });
+  assert.equal(earlyVillageState.relationships.mayor.friendship, 0);
+  assert.equal(earlyVillageState.relationships.blacksmith.friendship, 0);
+  assert.equal(earlyVillageState.relationships.merchant.friendship, 0);
+  assert.equal(earlyVillageState.relationships.mayor.canTalkToday, false);
 
   const advancedFlags = [
     'intro_arrived_village',
@@ -1164,6 +1232,50 @@ test('gameplay village NPC states are derived from world flags', async () => {
     blacksmith: { stateKey: 'masterwork_ready', available: true },
     merchant: { stateKey: 'traveling_buyer', available: true },
   });
+  assert.equal(advancedVillageState.relationships.mayor.canTalkToday, true);
+  assert.equal(advancedVillageState.relationships.blacksmith.canTalkToday, true);
+  assert.equal(advancedVillageState.relationships.merchant.canTalkToday, true);
+});
+
+test('gameplay village NPC interaction increases friendship once per day', async () => {
+  const db = createGameplayDatabaseStub(
+    ['intro_arrived_village', 'intro_met_mayor', 'intro_farm_assigned'],
+    [],
+    {},
+    {
+      mayor: {
+        friendship: 4,
+        last_interaction_day: null,
+      },
+    },
+  );
+  const service = new GameplayService(db);
+
+  const firstInteraction = await service.interactVillageNpc('user-1', 'mayor');
+  assert.equal(firstInteraction.interaction.npcKey, 'mayor');
+  assert.equal(firstInteraction.interaction.friendshipBefore, 4);
+  assert.equal(firstInteraction.interaction.friendshipAfter, 5);
+  assert.equal(firstInteraction.interaction.tierBefore, 'stranger');
+  assert.equal(firstInteraction.interaction.tierAfter, 'familiar');
+  assert.equal(firstInteraction.village.relationships.mayor.friendship, 5);
+  assert.equal(firstInteraction.village.relationships.mayor.canTalkToday, false);
+  assert.equal(db.state.relationships.get('mayor')?.friendship, 5);
+  assert.equal(db.state.relationships.get('mayor')?.last_interaction_day, 1);
+
+  await assert.rejects(
+    () => service.interactVillageNpc('user-1', 'mayor'),
+    /already interacted today/,
+  );
+});
+
+test('gameplay village NPC interaction rejects unavailable NPCs', async () => {
+  const db = createGameplayDatabaseStub(['intro_arrived_village', 'intro_met_mayor', 'intro_farm_assigned']);
+  const service = new GameplayService(db);
+
+  await assert.rejects(
+    () => service.interactVillageNpc('user-1', 'blacksmith'),
+    /not available for interaction/,
+  );
 });
 
 test('gameplay farm state seeds default plot layout and keeps it locked before farm assignment', async () => {

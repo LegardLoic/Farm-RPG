@@ -6,6 +6,7 @@ import { GameplayService } from './gameplay.service';
 import { TowerService } from '../tower/tower.service';
 import { CraftFarmRecipeDto } from './dto/craft-farm-recipe.dto';
 import { HarvestFarmPlotDto } from './dto/harvest-farm-plot.dto';
+import { InteractVillageNpcDto } from './dto/interact-village-npc.dto';
 import { PlantFarmPlotDto } from './dto/plant-farm-plot.dto';
 import { WaterFarmPlotDto } from './dto/water-farm-plot.dto';
 
@@ -50,6 +51,15 @@ export class GameplayController {
     return {
       status: 'ok',
       intro,
+    };
+  }
+
+  @Post('village/npc/interact')
+  async interactVillageNpc(@Req() req: AuthenticatedRequest, @Body() body: InteractVillageNpcDto) {
+    const result = await this.gameplayService.interactVillageNpc(req.authUser!.id, body.npcKey);
+    return {
+      status: 'ok',
+      ...result,
     };
   }
 

@@ -22,7 +22,10 @@ import {
   FARM_CROP_CATALOG,
   FARM_PLOTS_TABLE,
   FARM_PLOT_LAYOUT,
+  VILLAGE_NPC_KEYS,
+  VILLAGE_NPC_RELATIONSHIPS_TABLE,
   PLAYER_PROGRESSION_TABLE,
+  type VillageNpcKey,
   WORLD_STATE_TABLE,
   WORLD_FLAGS_TABLE,
   clampPlayerLevel,
@@ -37,6 +40,8 @@ import type {
   GameplaySleepResult,
   GameplayFarmWaterResult,
   GameplayIntroState,
+  GameplayVillageNpcInteractResult,
+  GameplayVillageNpcRelationshipTier,
   GameplayVillageState,
   GameplayWorldState,
   PlayerProgressionState,
@@ -77,7 +82,15 @@ type InventoryRow = {
   quantity: number;
 };
 
+type VillageNpcRelationshipRow = {
+  npc_key: VillageNpcKey;
+  friendship: number;
+  last_interaction_day: number | null;
+};
+
 type QueryExecutor = Pick<DatabaseService, 'query'> | TransactionClient;
+
+const MAX_VILLAGE_NPC_FRIENDSHIP = 30;
 
 @Injectable()
 export class GameplayService {
@@ -143,21 +156,68 @@ export class GameplayService {
   }
 
   async getVillageState(userId: string): Promise<GameplayVillageState> {
+    const world = await this.getWorldState(userId);
     const flags = new Set(await this.getWorldFlags(userId));
-    const blacksmithUnlocked = flags.has('blacksmith_shop_tier_1_unlocked');
-    const blacksmithCurseLifted = flags.has('blacksmith_curse_lifted');
+    return this.getVillageStateWithExecutor(this.databaseService, userId, flags, world.day);
+  }
 
-    return {
-      blacksmith: {
-        unlocked: blacksmithUnlocked,
-        curseLifted: blacksmithCurseLifted,
-      },
-      npcs: {
-        mayor: this.resolveMayorNpcState(flags),
-        blacksmith: this.resolveBlacksmithNpcState(flags, blacksmithUnlocked, blacksmithCurseLifted),
-        merchant: this.resolveMerchantNpcState(flags),
-      },
-    };
+  async interactVillageNpc(
+    userId: string,
+    npcKey: string,
+  ): Promise<{
+    interaction: GameplayVillageNpcInteractResult;
+    village: GameplayVillageState;
+  }> {
+    const normalizedNpcKey = this.resolveVillageNpcKeyOrThrow(npcKey);
+
+    return this.databaseService.withTransaction(async (tx) => {
+      await this.ensureWorldState(tx, userId);
+      await this.ensureVillageNpcRelationshipRows(tx, userId);
+
+      const world = await this.getWorldStateForUpdate(tx, userId);
+      const flags = new Set(await this.getWorldFlags(userId, tx));
+      const villageBefore = await this.getVillageStateWithExecutor(tx, userId, flags, world.day);
+      const npcState = villageBefore.npcs[normalizedNpcKey];
+      if (!npcState.available) {
+        throw new ForbiddenException(`${normalizedNpcKey} is not available for interaction`);
+      }
+
+      const relationshipBefore = villageBefore.relationships[normalizedNpcKey];
+      if (!relationshipBefore.canTalkToday) {
+        throw new BadRequestException(`${normalizedNpcKey} already interacted today`);
+      }
+
+      const row = await this.getVillageNpcRelationshipRowForUpdate(tx, userId, normalizedNpcKey);
+      const friendshipBefore = Math.max(0, Math.floor(row.friendship));
+      const friendshipAfter = Math.min(MAX_VILLAGE_NPC_FRIENDSHIP, friendshipBefore + 1);
+      const tierBefore = this.toVillageRelationshipTier(friendshipBefore);
+      const tierAfter = this.toVillageRelationshipTier(friendshipAfter);
+
+      await tx.query(
+        `
+          UPDATE ${VILLAGE_NPC_RELATIONSHIPS_TABLE}
+          SET friendship = $3,
+              last_interaction_day = $4,
+              updated_at = NOW()
+          WHERE user_id = $1
+            AND npc_key = $2
+        `,
+        [userId, normalizedNpcKey, friendshipAfter, world.day],
+      );
+
+      const village = await this.getVillageStateWithExecutor(tx, userId, flags, world.day);
+      return {
+        interaction: {
+          npcKey: normalizedNpcKey,
+          friendshipBefore,
+          friendshipAfter,
+          tierBefore,
+          tierAfter,
+          day: world.day,
+        },
+        village,
+      };
+    });
   }
 
   async getWorldState(userId: string): Promise<GameplayWorldState> {
@@ -659,6 +719,32 @@ export class GameplayService {
     };
   }
 
+  private async getVillageStateWithExecutor(
+    executor: QueryExecutor,
+    userId: string,
+    flags: Set<string>,
+    day: number,
+  ): Promise<GameplayVillageState> {
+    await this.ensureVillageNpcRelationshipRows(executor, userId);
+    const rows = await this.getVillageNpcRelationshipRows(executor, userId);
+    const blacksmithUnlocked = flags.has('blacksmith_shop_tier_1_unlocked');
+    const blacksmithCurseLifted = flags.has('blacksmith_curse_lifted');
+    const npcs: GameplayVillageState['npcs'] = {
+      mayor: this.resolveMayorNpcState(flags),
+      blacksmith: this.resolveBlacksmithNpcState(flags, blacksmithUnlocked, blacksmithCurseLifted),
+      merchant: this.resolveMerchantNpcState(flags),
+    };
+
+    return {
+      blacksmith: {
+        unlocked: blacksmithUnlocked,
+        curseLifted: blacksmithCurseLifted,
+      },
+      npcs,
+      relationships: this.toVillageNpcRelationships(rows, npcs, day),
+    };
+  }
+
   private toFarmPlotState(row: FarmPlotRow, day: number): GameplayFarmState['plots'][number] {
     const maturity = this.toFarmPlotMaturity(row, day);
 
@@ -890,6 +976,90 @@ export class GameplayService {
     return inventoryByItemKey;
   }
 
+  private async ensureVillageNpcRelationshipRows(executor: QueryExecutor, userId: string): Promise<void> {
+    for (const npcKey of VILLAGE_NPC_KEYS) {
+      await executor.query(
+        `
+          INSERT INTO ${VILLAGE_NPC_RELATIONSHIPS_TABLE} (user_id, npc_key, friendship, last_interaction_day)
+          VALUES ($1, $2, 0, NULL)
+          ON CONFLICT (user_id, npc_key) DO NOTHING
+        `,
+        [userId, npcKey],
+      );
+    }
+  }
+
+  private async getVillageNpcRelationshipRows(
+    executor: QueryExecutor,
+    userId: string,
+  ): Promise<VillageNpcRelationshipRow[]> {
+    const result = await executor.query<VillageNpcRelationshipRow>(
+      `
+        SELECT npc_key, friendship, last_interaction_day
+        FROM ${VILLAGE_NPC_RELATIONSHIPS_TABLE}
+        WHERE user_id = $1
+      `,
+      [userId],
+    );
+
+    return result.rows;
+  }
+
+  private async getVillageNpcRelationshipRowForUpdate(
+    executor: TransactionClient,
+    userId: string,
+    npcKey: VillageNpcKey,
+  ): Promise<VillageNpcRelationshipRow> {
+    const result = await executor.query<VillageNpcRelationshipRow>(
+      `
+        SELECT npc_key, friendship, last_interaction_day
+        FROM ${VILLAGE_NPC_RELATIONSHIPS_TABLE}
+        WHERE user_id = $1
+          AND npc_key = $2
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [userId, npcKey],
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      throw new NotFoundException(`Village relationship row not found for ${npcKey}`);
+    }
+
+    return row;
+  }
+
+  private toVillageNpcRelationships(
+    rows: VillageNpcRelationshipRow[],
+    npcs: GameplayVillageState['npcs'],
+    day: number,
+  ): GameplayVillageState['relationships'] {
+    const byKey = new Map(rows.map((row) => [row.npc_key, row]));
+
+    const toEntry = (npcKey: VillageNpcKey): GameplayVillageState['relationships'][VillageNpcKey] => {
+      const row = byKey.get(npcKey);
+      const friendship = Math.max(0, Math.floor(row?.friendship ?? 0));
+      const lastInteractionDay =
+        typeof row?.last_interaction_day === 'number' && row.last_interaction_day > 0
+          ? Math.floor(row.last_interaction_day)
+          : null;
+
+      return {
+        friendship,
+        tier: this.toVillageRelationshipTier(friendship),
+        lastInteractionDay,
+        canTalkToday: npcs[npcKey].available && lastInteractionDay !== day,
+      };
+    };
+
+    return {
+      mayor: toEntry('mayor'),
+      blacksmith: toEntry('blacksmith'),
+      merchant: toEntry('merchant'),
+    };
+  }
+
   private async getWorldFlags(userId: string, executor: QueryExecutor = this.databaseService): Promise<string[]> {
     const result = await executor.query<WorldFlagRow>(
       `
@@ -902,6 +1072,29 @@ export class GameplayService {
     );
 
     return result.rows.map((row) => row.flag_key);
+  }
+
+  private resolveVillageNpcKeyOrThrow(npcKey: string): VillageNpcKey {
+    const normalizedNpcKey = npcKey.trim().toLowerCase();
+    if (!VILLAGE_NPC_KEYS.includes(normalizedNpcKey as VillageNpcKey)) {
+      throw new NotFoundException(`Unknown village npc key: ${npcKey}`);
+    }
+
+    return normalizedNpcKey as VillageNpcKey;
+  }
+
+  private toVillageRelationshipTier(friendship: number): GameplayVillageNpcRelationshipTier {
+    if (friendship >= 20) {
+      return 'ally';
+    }
+    if (friendship >= 12) {
+      return 'trusted';
+    }
+    if (friendship >= 5) {
+      return 'familiar';
+    }
+
+    return 'stranger';
   }
 
   private resolveNextIntroFlag(flags: Set<string>): string | null {

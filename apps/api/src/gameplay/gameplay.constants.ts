@@ -2,6 +2,7 @@ export const PLAYER_PROGRESSION_TABLE = 'player_progression';
 export const WORLD_FLAGS_TABLE = 'world_flags';
 export const WORLD_STATE_TABLE = 'world_state';
 export const FARM_PLOTS_TABLE = 'farm_plots';
+export const VILLAGE_NPC_RELATIONSHIPS_TABLE = 'village_npc_relationships';
 
 export const BASE_PLAYER_LEVEL = 1;
 export const BASE_PLAYER_EXPERIENCE = 0;
@@ -21,6 +22,9 @@ export const INTRO_PROGRESS_FLAGS = [
   INTRO_FLAG_MET_MAYOR,
   INTRO_FLAG_FARM_ASSIGNED,
 ] as const;
+
+export const VILLAGE_NPC_KEYS = ['mayor', 'blacksmith', 'merchant'] as const;
+export type VillageNpcKey = (typeof VILLAGE_NPC_KEYS)[number];
 
 export const FARM_PLOT_LAYOUT = [
   { plotKey: 'plot_r1_c1', row: 1, col: 1 },
