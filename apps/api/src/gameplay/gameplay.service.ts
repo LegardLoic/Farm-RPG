@@ -254,6 +254,7 @@ export class GameplayService {
     return this.databaseService.withTransaction(async (tx) => {
       await this.ensureWorldState(tx, userId);
       await this.ensureVillageNpcRelationshipRows(tx, userId);
+      await this.getWorldStateForUpdate(tx, userId);
 
       const worldFlags = new Set(await this.getWorldFlags(userId, tx));
       const farmUnlocked = worldFlags.has(INTRO_FLAG_FARM_ASSIGNED);

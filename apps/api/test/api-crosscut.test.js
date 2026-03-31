@@ -332,6 +332,7 @@ function createGameplayDatabaseStub(
     inventory: new Map(Object.entries(initialInventory)),
     relationships: new Map(),
   };
+  const calls = [];
 
   for (const npcKey of ['mayor', 'blacksmith', 'merchant']) {
     const initial = initialRelationships[npcKey];
@@ -358,6 +359,8 @@ function createGameplayDatabaseStub(
   }
 
   const executeQuery = async (text, values = []) => {
+    calls.push({ text, values });
+
     if (text.includes('INSERT INTO world_state')) {
       return { rows: [] };
     }
@@ -588,6 +591,7 @@ function createGameplayDatabaseStub(
   };
 
   return {
+    calls,
     state,
     async query(text, values = []) {
       return executeQuery(text, values);
@@ -1322,6 +1326,12 @@ test('gameplay combat preparation consumes farm consumables and activates one-sh
   assert.equal(db.state.worldFlags.has('combat_prep_hp'), true);
   assert.equal(db.state.worldFlags.has('combat_prep_mp'), true);
   assert.equal(db.state.worldFlags.has('combat_prep_attack'), true);
+  assert.equal(
+    db.calls.some(
+      (entry) => entry.text.includes('SELECT zone, day') && entry.text.includes('FROM world_state') && entry.text.includes('FOR UPDATE'),
+    ),
+    true,
+  );
 
   await assert.rejects(
     () => service.prepareCombatLoadout('user-1'),
