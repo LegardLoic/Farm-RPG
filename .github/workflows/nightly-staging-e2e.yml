@@ -3,6 +3,7 @@ name: Nightly Staging E2E
 permissions:
   contents: read
   actions: read
+  issues: write
 
 on:
   schedule:
@@ -277,6 +278,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build nightly history
+        id: build_nightly_history
         if: always()
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -393,6 +395,15 @@ jobs:
             }
           }
 
+          let consecutiveFailures = 0;
+          for (const item of history) {
+            if (item.overall === 'failed') {
+              consecutiveFailures += 1;
+              continue;
+            }
+            break;
+          }
+
           const markdownLines = [
             '# Nightly Staging History',
             '',
@@ -408,6 +419,11 @@ jobs:
 
           await fs.writeFile(path.join('artifacts', 'nightly', 'history.json'), `${JSON.stringify(history, null, 2)}\n`);
           await fs.writeFile(path.join('artifacts', 'nightly', 'dashboard.md'), `${markdownLines.join('\n')}\n`);
+
+          const outputPath = process.env.GITHUB_OUTPUT;
+          if (outputPath) {
+            await fs.appendFile(outputPath, `consecutive_failures=${consecutiveFailures}\n`);
+          }
           NODE
 
           {
@@ -415,6 +431,87 @@ jobs:
             echo ""
             echo "Historical dashboard generated for the last 7 nightly runs."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Raise alert on 2 consecutive nightly failures
+        if: ${{ always() && steps.build_nightly_history.outputs.consecutive_failures != '' && fromJSON(steps.build_nightly_history.outputs.consecutive_failures) >= 2 }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONSECUTIVE_FAILURES: ${{ steps.build_nightly_history.outputs.consecutive_failures }}
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const repo = process.env.REPOSITORY;
+          const token = process.env.GITHUB_TOKEN;
+          const runUrl = process.env.RUN_URL;
+          const consecutiveFailures = Number.parseInt(process.env.CONSECUTIVE_FAILURES ?? '0', 10);
+          const apiBase = 'https://api.github.com';
+          const alertTitle = '[Nightly Alert] Staging checks failing repeatedly';
+
+          const headers = {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          };
+
+          async function ghJson(url, options = {}) {
+            const response = await fetch(url, {
+              ...options,
+              headers: {
+                ...headers,
+                ...(options.headers ?? {}),
+              },
+            });
+            if (!response.ok) {
+              const body = await response.text();
+              throw new Error(`GitHub API request failed (${response.status}) for ${url}: ${body}`);
+            }
+            return response.json();
+          }
+
+          async function ghVoid(url, options = {}) {
+            const response = await fetch(url, {
+              ...options,
+              headers: {
+                ...headers,
+                ...(options.headers ?? {}),
+              },
+            });
+            if (!response.ok) {
+              const body = await response.text();
+              throw new Error(`GitHub API request failed (${response.status}) for ${url}: ${body}`);
+            }
+          }
+
+          const alertBody = [
+            `Nightly staging checks failed **${consecutiveFailures}** runs in a row.`,
+            '',
+            `- Latest run: ${runUrl}`,
+            '- Check artifacts: `summary.json`, `history.json`, `dashboard.md`, and smoke logs.',
+          ].join('\n');
+
+          const issues = await ghJson(`${apiBase}/repos/${repo}/issues?state=open&per_page=100`);
+          const existing = (issues ?? []).find(
+            (issue) => !issue.pull_request && typeof issue.title === 'string' && issue.title.trim() === alertTitle,
+          );
+
+          if (existing) {
+            await ghVoid(`${apiBase}/repos/${repo}/issues/${existing.number}/comments`, {
+              method: 'POST',
+              body: JSON.stringify({ body: alertBody }),
+            });
+            return;
+          }
+
+          await ghVoid(`${apiBase}/repos/${repo}/issues`, {
+            method: 'POST',
+            body: JSON.stringify({
+              title: alertTitle,
+              body: alertBody,
+            }),
+          });
+          NODE
 
       - name: Upload nightly artifacts
         if: always()
