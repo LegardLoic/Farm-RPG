@@ -131,6 +131,39 @@ const MEND_MANA_COST = 3;
 const CLEANSE_MANA_COST = 3;
 const INTERRUPT_MANA_COST = 4;
 
+const FARM_PLOT_LAYOUT_FALLBACK: Array<{ plotKey: string; row: number; col: number }> = [
+  { plotKey: 'plot_r1_c1', row: 1, col: 1 },
+  { plotKey: 'plot_r1_c2', row: 1, col: 2 },
+  { plotKey: 'plot_r1_c3', row: 1, col: 3 },
+  { plotKey: 'plot_r1_c4', row: 1, col: 4 },
+  { plotKey: 'plot_r2_c1', row: 2, col: 1 },
+  { plotKey: 'plot_r2_c2', row: 2, col: 2 },
+  { plotKey: 'plot_r2_c3', row: 2, col: 3 },
+  { plotKey: 'plot_r2_c4', row: 2, col: 4 },
+  { plotKey: 'plot_r3_c1', row: 3, col: 1 },
+  { plotKey: 'plot_r3_c2', row: 3, col: 2 },
+  { plotKey: 'plot_r3_c3', row: 3, col: 3 },
+  { plotKey: 'plot_r3_c4', row: 3, col: 4 },
+];
+
+const FARM_LABEL_OVERRIDES: Record<string, string> = {
+  turnip_seed: 'Graines de navet',
+  carrot_seed: 'Graines de carotte',
+  wheat_seed: 'Graines de ble',
+  turnip: 'Navet',
+  carrot: 'Carotte',
+  wheat: 'Ble',
+  field_medicine: 'Medecine de champ',
+  focus_tonic: 'Tonique de concentration',
+  healing_herb: 'Herbe de soin',
+  mana_tonic: 'Tonique de mana',
+};
+
+const FARM_SCENE_ORIGIN_X = 540;
+const FARM_SCENE_ORIGIN_Y = 260;
+const FARM_SCENE_COL_STEP = 128;
+const FARM_SCENE_ROW_STEP = 96;
+
 type CombatUnitState = {
   hp: number;
   maxHp: number;
@@ -353,6 +386,24 @@ type FarmState = {
   readyPlots: number;
   cropCatalog: FarmCropCatalogEntryState[];
   plots: FarmPlotState[];
+};
+
+type FarmPlotPhase = 'empty' | 'planted' | 'watered' | 'ready';
+
+type FarmScenePlotSlot = {
+  plotKey: string;
+  row: number;
+  col: number;
+  plot: FarmPlotState | null;
+};
+
+type FarmScenePlotVisual = {
+  slot: FarmScenePlotSlot;
+  frame: Phaser.GameObjects.Rectangle;
+  bed: Phaser.GameObjects.Rectangle;
+  crop: Phaser.GameObjects.Rectangle;
+  badge: Phaser.GameObjects.Text;
+  label: Phaser.GameObjects.Text;
 };
 
 type FarmStoryTriggerType = 'day' | 'harvest_total';
@@ -732,6 +783,13 @@ export class GameScene extends Phaser.Scene {
     left: Phaser.Input.Keyboard.Key;
     right: Phaser.Input.Keyboard.Key;
   };
+  private farmHotkeys!: {
+    plant: Phaser.Input.Keyboard.Key;
+    water: Phaser.Input.Keyboard.Key;
+    harvest: Phaser.Input.Keyboard.Key;
+    sleep: Phaser.Input.Keyboard.Key;
+    craft: Phaser.Input.Keyboard.Key;
+  };
 
   private hudRoot: HTMLElement | null = null;
   private loginButton: HTMLButtonElement | null = null;
@@ -766,6 +824,17 @@ export class GameScene extends Phaser.Scene {
   private farmSleepButton: HTMLButtonElement | null = null;
   private farmPlotsRoot: HTMLElement | null = null;
   private farmErrorValue: HTMLElement | null = null;
+  private farmContextTitleValue: HTMLElement | null = null;
+  private farmContextStatusValue: HTMLElement | null = null;
+  private farmContextFeedbackValue: HTMLElement | null = null;
+  private farmContextSeedValue: HTMLElement | null = null;
+  private farmContextReadyValue: HTMLElement | null = null;
+  private farmContextPlantButton: HTMLButtonElement | null = null;
+  private farmContextWaterButton: HTMLButtonElement | null = null;
+  private farmContextHarvestButton: HTMLButtonElement | null = null;
+  private farmCraftingToggleButton: HTMLButtonElement | null = null;
+  private farmGoVillageButton: HTMLButtonElement | null = null;
+  private farmCraftingPanel: HTMLElement | null = null;
   private farmCraftingSummaryValue: HTMLElement | null = null;
   private farmCraftingListRoot: HTMLElement | null = null;
   private farmCraftingErrorValue: HTMLElement | null = null;
@@ -856,11 +925,19 @@ export class GameScene extends Phaser.Scene {
   private farmBusy = false;
   private farmError: string | null = null;
   private farmSelectedSeedItemKey = '';
+  private farmSelectedPlotKey: string | null = null;
+  private farmFeedbackMessage: string | null = null;
+  private farmCraftingPanelOpen = false;
   private farmRenderSignature = '';
   private farmCraftingState: FarmCraftingState | null = null;
   private farmCraftingBusy = false;
   private farmCraftingError: string | null = null;
   private farmCraftingRenderSignature = '';
+  private farmSceneRenderSignature = '';
+  private farmSceneBackground: Phaser.GameObjects.Graphics | null = null;
+  private farmScenePlotVisuals = new Map<string, FarmScenePlotVisual>();
+  private farmSceneStaticLabels: Phaser.GameObjects.GameObject[] = [];
+  private farmSceneActionHintLabel: Phaser.GameObjects.Text | null = null;
   private loopState: GameplayLoopState | null = null;
   private loopBusy = false;
   private loopError: string | null = null;
@@ -995,6 +1072,9 @@ export class GameScene extends Phaser.Scene {
   private readonly onFarmSeedSelectionChange = () => {
     this.farmSelectedSeedItemKey = this.readFarmSeedSelectionFromUi();
     this.farmError = null;
+    this.farmFeedbackMessage = this.farmSelectedSeedItemKey
+      ? `Graine active: ${this.formatFarmLabel(this.farmSelectedSeedItemKey)}.`
+      : 'Aucune graine selectionnee.';
     this.updateHud();
   };
 
@@ -1102,13 +1182,35 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    if (farmAction === 'select') {
+      const plotKey = button.dataset.plotKey;
+      if (plotKey) {
+        this.setSelectedFarmPlot(plotKey, true);
+        this.updateHud();
+      }
+      return;
+    }
+
+    if (farmAction === 'toggle-craft') {
+      this.toggleFarmCraftingPanel();
+      return;
+    }
+
+    if (farmAction === 'go-village') {
+      this.handleFarmVillageExitIntent();
+      return;
+    }
+
     if (farmAction === 'sleep') {
       void this.sleepAtFarm();
       return;
     }
 
     if (farmAction === 'plant' || farmAction === 'water' || farmAction === 'harvest') {
-      const plotKey = button.dataset.plotKey;
+      const plotKeyFromButton = button.dataset.plotKey?.trim();
+      const plotKey = plotKeyFromButton && plotKeyFromButton.length > 0
+        ? plotKeyFromButton
+        : (this.farmSelectedPlotKey ?? undefined);
       if (!plotKey) {
         return;
       }
@@ -1241,12 +1343,12 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.setupWorld();
+    this.drawDecor();
     this.setupPlayer();
     this.setupInput();
     this.setupHud();
     void this.bootstrapSessionState();
     this.setupCamera();
-    this.drawDecor();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.teardownHud();
@@ -1298,6 +1400,7 @@ export class GameScene extends Phaser.Scene {
 
     this.player.setTint(velocityX !== 0 || velocityY !== 0 ? 0xd8f1ff : 0xffffff);
     this.updateGamepadInput();
+    this.handleFarmHotkeys();
     this.updateHud();
   }
 
@@ -1327,6 +1430,7 @@ export class GameScene extends Phaser.Scene {
       this.player.setCollideWorldBounds(true);
       this.player.setSize(playerStrip.physics?.width ?? playerSprite.physics.width, playerStrip.physics?.height ?? playerSprite.physics.height);
       this.player.setOffset(playerStrip.physics?.offsetX ?? playerSprite.physics.offsetX, playerStrip.physics?.offsetY ?? playerSprite.physics.offsetY);
+      this.player.setDepth(34);
       this.playerUsesStripAnimation = true;
       this.playPlayerStripAnimation('idle', true);
     } else {
@@ -1340,15 +1444,15 @@ export class GameScene extends Phaser.Scene {
       this.player.setCollideWorldBounds(true);
       this.player.setSize(playerSprite.physics.width, playerSprite.physics.height);
       this.player.setOffset(playerSprite.physics.offsetX, playerSprite.physics.offsetY);
+      this.player.setDepth(34);
       this.playerUsesStripAnimation = false;
     }
 
     const obstacles = [
-      this.createObstacle(360, 220, 84, 28),
-      this.createObstacle(510, 260, 36, 96),
-      this.createObstacle(890, 180, 120, 34),
-      this.createObstacle(1180, 520, 110, 30),
-      this.createObstacle(1250, 620, 34, 120),
+      this.createObstacle(220, 235, 230, 150),
+      this.createObstacle(220, 432, 62, 44),
+      this.createObstacle(1325, 330, 120, 520),
+      this.createObstacle(620, 682, 760, 58),
     ];
 
     for (const obstacle of obstacles) {
@@ -1364,6 +1468,13 @@ export class GameScene extends Phaser.Scene {
       left: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       right: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
+    this.farmHotkeys = {
+      plant: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
+      water: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.TWO),
+      harvest: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.THREE),
+      sleep: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.F),
+      craft: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.C),
+    };
   }
 
   private setupHud(): void {
@@ -1373,8 +1484,52 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.hudRoot.innerHTML = `
-      <div class="hud-panel">
+      <div class="hud-panel hud-panel-farm-mvp">
         <div class="hud-title">Journal de ferme</div>
+        <div class="hud-farm-overview">
+          <div class="hud-farm-overview-grid">
+            <div class="hud-farm-overview-stat"><span>Jour</span><strong data-hud="farmDay">Jour 1</strong></div>
+            <div class="hud-farm-overview-stat"><span>Cycle</span><strong data-hud="farmDayPhase">Jour</strong></div>
+            <div class="hud-farm-overview-stat"><span>Zone</span><strong data-hud="farmZone">Ferme</strong></div>
+            <div class="hud-farm-overview-stat"><span>Graine</span><strong data-hud="farmSeedLabel">Aucune</strong></div>
+            <div class="hud-farm-overview-stat"><span>Parcelles</span><strong data-hud="farmReadyLabel">0 pretes</strong></div>
+            <div class="hud-farm-overview-stat"><span>Etat</span><strong data-hud="farmSummary">Chargement...</strong></div>
+          </div>
+          <p class="hud-farm-story-summary" data-hud="farmStorySummary">Scenario ferme: chargement...</p>
+          <p class="hud-farm-story-narrative" data-hud="farmStoryNarrative">
+            La ferme reprend vie: choisis une parcelle, plante, arrose, recolte.
+          </p>
+          <div class="hud-farm-controls">
+            <label class="hud-farm-field">
+              <span>Graine selectionnee</span>
+              <select data-hud="farmSeedSelect"></select>
+            </label>
+            <div class="hud-farm-actions">
+              <button class="hud-farm-action sleep" data-farm-action="sleep">Dormir (+1 jour)</button>
+              <button class="hud-farm-action" data-farm-action="toggle-craft">Ouvrir craft</button>
+              <button class="hud-farm-action" data-farm-action="go-village">Sortie village</button>
+            </div>
+          </div>
+          <div class="hud-farm-context">
+            <div class="hud-farm-context-header">
+              <span>Parcelle ciblee</span>
+              <strong data-hud="farmContextTitle">Selectionne une parcelle</strong>
+            </div>
+            <p class="hud-farm-context-status" data-hud="farmContextStatus">
+              Clique une parcelle dans la scene ou dans la grille ci-dessous.
+            </p>
+            <div class="farm-plot-actions context">
+              <button class="hud-farm-action" data-hud="farmContextPlant" data-farm-action="plant">Planter</button>
+              <button class="hud-farm-action water" data-hud="farmContextWater" data-farm-action="water">Arroser</button>
+              <button class="hud-farm-action harvest" data-hud="farmContextHarvest" data-farm-action="harvest">Recolter</button>
+            </div>
+            <p class="hud-farm-context-feedback" data-hud="farmContextFeedback" role="status" aria-live="polite">
+              Raccourcis: 1 planter, 2 arroser, 3 recolter, F dormir, C craft.
+            </p>
+          </div>
+          <div class="hud-farm-error" data-hud="farmError" hidden></div>
+          <ul class="hud-farm-plots" data-hud="farmPlots"></ul>
+        </div>
         <div class="hud-grid">
           <div class="hud-stat"><span>Jour</span><strong data-hud="day"></strong></div>
           <div class="hud-stat"><span>Cycle</span><strong data-hud="dayPhase"></strong></div>
@@ -1851,6 +2006,17 @@ export class GameScene extends Phaser.Scene {
     this.farmSleepButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-farm-action="sleep"]');
     this.farmPlotsRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmPlots"]');
     this.farmErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmError"]');
+    this.farmContextTitleValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmContextTitle"]');
+    this.farmContextStatusValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmContextStatus"]');
+    this.farmContextFeedbackValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmContextFeedback"]');
+    this.farmContextSeedValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmSeedLabel"]');
+    this.farmContextReadyValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmReadyLabel"]');
+    this.farmContextPlantButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-hud="farmContextPlant"]');
+    this.farmContextWaterButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-hud="farmContextWater"]');
+    this.farmContextHarvestButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-hud="farmContextHarvest"]');
+    this.farmCraftingToggleButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-farm-action="toggle-craft"]');
+    this.farmGoVillageButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-farm-action="go-village"]');
+    this.farmCraftingPanel = this.hudRoot.querySelector<HTMLElement>('.hud-farm-crafting');
     this.farmCraftingSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmCraftingSummary"]');
     this.farmCraftingListRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmCraftingRecipes"]');
     this.farmCraftingErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmCraftingError"]');
@@ -2003,6 +2169,16 @@ export class GameScene extends Phaser.Scene {
     this.stopEnemyHudStripPlayback();
     this.clearEnemyHudStripOverride();
     this.resetGamepadInputState();
+    this.clearFarmSceneVisuals();
+
+    if (this.farmSceneBackground) {
+      this.farmSceneBackground.destroy();
+      this.farmSceneBackground = null;
+    }
+    for (const label of this.farmSceneStaticLabels) {
+      label.destroy();
+    }
+    this.farmSceneStaticLabels = [];
 
     if (this.debugQaImportFileInput) {
       this.debugQaImportFileInput.removeEventListener('change', this.onDebugQaImportFileChange);
@@ -2073,6 +2249,17 @@ export class GameScene extends Phaser.Scene {
     this.farmSleepButton = null;
     this.farmPlotsRoot = null;
     this.farmErrorValue = null;
+    this.farmContextTitleValue = null;
+    this.farmContextStatusValue = null;
+    this.farmContextFeedbackValue = null;
+    this.farmContextSeedValue = null;
+    this.farmContextReadyValue = null;
+    this.farmContextPlantButton = null;
+    this.farmContextWaterButton = null;
+    this.farmContextHarvestButton = null;
+    this.farmCraftingToggleButton = null;
+    this.farmGoVillageButton = null;
+    this.farmCraftingPanel = null;
     this.farmCraftingSummaryValue = null;
     this.farmCraftingListRoot = null;
     this.farmCraftingErrorValue = null;
@@ -2167,10 +2354,14 @@ export class GameScene extends Phaser.Scene {
     this.farmBusy = false;
     this.farmError = null;
     this.farmSelectedSeedItemKey = '';
+    this.farmSelectedPlotKey = null;
+    this.farmFeedbackMessage = null;
+    this.farmCraftingPanelOpen = false;
     this.farmCraftingState = null;
     this.farmCraftingBusy = false;
     this.farmCraftingError = null;
     this.farmCraftingRenderSignature = '';
+    this.farmSceneRenderSignature = '';
     this.loopState = null;
     this.loopBusy = false;
     this.loopError = null;
@@ -2216,6 +2407,9 @@ export class GameScene extends Phaser.Scene {
 
     this.setHudText('day', `Jour ${this.hudState.day}`);
     this.setHudText('dayPhase', this.getDayPhaseLabel());
+    this.setHudText('farmDay', `Jour ${this.hudState.day}`);
+    this.setHudText('farmDayPhase', this.getDayPhaseLabel());
+    this.setHudText('farmZone', this.hudState.area);
     this.setHudText('gold', `${this.hudState.gold} po`);
     this.setHudText('level', `${this.hudState.level}`);
     this.setHudText('xp', `${this.hudState.xp} / ${this.hudState.xpToNext}`);
@@ -2390,6 +2584,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateFarmHud(): void {
+    this.ensureSelectedFarmPlot();
+
     if (this.farmSummaryValue) {
       this.farmSummaryValue.textContent = this.getFarmSummaryLabel();
     }
@@ -2410,13 +2606,43 @@ export class GameScene extends Phaser.Scene {
     if (this.farmSleepButton) {
       const canSleep = Boolean(this.isAuthenticated && this.farmState?.unlocked);
       this.farmSleepButton.disabled = !canSleep || this.farmBusy;
-      this.farmSleepButton.textContent = this.farmBusy ? 'Sleeping...' : 'Sleep (+1 day)';
+      this.farmSleepButton.textContent = this.farmBusy ? 'Dormir...' : 'Dormir (+1 jour)';
+    }
+
+    if (this.farmCraftingToggleButton) {
+      this.farmCraftingToggleButton.disabled = !this.isAuthenticated || !this.farmState?.unlocked;
+      this.farmCraftingToggleButton.textContent = this.farmCraftingPanelOpen ? 'Fermer craft' : 'Ouvrir craft';
+    }
+
+    if (this.farmGoVillageButton) {
+      this.farmGoVillageButton.disabled = !this.isAuthenticated;
+    }
+
+    if (this.farmContextSeedValue) {
+      this.farmContextSeedValue.textContent = this.getSelectedSeedLabel();
+    }
+
+    if (this.farmContextReadyValue) {
+      this.farmContextReadyValue.textContent = this.getFarmReadyPlotsLabel();
+    }
+
+    this.updateFarmContextPanel();
+
+    if (this.farmContextFeedbackValue) {
+      const feedback = this.getFarmFeedbackLabel();
+      this.farmContextFeedbackValue.dataset.tone = this.farmError ? 'error' : 'info';
+      this.farmContextFeedbackValue.textContent = feedback;
     }
 
     this.renderFarmPanel();
+    this.renderFarmScene();
   }
 
   private updateFarmCraftingHud(): void {
+    if (this.farmCraftingPanel) {
+      this.farmCraftingPanel.hidden = !this.farmCraftingPanelOpen;
+    }
+
     if (this.farmCraftingSummaryValue) {
       this.farmCraftingSummaryValue.textContent = this.getFarmCraftingSummaryLabel();
     }
@@ -3477,7 +3703,7 @@ export class GameScene extends Phaser.Scene {
 
       const item = document.createElement('li');
       item.classList.add('farm-plot-item', 'empty');
-      item.textContent = 'Connecte toi pour gerer la ferme.';
+      item.textContent = 'Connecte-toi pour gerer les parcelles de la ferme.';
       plotsRoot.appendChild(item);
       return;
     }
@@ -3515,7 +3741,7 @@ export class GameScene extends Phaser.Scene {
       for (const crop of unlockedCrops) {
         const option = document.createElement('option');
         option.value = crop.seedItemKey;
-        option.textContent = `${this.formatFarmLabel(crop.cropKey)} seed (${crop.growthDays}j)`;
+        option.textContent = `${this.formatFarmLabel(crop.seedItemKey)} (${crop.growthDays}j)`;
         seedSelect.appendChild(option);
       }
     }
@@ -3539,7 +3765,6 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const selectedSeedItemKey = this.farmSelectedSeedItemKey;
     const sortedPlots = [...farm.plots].sort((left, right) => (
       left.row - right.row || left.col - right.col || left.plotKey.localeCompare(right.plotKey)
     ));
@@ -3553,6 +3778,9 @@ export class GameScene extends Phaser.Scene {
       if (!plot.cropKey) {
         item.dataset.empty = '1';
       }
+      if (plot.plotKey === this.farmSelectedPlotKey) {
+        item.dataset.selected = '1';
+      }
 
       const header = document.createElement('div');
       header.classList.add('farm-plot-header');
@@ -3563,7 +3791,7 @@ export class GameScene extends Phaser.Scene {
 
       const badge = document.createElement('span');
       badge.classList.add('farm-plot-meta');
-      badge.textContent = plot.cropKey ? this.formatFarmLabel(plot.cropKey) : 'Vide';
+      badge.textContent = this.getFarmPlotPhaseLabel(plot);
       header.appendChild(badge);
       item.appendChild(header);
 
@@ -3575,35 +3803,13 @@ export class GameScene extends Phaser.Scene {
       const actions = document.createElement('div');
       actions.classList.add('farm-plot-actions');
 
-      const canPlant = !plot.cropKey && selectedSeedItemKey.length > 0;
-      const canWater = Boolean(plot.cropKey) && !plot.wateredToday;
-      const canHarvest = Boolean(plot.cropKey) && plot.readyToHarvest;
-
-      const plantButton = document.createElement('button');
-      plantButton.classList.add('hud-farm-action', 'plant');
-      plantButton.dataset.farmAction = 'plant';
-      plantButton.dataset.plotKey = plot.plotKey;
-      plantButton.textContent = canPlant
-        ? `Plant (${this.formatFarmLabel(selectedSeedItemKey)})`
-        : 'Plant';
-      plantButton.disabled = this.farmBusy || !farm.unlocked || !canPlant;
-      actions.appendChild(plantButton);
-
-      const waterButton = document.createElement('button');
-      waterButton.classList.add('hud-farm-action', 'water');
-      waterButton.dataset.farmAction = 'water';
-      waterButton.dataset.plotKey = plot.plotKey;
-      waterButton.textContent = plot.wateredToday ? 'Watered' : 'Water';
-      waterButton.disabled = this.farmBusy || !farm.unlocked || !canWater;
-      actions.appendChild(waterButton);
-
-      const harvestButton = document.createElement('button');
-      harvestButton.classList.add('hud-farm-action', 'harvest');
-      harvestButton.dataset.farmAction = 'harvest';
-      harvestButton.dataset.plotKey = plot.plotKey;
-      harvestButton.textContent = 'Harvest';
-      harvestButton.disabled = this.farmBusy || !farm.unlocked || !canHarvest;
-      actions.appendChild(harvestButton);
+      const focusButton = document.createElement('button');
+      focusButton.classList.add('hud-farm-action');
+      focusButton.dataset.farmAction = 'select';
+      focusButton.dataset.plotKey = plot.plotKey;
+      focusButton.textContent = plot.plotKey === this.farmSelectedPlotKey ? 'Ciblee' : 'Cibler';
+      focusButton.disabled = this.farmBusy;
+      actions.appendChild(focusButton);
 
       item.appendChild(actions);
       plotsRoot.appendChild(item);
@@ -3627,7 +3833,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.isAuthenticated) {
       const item = document.createElement('li');
       item.classList.add('shop-item', 'empty');
-      item.textContent = 'Connect to access farm crafting.';
+      item.textContent = 'Connecte-toi pour utiliser le craft de ferme.';
       craftingRoot.appendChild(item);
       return;
     }
@@ -3635,7 +3841,7 @@ export class GameScene extends Phaser.Scene {
     if (this.farmCraftingBusy && !this.farmCraftingState) {
       const item = document.createElement('li');
       item.classList.add('shop-item', 'empty');
-      item.textContent = 'Loading recipes...';
+      item.textContent = 'Chargement des recettes...';
       craftingRoot.appendChild(item);
       return;
     }
@@ -3644,7 +3850,7 @@ export class GameScene extends Phaser.Scene {
     if (!crafting) {
       const item = document.createElement('li');
       item.classList.add('shop-item', 'empty');
-      item.textContent = 'No crafting data.';
+      item.textContent = 'Aucune donnee de craft disponible.';
       craftingRoot.appendChild(item);
       return;
     }
@@ -3652,7 +3858,7 @@ export class GameScene extends Phaser.Scene {
     if (!crafting.unlocked) {
       const item = document.createElement('li');
       item.classList.add('shop-item', 'empty');
-      item.textContent = 'Farm crafting locked. Complete farm assignment first.';
+      item.textContent = 'Craft verrouille. Termine l attribution de la ferme.';
       craftingRoot.appendChild(item);
       return;
     }
@@ -3661,7 +3867,7 @@ export class GameScene extends Phaser.Scene {
     if (unlockedRecipes.length === 0) {
       const item = document.createElement('li');
       item.classList.add('shop-item', 'empty');
-      item.textContent = this.farmCraftingBusy ? 'Refreshing recipes...' : 'No recipes unlocked yet.';
+      item.textContent = this.farmCraftingBusy ? 'Mise a jour des recettes...' : 'Aucune recette debloquee.';
       craftingRoot.appendChild(item);
       return;
     }
@@ -3690,14 +3896,14 @@ export class GameScene extends Phaser.Scene {
 
       const ingredients = document.createElement('p');
       ingredients.classList.add('farm-crafting-ingredients');
-      ingredients.textContent = `Needs: ${recipe.ingredients
+      ingredients.textContent = `Requis: ${recipe.ingredients
         .map((entry) => `${this.formatFarmLabel(entry.itemKey)} ${entry.ownedQuantity}/${entry.requiredQuantity}`)
         .join(' | ')}`;
       item.appendChild(ingredients);
 
       const craftButton = document.createElement('button');
       craftButton.classList.add('hud-shop-buy');
-      craftButton.textContent = `Craft x1 (max ${recipe.maxCraftable})`;
+      craftButton.textContent = `Fabriquer x1 (max ${recipe.maxCraftable})`;
       craftButton.dataset.farmCraftAction = 'craft';
       craftButton.dataset.recipeKey = recipe.recipeKey;
       craftButton.disabled = this.farmCraftingBusy || this.farmBusy || recipe.maxCraftable < 1;
@@ -3831,24 +4037,24 @@ export class GameScene extends Phaser.Scene {
 
   private getFarmSummaryLabel(): string {
     if (!this.isAuthenticated) {
-      return 'Login required';
+      return 'Connexion requise';
     }
 
     if (this.farmBusy && !this.farmState) {
-      return 'Loading...';
+      return 'Chargement...';
     }
 
     if (!this.farmState) {
-      return 'No data';
+      return 'Aucune donnee';
     }
 
     if (!this.farmState.unlocked) {
-      return this.farmBusy ? 'Checking unlock...' : 'Locked';
+      return this.farmBusy ? 'Verification debloquage...' : 'Verrouillee';
     }
 
     return this.farmBusy
-      ? 'Refreshing...'
-      : `Ready ${this.farmState.readyPlots} | Planted ${this.farmState.plantedPlots}/${this.farmState.totalPlots}`;
+      ? 'Mise a jour...'
+      : `Pretes ${this.farmState.readyPlots} | Plantees ${this.farmState.plantedPlots}/${this.farmState.totalPlots}`;
   }
 
   private getFarmStorySummaryLabel(): string {
@@ -3857,11 +4063,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (!this.farmStoryState) {
-      return this.farmBusy ? 'Scenario ferme: chargement...' : 'Scenario ferme: no data';
+      return this.farmBusy ? 'Scenario ferme: chargement...' : 'Scenario ferme: aucune donnee';
     }
 
     const story = this.farmStoryState;
-    const progressLabel = `${story.unlockedEvents}/${story.totalEvents} beats`;
+    const progressLabel = `${story.unlockedEvents}/${story.totalEvents} etapes`;
     return `Scenario ferme | ${progressLabel} | Jour ${story.day} | Recoltes ${story.harvestTotal}`;
   }
 
@@ -3881,25 +4087,25 @@ export class GameScene extends Phaser.Scene {
 
   private getFarmCraftingSummaryLabel(): string {
     if (!this.isAuthenticated) {
-      return 'Login required';
+      return 'Connexion requise';
     }
 
     if (this.farmCraftingBusy && !this.farmCraftingState) {
-      return 'Loading...';
+      return 'Chargement...';
     }
 
     if (!this.farmCraftingState) {
-      return 'No data';
+      return 'Aucune donnee';
     }
 
     if (!this.farmCraftingState.unlocked) {
-      return this.farmCraftingBusy ? 'Checking unlock...' : 'Locked';
+      return this.farmCraftingBusy ? 'Verification debloquage...' : 'Verrouille';
     }
 
     const unlockedRecipes = this.farmCraftingState.recipes.filter((recipe) => recipe.unlocked).length;
     return this.farmCraftingBusy
-      ? 'Refreshing...'
-      : `${this.farmCraftingState.craftableRecipes} craftable | ${unlockedRecipes} recipes`;
+      ? 'Mise a jour...'
+      : `${this.farmCraftingState.craftableRecipes} craftables | ${unlockedRecipes} recettes`;
   }
 
   private getLoopSummaryLabel(): string {
@@ -4010,6 +4216,11 @@ export class GameScene extends Phaser.Scene {
     const value = raw.trim().toLowerCase();
     if (value.length === 0) {
       return '-';
+    }
+
+    const override = FARM_LABEL_OVERRIDES[value];
+    if (override) {
+      return override;
     }
 
     return value
@@ -4209,6 +4420,8 @@ export class GameScene extends Phaser.Scene {
       this.farmBusy ? '1' : '0',
       this.farmError ?? '',
       this.farmSelectedSeedItemKey,
+      this.farmSelectedPlotKey ?? '',
+      this.farmCraftingPanelOpen ? '1' : '0',
       farm
         ? `${farm.unlocked ? '1' : '0'}:${farm.totalPlots}:${farm.plantedPlots}:${farm.wateredPlots}:${farm.readyPlots}`
         : 'none',
@@ -5685,6 +5898,7 @@ export class GameScene extends Phaser.Scene {
         method: 'POST',
       });
       this.applyGameplaySnapshot(payload);
+      this.farmFeedbackMessage = `Nuit passee. Jour ${this.hudState.day}.`;
     } catch (error) {
       this.farmError = this.getErrorMessage(error, 'Unable to sleep right now.');
     } finally {
@@ -5734,6 +5948,8 @@ export class GameScene extends Phaser.Scene {
       });
       await this.refreshGameplayState();
       await this.refreshVillageMarketState();
+      this.farmFeedbackMessage = `Craft termine: ${this.formatFarmLabel(recipe.outputItemKey)} +${recipe.outputQuantity}.`;
+      this.farmCraftingPanelOpen = true;
     } catch (error) {
       this.farmCraftingError = this.getErrorMessage(error, 'Unable to craft this recipe.');
     } finally {
@@ -5776,6 +5992,7 @@ export class GameScene extends Phaser.Scene {
       });
       await this.refreshGameplayState();
       await this.refreshVillageMarketState();
+      this.farmFeedbackMessage = `Parcelle semee: ${this.formatFarmLabel(seedItemKey)}.`;
     } catch (error) {
       this.farmError = this.getErrorMessage(error, 'Unable to plant this plot.');
     } finally {
@@ -5809,6 +6026,7 @@ export class GameScene extends Phaser.Scene {
         }),
       });
       await this.refreshGameplayState();
+      this.farmFeedbackMessage = 'Parcelle arrosee.';
     } catch (error) {
       this.farmError = this.getErrorMessage(error, 'Unable to water this plot.');
     } finally {
@@ -5830,6 +6048,9 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    const harvestedCropKey = this.getFarmPlotByKey(plotKey)?.cropKey ?? null;
+    const harvestedCropLabel = harvestedCropKey ? this.formatFarmLabel(harvestedCropKey) : null;
+
     this.farmBusy = true;
     this.farmError = null;
     this.updateHud();
@@ -5843,6 +6064,9 @@ export class GameScene extends Phaser.Scene {
       });
       await this.refreshGameplayState();
       await this.refreshVillageMarketState();
+      this.farmFeedbackMessage = harvestedCropLabel
+        ? `Recolte terminee: ${harvestedCropLabel}.`
+        : 'Recolte terminee.';
     } catch (error) {
       this.farmError = this.getErrorMessage(error, 'Unable to harvest this plot.');
     } finally {
@@ -6123,8 +6347,20 @@ export class GameScene extends Phaser.Scene {
         if (!unlockedSeedKeys.has(this.farmSelectedSeedItemKey)) {
           this.farmSelectedSeedItemKey = farm.cropCatalog.find((entry) => entry.unlocked)?.seedItemKey ?? '';
         }
+        if (
+          !this.farmSelectedPlotKey ||
+          !farm.plots.some((plot) => plot.plotKey === this.farmSelectedPlotKey)
+        ) {
+          const preferredPlot =
+            farm.plots.find((plot) => plot.readyToHarvest) ??
+            farm.plots.find((plot) => !plot.cropKey) ??
+            farm.plots[0] ??
+            null;
+          this.farmSelectedPlotKey = preferredPlot?.plotKey ?? null;
+        }
       } else {
         this.farmSelectedSeedItemKey = '';
+        this.farmSelectedPlotKey = null;
       }
     }
 
@@ -6280,11 +6516,15 @@ export class GameScene extends Phaser.Scene {
     this.farmBusy = false;
     this.farmError = null;
     this.farmSelectedSeedItemKey = '';
+    this.farmSelectedPlotKey = null;
+    this.farmFeedbackMessage = null;
+    this.farmCraftingPanelOpen = false;
     this.farmRenderSignature = '';
     this.farmCraftingState = null;
     this.farmCraftingBusy = false;
     this.farmCraftingError = null;
     this.farmCraftingRenderSignature = '';
+    this.farmSceneRenderSignature = '';
   }
 
   private resetHeroProfileState(): void {
@@ -9856,49 +10096,569 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawDecor(): void {
-    const graphics = this.add.graphics();
+    if (this.farmSceneBackground) {
+      this.farmSceneBackground.destroy();
+      this.farmSceneBackground = null;
+    }
+    this.clearFarmSceneVisuals();
 
-    graphics.fillStyle(0x1a6a3f, 1);
+    for (const label of this.farmSceneStaticLabels) {
+      label.destroy();
+    }
+    this.farmSceneStaticLabels = [];
+
+    const graphics = this.add.graphics();
+    graphics.setDepth(1);
+    this.farmSceneBackground = graphics;
+
+    graphics.fillGradientStyle(0x2f6041, 0x2f6041, 0x1f462f, 0x1f462f, 1);
     graphics.fillRect(0, 0, 1600, 900);
 
-    graphics.fillStyle(0x5c9a58, 1);
-    for (let x = 0; x < 1600; x += 64) {
-      for (let y = 0; y < 900; y += 64) {
-        const offset = (x + y) % 2 === 0 ? 6 : 0;
-        graphics.fillRect(x + offset, y + offset, 56, 56);
+    graphics.fillStyle(0x3d7248, 1);
+    for (let x = 0; x < 1600; x += 52) {
+      for (let y = 0; y < 900; y += 52) {
+        if ((x + y) % 104 === 0) {
+          graphics.fillCircle(x + 20, y + 16, 2);
+        }
       }
     }
 
-    graphics.lineStyle(1, 0x88a97d, 0.3);
-    for (let x = 0; x <= 1600; x += 64) {
-      graphics.lineBetween(x, 0, x, 900);
+    graphics.fillStyle(0x6a5530, 1);
+    graphics.fillRoundedRect(426, 182, 556, 360, 16);
+    graphics.fillStyle(0x7f6637, 0.9);
+    graphics.fillRoundedRect(438, 194, 532, 336, 12);
+
+    graphics.fillStyle(0x7b5130, 1);
+    graphics.fillRoundedRect(92, 148, 250, 170, 16);
+    graphics.fillStyle(0x9d7448, 1);
+    graphics.fillTriangle(92, 148, 220, 74, 342, 148);
+    graphics.fillStyle(0xd7c39a, 1);
+    graphics.fillRect(202, 218, 34, 78);
+
+    graphics.fillStyle(0x6f4b2b, 1);
+    graphics.fillRoundedRect(116, 404, 204, 84, 12);
+    graphics.fillStyle(0x8d6942, 1);
+    graphics.fillRect(184, 404, 12, 84);
+    graphics.fillRect(238, 404, 12, 84);
+
+    graphics.fillStyle(0x886a3f, 1);
+    graphics.fillRoundedRect(1168, 256, 220, 330, 18);
+    graphics.fillStyle(0xb48b57, 1);
+    graphics.fillRoundedRect(1192, 278, 174, 286, 14);
+    graphics.fillStyle(0xd4b277, 1);
+    graphics.fillTriangle(1370, 410, 1450, 440, 1370, 470);
+
+    graphics.lineStyle(4, 0xc5a16a, 0.8);
+    graphics.lineBetween(312, 254, 438, 254);
+    graphics.lineBetween(312, 446, 438, 446);
+    graphics.lineBetween(970, 362, 1168, 362);
+
+    this.farmSceneStaticLabels.push(
+      this.add
+        .text(218, 130, 'Maison', {
+          fontFamily: 'Georgia, serif',
+          fontSize: '18px',
+          color: '#f3e5c5',
+          stroke: '#1d140c',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(12),
+      this.add
+        .text(218, 390, 'Coin craft', {
+          fontFamily: 'Georgia, serif',
+          fontSize: '16px',
+          color: '#f1d9ab',
+          stroke: '#1d140c',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(12),
+      this.add
+        .text(1244, 236, 'Sortie village', {
+          fontFamily: 'Georgia, serif',
+          fontSize: '17px',
+          color: '#f6ddaf',
+          stroke: '#1d140c',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(12),
+    );
+
+    this.createFarmActionZone(220, 236, 222, 146, () => {
+      void this.sleepAtFarm();
+    });
+    this.createFarmActionZone(218, 446, 196, 74, () => {
+      this.toggleFarmCraftingPanel();
+    });
+    this.createFarmActionZone(1278, 418, 174, 280, () => {
+      this.handleFarmVillageExitIntent();
+    });
+
+    this.farmSceneActionHintLabel = this.add
+      .text(804, 690, '1 planter • 2 arroser • 3 recolter • F dormir • C craft', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#e8f2dd',
+        stroke: '#192015',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(20);
+
+    this.renderFarmScene();
+  }
+
+  private createFarmActionZone(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    onTrigger: () => void,
+  ): void {
+    const trigger = this.add.rectangle(x, y, width, height, 0xe2b66d, 0.08);
+    trigger.setStrokeStyle(2, 0xe2b66d, 0.38);
+    trigger.setDepth(11);
+    trigger.setInteractive({ useHandCursor: true });
+    trigger.on('pointerdown', () => {
+      onTrigger();
+    });
+    this.farmSceneStaticLabels.push(trigger);
+  }
+
+  private clearFarmSceneVisuals(): void {
+    for (const visual of this.farmScenePlotVisuals.values()) {
+      visual.frame.destroy();
+      visual.bed.destroy();
+      visual.crop.destroy();
+      visual.badge.destroy();
+      visual.label.destroy();
     }
-    for (let y = 0; y <= 900; y += 64) {
-      graphics.lineBetween(0, y, 1600, y);
+    this.farmScenePlotVisuals.clear();
+    this.farmSceneRenderSignature = '';
+
+    if (this.farmSceneActionHintLabel) {
+      this.farmSceneActionHintLabel.destroy();
+      this.farmSceneActionHintLabel = null;
+    }
+  }
+
+  private renderFarmScene(): void {
+    const signature = `${this.computeFarmRenderSignature()}|${this.getDayPhaseKey()}`;
+    if (signature === this.farmSceneRenderSignature) {
+      return;
+    }
+    this.farmSceneRenderSignature = signature;
+
+    for (const visual of this.farmScenePlotVisuals.values()) {
+      visual.frame.destroy();
+      visual.bed.destroy();
+      visual.crop.destroy();
+      visual.badge.destroy();
+      visual.label.destroy();
+    }
+    this.farmScenePlotVisuals.clear();
+
+    this.ensureSelectedFarmPlot();
+    const slots = this.getFarmSceneSlots();
+
+    for (const slot of slots) {
+      const position = this.getFarmScenePlotPosition(slot);
+      const phase = this.getFarmPlotPhase(slot.plot);
+      const selected = slot.plotKey === this.farmSelectedPlotKey;
+      const palette = this.getFarmScenePlotPalette(phase, selected);
+
+      const frame = this.add.rectangle(position.x, position.y, 108, 68, palette.frame, 0.9);
+      frame.setStrokeStyle(2, selected ? 0xf6d88f : 0x29311e, selected ? 1 : 0.6);
+      frame.setDepth(14);
+      frame.setInteractive({ useHandCursor: true });
+      frame.on('pointerdown', () => {
+        this.setSelectedFarmPlot(slot.plotKey, true);
+        this.updateHud();
+      });
+
+      const bed = this.add.rectangle(position.x, position.y + 2, 92, 50, palette.bed, 1);
+      bed.setDepth(15);
+
+      const crop = this.add.rectangle(position.x, position.y - 2, 54, 26, palette.crop, phase === 'empty' ? 0.44 : 1);
+      crop.setDepth(16);
+
+      const badge = this.add
+        .text(position.x, position.y - 34, this.getFarmPlotPhaseLabel(slot.plot), {
+          fontFamily: 'Trebuchet MS, sans-serif',
+          fontSize: '11px',
+          color: palette.badge,
+          stroke: '#161f12',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(17);
+
+      const label = this.add
+        .text(position.x, position.y + 31, `${slot.row}-${slot.col}`, {
+          fontFamily: 'Trebuchet MS, sans-serif',
+          fontSize: '10px',
+          color: '#e8efdc',
+          stroke: '#18210f',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(17);
+
+      this.farmScenePlotVisuals.set(slot.plotKey, {
+        slot,
+        frame,
+        bed,
+        crop,
+        badge,
+        label,
+      });
     }
 
-    graphics.fillStyle(0x8a6d3b, 1);
-    graphics.fillRoundedRect(180, 140, 140, 90, 12);
-    graphics.fillStyle(0xb98b4d, 1);
-    graphics.fillRoundedRect(178, 138, 144, 10, 4);
-    graphics.fillStyle(0xd9c28b, 1);
-    graphics.fillRect(232, 174, 32, 56);
+    if (this.farmSceneActionHintLabel) {
+      this.farmSceneActionHintLabel.setText(this.getFarmFeedbackLabel());
+    }
+  }
 
-    graphics.fillStyle(0x4a6fa5, 1);
-    graphics.fillRoundedRect(820, 420, 170, 110, 14);
-    graphics.fillStyle(0x9dc0eb, 1);
-    graphics.fillRect(900, 454, 28, 44);
+  private getFarmSceneSlots(): FarmScenePlotSlot[] {
+    const farm = this.farmState;
+    const byPlotKey = new Map<string, FarmPlotState>();
+    if (farm) {
+      for (const plot of farm.plots) {
+        byPlotKey.set(plot.plotKey, plot);
+      }
+    }
 
-    graphics.fillStyle(0x754d2b, 1);
-    graphics.fillRoundedRect(1120, 120, 160, 130, 14);
-    graphics.fillStyle(0x493022, 1);
-    graphics.fillRect(1182, 170, 36, 80);
+    const slots = FARM_PLOT_LAYOUT_FALLBACK.map<FarmScenePlotSlot>((entry) => ({
+      plotKey: entry.plotKey,
+      row: entry.row,
+      col: entry.col,
+      plot: byPlotKey.get(entry.plotKey) ?? null,
+    }));
 
-    graphics.destroy();
+    if (farm && farm.plots.length > 0) {
+      for (const plot of farm.plots) {
+        if (!slots.some((entry) => entry.plotKey === plot.plotKey)) {
+          slots.push({
+            plotKey: plot.plotKey,
+            row: plot.row,
+            col: plot.col,
+            plot,
+          });
+        }
+      }
+    }
+
+    slots.sort((left, right) => left.row - right.row || left.col - right.col || left.plotKey.localeCompare(right.plotKey));
+    return slots;
+  }
+
+  private getFarmScenePlotPosition(slot: FarmScenePlotSlot): { x: number; y: number } {
+    return {
+      x: FARM_SCENE_ORIGIN_X + (slot.col - 1) * FARM_SCENE_COL_STEP,
+      y: FARM_SCENE_ORIGIN_Y + (slot.row - 1) * FARM_SCENE_ROW_STEP,
+    };
+  }
+
+  private getFarmScenePlotPalette(
+    phase: FarmPlotPhase,
+    selected: boolean,
+  ): { frame: number; bed: number; crop: number; badge: string } {
+    if (phase === 'ready') {
+      return {
+        frame: selected ? 0x7f6b2f : 0x6d5a2a,
+        bed: 0x78602f,
+        crop: 0xd8c37a,
+        badge: '#ffeab6',
+      };
+    }
+
+    if (phase === 'watered') {
+      return {
+        frame: selected ? 0x375f71 : 0x2f4f5d,
+        bed: 0x4d5f4f,
+        crop: 0x6eb0d4,
+        badge: '#cdeeff',
+      };
+    }
+
+    if (phase === 'planted') {
+      return {
+        frame: selected ? 0x44602f : 0x3b532a,
+        bed: 0x5f4f2f,
+        crop: 0x73ad57,
+        badge: '#d2efc2',
+      };
+    }
+
+    return {
+      frame: selected ? 0x5e4a31 : 0x493824,
+      bed: 0x6c5234,
+      crop: 0x503c29,
+      badge: '#c5d0de',
+    };
+  }
+
+  private ensureSelectedFarmPlot(): void {
+    const slots = this.getFarmSceneSlots();
+    if (slots.length === 0) {
+      this.farmSelectedPlotKey = null;
+      return;
+    }
+
+    if (this.farmSelectedPlotKey && slots.some((slot) => slot.plotKey === this.farmSelectedPlotKey)) {
+      return;
+    }
+
+    const preferred =
+      slots.find((slot) => slot.plot?.readyToHarvest) ??
+      slots.find((slot) => slot.plot && !slot.plot.cropKey) ??
+      slots[0];
+    this.farmSelectedPlotKey = preferred ? preferred.plotKey : null;
+  }
+
+  private setSelectedFarmPlot(plotKey: string, announceSelection: boolean): void {
+    const slot = this.getFarmSceneSlots().find((entry) => entry.plotKey === plotKey);
+    if (!slot) {
+      return;
+    }
+
+    this.farmSelectedPlotKey = plotKey;
+    this.farmError = null;
+    if (announceSelection) {
+      this.farmFeedbackMessage = `Parcelle ${slot.row}-${slot.col} ciblee.`;
+    }
+    this.farmSceneRenderSignature = '';
+  }
+
+  private getFarmPlotByKey(plotKey: string | null): FarmPlotState | null {
+    if (!plotKey || !this.farmState) {
+      return null;
+    }
+
+    return this.farmState.plots.find((plot) => plot.plotKey === plotKey) ?? null;
+  }
+
+  private getFarmPlotPhase(plot: FarmPlotState | null): FarmPlotPhase {
+    if (!plot || !plot.cropKey) {
+      return 'empty';
+    }
+
+    if (plot.readyToHarvest) {
+      return 'ready';
+    }
+
+    if (plot.wateredToday) {
+      return 'watered';
+    }
+
+    return 'planted';
+  }
+
+  private getFarmPlotPhaseLabel(plot: FarmPlotState | null): string {
+    const phase = this.getFarmPlotPhase(plot);
+    if (phase === 'ready') {
+      return 'Prete';
+    }
+    if (phase === 'watered') {
+      return 'Arrosee';
+    }
+    if (phase === 'planted') {
+      return 'Plantee';
+    }
+    return 'Vide';
+  }
+
+  private getSelectedSeedLabel(): string {
+    if (!this.farmSelectedSeedItemKey) {
+      return 'Aucune';
+    }
+
+    return this.formatFarmLabel(this.farmSelectedSeedItemKey);
+  }
+
+  private getFarmReadyPlotsLabel(): string {
+    const farm = this.farmState;
+    if (!farm || !farm.unlocked) {
+      return 'Ferme verrouillee';
+    }
+
+    return `${farm.readyPlots} pretes / ${farm.totalPlots}`;
+  }
+
+  private updateFarmContextPanel(): void {
+    const farm = this.farmState;
+    const selectedPlot = this.getFarmPlotByKey(this.farmSelectedPlotKey);
+    const canUseFarm = Boolean(this.isAuthenticated && farm?.unlocked);
+
+    if (this.farmContextTitleValue) {
+      if (selectedPlot) {
+        this.farmContextTitleValue.textContent = `Parcelle ${selectedPlot.row}-${selectedPlot.col}`;
+      } else if (!canUseFarm) {
+        this.farmContextTitleValue.textContent = 'Ferme indisponible';
+      } else {
+        this.farmContextTitleValue.textContent = 'Selectionne une parcelle';
+      }
+    }
+
+    if (this.farmContextStatusValue) {
+      if (!this.isAuthenticated) {
+        this.farmContextStatusValue.textContent = 'Connecte-toi pour lancer la boucle agricole.';
+      } else if (!farm?.unlocked) {
+        this.farmContextStatusValue.textContent = 'Termine l intro pour recuperer officiellement la ferme.';
+      } else if (!selectedPlot) {
+        this.farmContextStatusValue.textContent = 'Selectionne une parcelle depuis la scene ou la grille.';
+      } else {
+        this.farmContextStatusValue.textContent = this.getFarmPlotStatusLabel(selectedPlot);
+      }
+    }
+
+    const canPlant = Boolean(canUseFarm && selectedPlot && !selectedPlot.cropKey && this.farmSelectedSeedItemKey);
+    const canWater = Boolean(canUseFarm && selectedPlot?.cropKey && !selectedPlot.wateredToday);
+    const canHarvest = Boolean(canUseFarm && selectedPlot?.cropKey && selectedPlot.readyToHarvest);
+
+    const plantButton = this.farmContextPlantButton;
+    if (plantButton) {
+      plantButton.dataset.farmAction = 'plant';
+      if (selectedPlot) {
+        plantButton.dataset.plotKey = selectedPlot.plotKey;
+      } else {
+        delete plantButton.dataset.plotKey;
+      }
+      plantButton.textContent = this.farmSelectedSeedItemKey
+        ? `Planter (${this.formatFarmLabel(this.farmSelectedSeedItemKey)})`
+        : 'Planter';
+      plantButton.disabled = this.farmBusy || !canPlant;
+    }
+
+    const waterButton = this.farmContextWaterButton;
+    if (waterButton) {
+      waterButton.dataset.farmAction = 'water';
+      if (selectedPlot) {
+        waterButton.dataset.plotKey = selectedPlot.plotKey;
+      } else {
+        delete waterButton.dataset.plotKey;
+      }
+      waterButton.disabled = this.farmBusy || !canWater;
+    }
+
+    const harvestButton = this.farmContextHarvestButton;
+    if (harvestButton) {
+      harvestButton.dataset.farmAction = 'harvest';
+      if (selectedPlot) {
+        harvestButton.dataset.plotKey = selectedPlot.plotKey;
+      } else {
+        delete harvestButton.dataset.plotKey;
+      }
+      harvestButton.disabled = this.farmBusy || !canHarvest;
+    }
+  }
+
+  private getFarmFeedbackLabel(): string {
+    if (this.farmError) {
+      return this.farmError;
+    }
+    if (this.farmCraftingError) {
+      return this.farmCraftingError;
+    }
+    if (this.farmBusy) {
+      return 'Action en cours sur la ferme...';
+    }
+    if (this.farmCraftingBusy) {
+      return 'Craft en cours...';
+    }
+    if (this.farmFeedbackMessage) {
+      return this.farmFeedbackMessage;
+    }
+    if (!this.isAuthenticated) {
+      return 'Connecte-toi pour activer la ferme.';
+    }
+    if (!this.farmState?.unlocked) {
+      return 'Passe l intro avec le maire pour debloquer la ferme.';
+    }
+    return 'Clique une parcelle, puis choisis Planter, Arroser ou Recolter.';
+  }
+
+  private toggleFarmCraftingPanel(): void {
+    if (!this.isAuthenticated) {
+      this.farmFeedbackMessage = 'Connexion requise pour ouvrir le craft.';
+      this.updateHud();
+      return;
+    }
+
+    if (!this.farmState?.unlocked) {
+      this.farmFeedbackMessage = 'Le coin craft se debloque avec la ferme.';
+      this.updateHud();
+      return;
+    }
+
+    this.farmCraftingPanelOpen = !this.farmCraftingPanelOpen;
+    this.farmFeedbackMessage = this.farmCraftingPanelOpen
+      ? 'Coin craft ouvert.'
+      : 'Coin craft ferme.';
+    this.updateHud();
+  }
+
+  private handleFarmVillageExitIntent(): void {
+    if (!this.isAuthenticated) {
+      this.farmFeedbackMessage = 'Connexion requise pour quitter la ferme.';
+      this.updateHud();
+      return;
+    }
+
+    this.farmFeedbackMessage = 'Sortie village visible. La navigation village arrive au lot 2.';
+    this.updateHud();
+  }
+
+  private handleFarmHotkeys(): void {
+    if (this.isTypingInsideField()) {
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.farmHotkeys.craft)) {
+      this.toggleFarmCraftingPanel();
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.farmHotkeys.sleep)) {
+      void this.sleepAtFarm();
+      return;
+    }
+
+    const plotKey = this.farmSelectedPlotKey;
+    if (!plotKey) {
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.farmHotkeys.plant)) {
+      void this.plantFarmPlot(plotKey);
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.farmHotkeys.water)) {
+      void this.waterFarmPlot(plotKey);
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.farmHotkeys.harvest)) {
+      void this.harvestFarmPlot(plotKey);
+    }
+  }
+
+  private isTypingInsideField(): boolean {
+    const active = document.activeElement;
+    if (!active) {
+      return false;
+    }
+
+    const tagName = active.tagName.toUpperCase();
+    return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
   }
 
   private createObstacle(x: number, y: number, width: number, height: number): Phaser.GameObjects.Rectangle {
-    const obstacle = this.add.rectangle(x, y, width, height, 0x354b2f, 0.35);
+    const obstacle = this.add.rectangle(x, y, width, height, 0x0f1410, 0.001);
+    obstacle.setDepth(3);
     this.physics.add.existing(obstacle, true);
     return obstacle;
   }

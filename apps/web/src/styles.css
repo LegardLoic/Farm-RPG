@@ -111,6 +111,120 @@ body::before {
   pointer-events: auto;
 }
 
+.hud-panel.hud-panel-farm-mvp {
+  width: min(540px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  background:
+    linear-gradient(180deg, rgba(23, 34, 20, 0.82), rgba(13, 20, 15, 0.86)),
+    rgba(13, 20, 15, 0.86);
+  border-color: rgba(198, 171, 110, 0.32);
+}
+
+.hud-panel.hud-panel-farm-mvp .hud-grid,
+.hud-panel.hud-panel-farm-mvp .hud-location,
+.hud-panel.hud-panel-farm-mvp .hud-hero-profile,
+.hud-panel.hud-panel-farm-mvp .hud-combat,
+.hud-panel.hud-panel-farm-mvp .hud-quests,
+.hud-panel.hud-panel-farm-mvp .hud-village-npcs,
+.hud-panel.hud-panel-farm-mvp .hud-blacksmith,
+.hud-panel.hud-panel-farm-mvp .hud-village-market,
+.hud-panel.hud-panel-farm-mvp .hud-farm,
+.hud-panel.hud-panel-farm-mvp .hud-loop,
+.hud-panel.hud-panel-farm-mvp .hud-tower-story,
+.hud-panel.hud-panel-farm-mvp .hud-autosave,
+.hud-panel.hud-panel-farm-mvp .hud-saves,
+.hud-panel.hud-panel-farm-mvp .hud-debug-qa {
+  display: none;
+}
+
+.hud-farm-overview {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hud-farm-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hud-farm-overview-stat {
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(214, 194, 142, 0.22);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.hud-farm-overview-stat span {
+  display: block;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b9c3d4;
+}
+
+.hud-farm-overview-stat strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.83rem;
+  color: #f3ebd7;
+}
+
+.hud-farm-context {
+  border: 1px solid rgba(214, 194, 142, 0.22);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(9, 14, 11, 0.46);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hud-farm-context-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud-farm-context-header span {
+  font-size: 0.69rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b9c3d4;
+}
+
+.hud-farm-context-header strong {
+  font-size: 0.78rem;
+  color: #f3ebd7;
+}
+
+.hud-farm-context-status {
+  margin: 0;
+  font-size: 0.77rem;
+  line-height: 1.35;
+  color: #d6e2cf;
+}
+
+.hud-farm-context-feedback {
+  margin: 0;
+  font-size: 0.73rem;
+  line-height: 1.36;
+  color: #b7cbc0;
+  border: 1px solid rgba(127, 209, 199, 0.24);
+  background: rgba(127, 209, 199, 0.08);
+  border-radius: 8px;
+  padding: 7px 8px;
+}
+
+.hud-farm-context-feedback[data-tone="error"] {
+  border-color: rgba(242, 111, 111, 0.34);
+  background: rgba(242, 111, 111, 0.11);
+  color: #ffd0d0;
+}
+
 .hud-title {
   font-size: 1.15rem;
   letter-spacing: 0.12em;
@@ -398,6 +512,12 @@ body::before {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.hud-panel.hud-panel-farm-mvp .hud-farm-crafting {
+  margin-top: 10px;
+  border-color: rgba(127, 209, 199, 0.28);
+  background: rgba(9, 18, 15, 0.56);
 }
 
 .hud-loop {
@@ -1366,6 +1486,13 @@ body::before {
   overflow: auto;
 }
 
+.hud-panel.hud-panel-farm-mvp .hud-farm-plots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 260px;
+}
+
 .hud-farm-crafting-list {
   margin: 0;
   padding: 0;
@@ -1428,9 +1555,20 @@ body::before {
   gap: 8px;
 }
 
+.hud-panel.hud-panel-farm-mvp .farm-plot-item {
+  border-color: rgba(214, 194, 142, 0.2);
+  background: rgba(13, 23, 15, 0.42);
+  min-height: 126px;
+}
+
 .farm-plot-item[data-ready="1"] {
   border-color: rgba(127, 209, 199, 0.4);
   background: rgba(127, 209, 199, 0.1);
+}
+
+.farm-plot-item[data-selected="1"] {
+  border-color: rgba(226, 182, 109, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(226, 182, 109, 0.24);
 }
 
 .quest-item.empty {
@@ -1526,6 +1664,12 @@ body::before {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.farm-plot-actions.context {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .save-slot-state {
@@ -1683,6 +1827,16 @@ body::before {
 .hud-farm-action.sleep {
   border-color: rgba(185, 195, 212, 0.45);
   background: rgba(185, 195, 212, 0.14);
+}
+
+.hud-farm-action[data-farm-action="toggle-craft"] {
+  border-color: rgba(127, 209, 199, 0.45);
+  background: rgba(127, 209, 199, 0.15);
+}
+
+.hud-farm-action[data-farm-action="go-village"] {
+  border-color: rgba(214, 194, 142, 0.48);
+  background: rgba(214, 194, 142, 0.18);
 }
 
 .hud-autosave-restore {
@@ -2300,6 +2454,18 @@ body::before {
 
   .hud-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hud-farm-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hud-panel.hud-panel-farm-mvp .hud-farm-plots {
+    grid-template-columns: 1fr;
+  }
+
+  .farm-plot-actions.context {
+    grid-template-columns: 1fr;
   }
 
   .hud-combat-meta,
