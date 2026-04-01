@@ -223,6 +223,7 @@ function createQuestProgressRecorder() {
   return {
     harvestCalls: [],
     deliveryCalls: [],
+    npcInteractionCalls: [],
     async recordFarmHarvest(_executor, userId, input) {
       this.harvestCalls.push({
         userId,
@@ -238,6 +239,15 @@ function createQuestProgressRecorder() {
         input: {
           cropKey: input.cropKey,
           quantity: input.quantity,
+        },
+      });
+    },
+    async recordVillageNpcInteraction(_executor, userId, input) {
+      this.npcInteractionCalls.push({
+        userId,
+        input: {
+          npcKey: input.npcKey,
+          friendshipAfter: input.friendshipAfter,
         },
       });
     },
@@ -1403,6 +1413,34 @@ test('gameplay village NPC interaction increases friendship once per day', async
     () => service.interactVillageNpc('user-1', 'mayor'),
     /already interacted today/,
   );
+});
+
+test('gameplay village NPC interaction reports village quest progression', async () => {
+  const db = createGameplayDatabaseStub(
+    ['intro_arrived_village', 'intro_met_mayor', 'intro_farm_assigned'],
+    [],
+    {},
+    {
+      mayor: {
+        friendship: 2,
+        last_interaction_day: null,
+      },
+    },
+  );
+  const quests = createQuestProgressRecorder();
+  const service = new GameplayService(db, quests);
+
+  const result = await service.interactVillageNpc('user-1', 'mayor');
+
+  assert.equal(result.interaction.friendshipAfter, 3);
+  assert.equal(quests.npcInteractionCalls.length, 1);
+  assert.deepEqual(quests.npcInteractionCalls[0], {
+    userId: 'user-1',
+    input: {
+      npcKey: 'mayor',
+      friendshipAfter: 3,
+    },
+  });
 });
 
 test('gameplay village NPC interaction rejects unavailable NPCs', async () => {

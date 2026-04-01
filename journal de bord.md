@@ -1565,6 +1565,27 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - régression web validée (`@farm-rpg/web`).
   - suite globale validée (`npm run test`).
 
+### Lot 101 - Quetes narratives village: micro-quetes PNJ
+- Backend quetes:
+  - extension du schema de progression de quetes:
+    - `npcInteractionsTotal`
+    - `interactedNpcs`
+    - `npcFriendshipLevels`.
+  - nouveaux metriques d'objectifs:
+    - `village_npc_interaction_total`
+    - `village_npc_interaction_npc`
+    - `village_npc_friendship_npc`.
+  - hook de progression branche sur `POST /gameplay/village/npc/interact` via `recordVillageNpcInteraction`.
+  - compatibilite conservee avec snapshots de progression legacy (normalisation avec defaults).
+- Nouvelles micro-quetes narratives:
+  - `village_mayor_briefing` (dialogue + relation maire)
+  - `blacksmith_forge_update` (dialogue + relation forgeron)
+  - `merchant_route_sync` (dialogue marchand + volume d'interactions village).
+- QA:
+  - tests crosscut etendus:
+    - verification du hook de progression quetes lors d'une interaction PNJ
+  - suite API validee.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1593,7 +1614,8 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - definitions cote serveur
   - progression automatique sur victoires
   - progression automatique sur recoltes ferme et livraisons marche village
-  - objectifs bases sur victoires, paliers de tour, recoltes et livraisons
+  - progression automatique sur interactions/relation PNJ village
+  - objectifs bases sur victoires, paliers de tour, recoltes, livraisons et interactions PNJ
   - claim explicite des recompenses
 - Shops:
   - boutique forgeron protegee
@@ -1753,13 +1775,13 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 101 - Quetes narratives village: premieres micro-quetes dialoguees reliees aux etats PNJ.
-2. Lot 102 - Premiere passe dialogues contextuels PNJ relies au tier de relation.
-3. Lot 103 - Hook scenario ferme: premiers evenements declenches par jour + progression recoltes.
-4. Lot 104 - Trigger scenario tour: premiers beats narratifs relies aux paliers 3/5/8/10.
-5. Lot 105 - Passe accessibilite HUD combat (contraste, focus, lisibilite mobile).
-6. Lot 106 - Telemetrie balancing: extraction KPI debuffs/reactions pour iterations tuning.
-7. Lot 107 - Economie UI: affichage explicite des gains XP de vente dans le panneau Market.
-8. Lot 108 - QA mobile touch: revue interactions combat/farm en viewport reduit.
+1. Lot 102 - Premiere passe dialogues contextuels PNJ relies au tier de relation.
+2. Lot 103 - Hook scenario ferme: premiers evenements declenches par jour + progression recoltes.
+3. Lot 104 - Trigger scenario tour: premiers beats narratifs relies aux paliers 3/5/8/10.
+4. Lot 105 - Passe accessibilite HUD combat (contraste, focus, lisibilite mobile).
+5. Lot 106 - Telemetrie balancing: extraction KPI debuffs/reactions pour iterations tuning.
+6. Lot 107 - Economie UI: affichage explicite des gains XP de vente dans le panneau Market.
+7. Lot 108 - QA mobile touch: revue interactions combat/farm en viewport reduit.
+8. Lot 109 - Quetes village phase 2: chaines multi-jours avec conditions farm+tour combinees.
 
 

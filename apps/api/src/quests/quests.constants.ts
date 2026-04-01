@@ -142,6 +142,104 @@ export const QUEST_DEFINITIONS: QuestDefinition[] = [
     },
   },
   {
+    key: 'village_mayor_briefing',
+    title: 'Mayor Briefing',
+    description:
+      'Debrief with the mayor after your first field runs so the village watch can adapt patrol routes.',
+    objectives: [
+      {
+        key: 'talk_mayor_1',
+        description: 'Talk to the mayor 1 time',
+        metric: 'village_npc_interaction_npc',
+        target: 1,
+        npcKey: 'mayor',
+      },
+      {
+        key: 'friendship_mayor_3',
+        description: 'Reach friendship 3 with the mayor',
+        metric: 'village_npc_friendship_npc',
+        target: 3,
+        npcKey: 'mayor',
+      },
+    ],
+    rewards: {
+      experience: 24,
+      gold: 26,
+      items: [
+        {
+          itemKey: 'healing_herb',
+          quantity: 1,
+        },
+      ],
+      flags: ['village_mayor_briefing_done'],
+    },
+  },
+  {
+    key: 'blacksmith_forge_update',
+    title: 'Forge Status Update',
+    description:
+      'Check in with the blacksmith as soon as the curse weakens and gather actionable forge requests.',
+    objectives: [
+      {
+        key: 'talk_blacksmith_2',
+        description: 'Talk to the blacksmith 2 times',
+        metric: 'village_npc_interaction_npc',
+        target: 2,
+        npcKey: 'blacksmith',
+      },
+      {
+        key: 'friendship_blacksmith_4',
+        description: 'Reach friendship 4 with the blacksmith',
+        metric: 'village_npc_friendship_npc',
+        target: 4,
+        npcKey: 'blacksmith',
+      },
+    ],
+    rewards: {
+      experience: 34,
+      gold: 38,
+      items: [
+        {
+          itemKey: 'iron_ore',
+          quantity: 2,
+        },
+      ],
+      flags: ['village_forge_update_done'],
+    },
+  },
+  {
+    key: 'merchant_route_sync',
+    title: 'Merchant Route Sync',
+    description:
+      'Coordinate with the merchant to sync crop deliveries and tower supply movement once trade routes open.',
+    objectives: [
+      {
+        key: 'talk_merchant_2',
+        description: 'Talk to the merchant 2 times',
+        metric: 'village_npc_interaction_npc',
+        target: 2,
+        npcKey: 'merchant',
+      },
+      {
+        key: 'npc_talks_6_total',
+        description: 'Reach 6 total village NPC interactions',
+        metric: 'village_npc_interaction_total',
+        target: 6,
+      },
+    ],
+    rewards: {
+      experience: 48,
+      gold: 46,
+      items: [
+        {
+          itemKey: 'carrot_seed',
+          quantity: 2,
+        },
+      ],
+      flags: ['village_merchant_route_sync_done'],
+    },
+  },
+  {
     key: 'story_floor_3',
     title: 'Smoke Above The Fields',
     description: 'Reach floor 3 of the tower and report the first signs of corruption.',

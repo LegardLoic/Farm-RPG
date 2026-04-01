@@ -1151,6 +1151,8 @@ export class DebugAdminService {
       enemyVictories: { ...progress.enemyVictories },
       harvestedCrops: { ...progress.harvestedCrops },
       deliveredCrops: { ...progress.deliveredCrops },
+      interactedNpcs: { ...progress.interactedNpcs },
+      npcFriendshipLevels: { ...progress.npcFriendshipLevels },
     };
 
     for (const objective of definition.objectives) {
@@ -1186,6 +1188,24 @@ export class DebugAdminService {
         continue;
       }
 
+      if (objective.metric === 'village_npc_interaction_total') {
+        completed.npcInteractionsTotal = Math.max(completed.npcInteractionsTotal, objective.target);
+        continue;
+      }
+
+      if (objective.metric === 'village_npc_interaction_npc' && objective.npcKey) {
+        const currentNpcInteractions = completed.interactedNpcs[objective.npcKey] ?? 0;
+        completed.interactedNpcs[objective.npcKey] = Math.max(currentNpcInteractions, objective.target);
+        completed.npcInteractionsTotal = Math.max(completed.npcInteractionsTotal, objective.target);
+        continue;
+      }
+
+      if (objective.metric === 'village_npc_friendship_npc' && objective.npcKey) {
+        const currentFriendship = completed.npcFriendshipLevels[objective.npcKey] ?? 0;
+        completed.npcFriendshipLevels[objective.npcKey] = Math.max(currentFriendship, objective.target);
+        continue;
+      }
+
       if (objective.metric === 'enemy_victories' && objective.enemyKey) {
         const currentEnemyVictories = completed.enemyVictories[objective.enemyKey] ?? 0;
         completed.enemyVictories[objective.enemyKey] = Math.max(currentEnemyVictories, objective.target);
@@ -1213,6 +1233,8 @@ export class DebugAdminService {
     const enemyVictories = parsed.enemyVictories ?? {};
     const harvestedCrops = parsed.harvestedCrops ?? {};
     const deliveredCrops = parsed.deliveredCrops ?? {};
+    const interactedNpcs = parsed.interactedNpcs ?? {};
+    const npcFriendshipLevels = parsed.npcFriendshipLevels ?? {};
 
     return {
       victoriesTotal: Math.max(0, Number(parsed.victoriesTotal ?? 0)),
@@ -1222,6 +1244,9 @@ export class DebugAdminService {
       harvestedCrops: { ...harvestedCrops },
       cropsDeliveredTotal: Math.max(0, Number(parsed.cropsDeliveredTotal ?? 0)),
       deliveredCrops: { ...deliveredCrops },
+      npcInteractionsTotal: Math.max(0, Number(parsed.npcInteractionsTotal ?? 0)),
+      interactedNpcs: { ...interactedNpcs },
+      npcFriendshipLevels: { ...npcFriendshipLevels },
       lastVictoryAt: typeof parsed.lastVictoryAt === 'string' ? parsed.lastVictoryAt : null,
       completedAt: typeof parsed.completedAt === 'string' ? parsed.completedAt : null,
       claimedAt: typeof parsed.claimedAt === 'string' ? parsed.claimedAt : null,
@@ -1237,6 +1262,9 @@ export class DebugAdminService {
       harvestedCrops: {},
       cropsDeliveredTotal: 0,
       deliveredCrops: {},
+      npcInteractionsTotal: 0,
+      interactedNpcs: {},
+      npcFriendshipLevels: {},
       lastVictoryAt: null,
       completedAt: null,
       claimedAt: null,

@@ -36,6 +36,11 @@ type RecordVillageDeliveryInput = {
   quantity: number;
 };
 
+type RecordVillageNpcInteractionInput = {
+  npcKey: 'mayor' | 'blacksmith' | 'merchant';
+  friendshipAfter: number;
+};
+
 type QuestStateRow = {
   quest_key: string;
   status: QuestStatus;
@@ -162,6 +167,27 @@ export class QuestsService {
     await this.recordProgressEvent(executor, userId, null, (progress) => {
       progress.cropsDeliveredTotal += quantity;
       progress.deliveredCrops[cropKey] = (progress.deliveredCrops[cropKey] ?? 0) + quantity;
+    });
+  }
+
+  async recordVillageNpcInteraction(
+    executor: TransactionClient,
+    userId: string,
+    input: RecordVillageNpcInteractionInput,
+  ): Promise<void> {
+    const npcKey = input.npcKey.trim();
+    if (!npcKey) {
+      return;
+    }
+
+    const friendshipAfter = Math.max(0, Math.floor(Number(input.friendshipAfter ?? 0)));
+    await this.recordProgressEvent(executor, userId, null, (progress) => {
+      progress.npcInteractionsTotal += 1;
+      progress.interactedNpcs[npcKey] = (progress.interactedNpcs[npcKey] ?? 0) + 1;
+      progress.npcFriendshipLevels[npcKey] = Math.max(
+        progress.npcFriendshipLevels[npcKey] ?? 0,
+        friendshipAfter,
+      );
     });
   }
 
@@ -492,6 +518,26 @@ export class QuestsService {
       return progress.deliveredCrops[objective.cropKey] ?? 0;
     }
 
+    if (objective.metric === 'village_npc_interaction_total') {
+      return progress.npcInteractionsTotal;
+    }
+
+    if (objective.metric === 'village_npc_interaction_npc') {
+      if (!objective.npcKey) {
+        return 0;
+      }
+
+      return progress.interactedNpcs[objective.npcKey] ?? 0;
+    }
+
+    if (objective.metric === 'village_npc_friendship_npc') {
+      if (!objective.npcKey) {
+        return 0;
+      }
+
+      return progress.npcFriendshipLevels[objective.npcKey] ?? 0;
+    }
+
     if (!objective.enemyKey) {
       return 0;
     }
@@ -517,6 +563,8 @@ export class QuestsService {
     const enemyVictories = parsed.enemyVictories ?? {};
     const harvestedCrops = parsed.harvestedCrops ?? {};
     const deliveredCrops = parsed.deliveredCrops ?? {};
+    const interactedNpcs = parsed.interactedNpcs ?? {};
+    const npcFriendshipLevels = parsed.npcFriendshipLevels ?? {};
 
     return {
       victoriesTotal: Math.max(0, Number(parsed.victoriesTotal ?? 0)),
@@ -526,6 +574,9 @@ export class QuestsService {
       harvestedCrops: { ...harvestedCrops },
       cropsDeliveredTotal: Math.max(0, Number(parsed.cropsDeliveredTotal ?? 0)),
       deliveredCrops: { ...deliveredCrops },
+      npcInteractionsTotal: Math.max(0, Number(parsed.npcInteractionsTotal ?? 0)),
+      interactedNpcs: { ...interactedNpcs },
+      npcFriendshipLevels: { ...npcFriendshipLevels },
       lastVictoryAt: typeof parsed.lastVictoryAt === 'string' ? parsed.lastVictoryAt : null,
       completedAt: typeof parsed.completedAt === 'string' ? parsed.completedAt : null,
       claimedAt: typeof parsed.claimedAt === 'string' ? parsed.claimedAt : null,
@@ -541,6 +592,9 @@ export class QuestsService {
       harvestedCrops: {},
       cropsDeliveredTotal: 0,
       deliveredCrops: {},
+      npcInteractionsTotal: 0,
+      interactedNpcs: {},
+      npcFriendshipLevels: {},
       lastVictoryAt: null,
       completedAt: null,
       claimedAt: null,
