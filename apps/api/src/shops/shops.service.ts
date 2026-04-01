@@ -5,8 +5,10 @@ import {
   BASE_PLAYER_EXPERIENCE,
   BASE_PLAYER_GOLD,
   BASE_PLAYER_LEVEL,
+  PLAYER_MAX_LEVEL,
   PLAYER_PROGRESSION_TABLE,
   WORLD_FLAGS_TABLE,
+  clampPlayerLevel,
   xpRequiredForLevel,
 } from '../gameplay/gameplay.constants';
 import { INVENTORY_ITEMS_TABLE } from '../inventory/inventory.constants';
@@ -14,8 +16,10 @@ import { QuestsService } from '../quests/quests.service';
 import {
   BLACKSMITH_OFFERS,
   BLACKSMITH_SHOP_UNLOCK_FLAG,
+  VILLAGE_CROP_SALE_BASE_EXPERIENCE,
   VILLAGE_CROP_BUYBACK_OFFERS,
   VILLAGE_MARKET_UNLOCK_FLAGS,
+  resolveVillageSaleExperienceTier,
   VILLAGE_SEED_OFFERS,
 } from './shops.constants';
 import type {
@@ -246,9 +250,19 @@ export class ShopsService {
       }
 
       const progression = await this.getProgressionForUpdate(tx, userId);
+      const experienceTier = resolveVillageSaleExperienceTier(worldFlags);
+      const baseExperiencePerItem = VILLAGE_CROP_SALE_BASE_EXPERIENCE[buybackOffer.itemKey] ?? 1;
+      const totalExperienceGained = Math.max(
+        0,
+        Math.round(baseExperiencePerItem * quantity * experienceTier.experienceMultiplier),
+      );
       const totalGoldGained = buybackOffer.goldValue * quantity;
-      const newGold = progression.gold + totalGoldGained;
-      await this.updatePlayerGold(tx, userId, newGold);
+      const progressionAfter = this.applyRewardsToProgression(
+        progression,
+        totalExperienceGained,
+        totalGoldGained,
+      );
+      await this.updatePlayerProgression(tx, userId, progressionAfter);
 
       if (this.questsService) {
         await this.questsService.recordVillageDelivery(tx, userId, {
@@ -262,8 +276,16 @@ export class ShopsService {
         quantitySold: quantity,
         unitGoldValue: buybackOffer.goldValue,
         totalGoldGained,
-        newGold,
+        totalExperienceGained,
+        economyTierKey: experienceTier.key,
+        newGold: progressionAfter.gold,
         remainingQuantity,
+        progression: {
+          level: progressionAfter.level,
+          experience: progressionAfter.experience,
+          experienceToNextLevel: progressionAfter.experience_to_next,
+          gold: progressionAfter.gold,
+        },
       };
     });
   }
@@ -399,6 +421,62 @@ export class ShopsService {
       `,
       [userId, gold],
     );
+  }
+
+  private async updatePlayerProgression(
+    executor: TransactionClient,
+    userId: string,
+    progression: PlayerProgressionRow,
+  ): Promise<void> {
+    await executor.query(
+      `
+        UPDATE ${PLAYER_PROGRESSION_TABLE}
+        SET level = $2,
+            experience = $3,
+            experience_to_next = $4,
+            gold = $5,
+            updated_at = NOW()
+        WHERE user_id = $1
+      `,
+      [
+        userId,
+        progression.level,
+        progression.experience,
+        progression.experience_to_next,
+        progression.gold,
+      ],
+    );
+  }
+
+  private applyRewardsToProgression(
+    progression: PlayerProgressionRow,
+    gainedExperience: number,
+    gainedGold: number,
+  ): PlayerProgressionRow {
+    let level = clampPlayerLevel(progression.level);
+    let experience = Math.max(0, Math.floor(progression.experience));
+    experience += Math.max(0, Math.floor(gainedExperience));
+
+    let experienceToNext = xpRequiredForLevel(level);
+    while (level < PLAYER_MAX_LEVEL && experience >= experienceToNext) {
+      experience -= experienceToNext;
+      level += 1;
+      experienceToNext = xpRequiredForLevel(level);
+    }
+
+    if (level >= PLAYER_MAX_LEVEL) {
+      level = PLAYER_MAX_LEVEL;
+      experience = Math.max(0, Math.min(experience, experienceToNext - 1));
+      experienceToNext = xpRequiredForLevel(level);
+    }
+
+    return {
+      ...progression,
+      level,
+      experience,
+      experience_to_next: experienceToNext,
+      gold: Math.max(0, Math.floor(progression.gold) + Math.max(0, Math.floor(gainedGold))),
+    };
   }
 
   private async isShopUnlocked(

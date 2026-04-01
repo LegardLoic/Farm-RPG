@@ -6236,7 +6236,45 @@ export class GameScene extends Phaser.Scene {
       return 'Recap: pending';
     }
 
-    return `Recap: DMG ${recap.damageDealt}/${recap.damageTaken} | Heal ${recap.healingDone} | MP ${recap.mpSpent}/${recap.mpRecovered} | Status +P${recap.poisonApplied}/+C${recap.ceciteApplied}/+O${recap.obscuriteApplied} cleansed ${recap.debuffsCleansed} | Loot x${recap.rewards.lootItems}`;
+    const summaryLine = [
+      `Recap ${this.getCombatRecapOutcomeLabel(recap.outcome)}`,
+      `R${recap.rounds}`,
+      `DMG +${recap.damageDealt}/-${recap.damageTaken}`,
+      `Heal +${recap.healingDone}`,
+      `MP -${recap.mpSpent}/+${recap.mpRecovered}`,
+    ].join(' | ');
+
+    const statusLine = [
+      `Status P${recap.poisonApplied}/C${recap.ceciteApplied}/O${recap.obscuriteApplied}`,
+      `Cleanse ${recap.debuffsCleansed}`,
+      `Blind miss ${recap.blindMisses}`,
+    ].join(' | ');
+
+    const rewardsLine = [
+      `Rewards XP +${recap.rewards.experience}`,
+      `Gold +${recap.rewards.gold}`,
+      `Loot x${recap.rewards.lootItems}`,
+    ].join(' | ');
+
+    const penaltyLine =
+      recap.penalties.goldLost > 0 || recap.penalties.itemsLost > 0
+        ? `Penalties Gold -${recap.penalties.goldLost} | Items -${recap.penalties.itemsLost}`
+        : '';
+
+    return [summaryLine, statusLine, rewardsLine, penaltyLine].filter((line) => line.length > 0).join('\n');
+  }
+
+  private getCombatRecapOutcomeLabel(status: CombatStatus): string {
+    if (status === 'won') {
+      return 'Victory';
+    }
+    if (status === 'lost') {
+      return 'Defeat';
+    }
+    if (status === 'fled') {
+      return 'Flee';
+    }
+    return 'Active';
   }
 
   private getCombatName(): string {

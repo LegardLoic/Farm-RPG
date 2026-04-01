@@ -39,6 +39,7 @@ import {
   COMBAT_ENCOUNTERS_TABLE,
   COMBAT_ENEMY_DEFINITIONS,
   COMBAT_LOG_LIMIT,
+  COMBAT_STATUS_BALANCE_TABLE,
   CURSE_AVATAR_DISPEL_MANA_COST,
   CLEANSE_MANA_COST,
   CLEANSE_REACTION_WINDOW_TURNS,
@@ -50,11 +51,8 @@ import {
   INTERRUPT_MANA_COST,
   INTERRUPT_REACTION_WINDOW_TURNS,
   MEND_MANA_COST,
-  PLAYER_BLINDED_DURATION_TURNS,
-  PLAYER_BLINDED_MISS_CHANCE,
-  PLAYER_DARKENED_DURATION_TURNS,
+  type CombatStatusBalanceTier,
   PLAYER_POISON_DAMAGE,
-  PLAYER_POISON_DURATION_TURNS,
   RALLY_DURATION_TURNS,
   RALLY_MANA_COST,
   THORN_BEAST_ALPHA_ROOT_SMASH_INTERVAL,
@@ -158,6 +156,8 @@ type CombatCurveTier = {
   rewardXpMultiplier: number;
   rewardGoldMultiplier: number;
 };
+
+type CombatDebuffKey = 'poison' | 'cecite' | 'obscurite';
 
 const COMBAT_CURVE_TIERS: CombatCurveTier[] = [
   {
@@ -1376,12 +1376,14 @@ export class CombatService {
       case 'root_smash':
         damage += 3;
         label = `${encounter.enemy.name} uses Root Smash`;
-        this.setPlayerBlindedTurns(
-          encounter,
-          Math.max(this.getPlayerBlindedTurns(encounter), PLAYER_BLINDED_DURATION_TURNS),
-        );
-        this.incrementTelemetryCounter(encounter, 'telemetryRecapCeciteApplied');
-        this.pushLog(encounter, `You are afflicted by Cecite for ${PLAYER_BLINDED_DURATION_TURNS} turns.`);
+        {
+          const result = this.tryApplyPlayerDebuff(encounter, 'cecite');
+          if (result.applied) {
+            this.pushLog(encounter, `You are afflicted by Cecite for ${result.duration} turns.`);
+          } else {
+            this.pushLog(encounter, 'You resist Cecite.');
+          }
+        }
         break;
       case 'opening_punish':
         damage += 2;
@@ -1391,12 +1393,14 @@ export class CombatService {
         encounter.enemy.currentMp -= 3;
         damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + 2;
         label = `${encounter.enemy.name} casts Cinder Burst`;
-        this.setPlayerPoisonedTurns(
-          encounter,
-          Math.max(this.getPlayerPoisonedTurns(encounter), PLAYER_POISON_DURATION_TURNS),
-        );
-        this.incrementTelemetryCounter(encounter, 'telemetryRecapPoisonApplied');
-        this.pushLog(encounter, `You are afflicted by Poison for ${PLAYER_POISON_DURATION_TURNS} turns.`);
+        {
+          const result = this.tryApplyPlayerDebuff(encounter, 'poison');
+          if (result.applied) {
+            this.pushLog(encounter, `You are afflicted by Poison for ${result.duration} turns.`);
+          } else {
+            this.pushLog(encounter, 'You resist Poison.');
+          }
+        }
         break;
       case 'molten_shell':
         encounter.enemy.currentMp -= CINDER_WARDEN_PURGE_MANA_COST;
@@ -1423,17 +1427,17 @@ export class CombatService {
         const enraged = Boolean(encounter.scriptState?.avatarEnraged);
         encounter.enemy.currentMp -= CURSE_AVATAR_DISPEL_MANA_COST;
         this.setPlayerRallyTurns(encounter, 0);
-        this.setPlayerDarkenedTurns(
-          encounter,
-          Math.max(this.getPlayerDarkenedTurns(encounter), PLAYER_DARKENED_DURATION_TURNS),
-        );
-        this.incrementTelemetryCounter(encounter, 'telemetryRecapObscuriteApplied');
+        const result = this.tryApplyPlayerDebuff(encounter, 'obscurite');
         damage = this.calculateEnemyMagicDamage(encounter.enemy, encounter.player) + (enraged ? 3 : 2);
         label = `${encounter.enemy.name} casts Null Sigil`;
-        this.pushLog(
-          encounter,
-          `Your Rally buff is dispelled and you are shrouded in Obscurite for ${PLAYER_DARKENED_DURATION_TURNS} turns.`,
-        );
+        if (result.applied) {
+          this.pushLog(
+            encounter,
+            `Your Rally buff is dispelled and you are shrouded in Obscurite for ${result.duration} turns.`,
+          );
+        } else {
+          this.pushLog(encounter, 'Your Rally buff is dispelled but you resist Obscurite.');
+        }
         break;
       }
       case 'cataclysm_ray':
@@ -1554,6 +1558,80 @@ export class CombatService {
     );
   }
 
+  private resolveStatusBalanceProfile(towerFloor: number): CombatStatusBalanceTier {
+    const safeFloor = Math.max(1, Math.floor(towerFloor));
+    return (
+      COMBAT_STATUS_BALANCE_TABLE.find(
+        (tier) => safeFloor >= tier.minFloor && (tier.maxFloor === null || safeFloor <= tier.maxFloor),
+      ) ?? COMBAT_STATUS_BALANCE_TABLE[0]
+    );
+  }
+
+  private tryApplyPlayerDebuff(
+    encounter: CombatEncounterState,
+    debuff: CombatDebuffKey,
+  ): {
+    applied: boolean;
+    duration: number;
+  } {
+    const profile = this.resolveStatusBalanceProfile(encounter.towerFloor);
+
+    if (debuff === 'poison') {
+      if (Math.random() >= profile.poisonApplyChance) {
+        return {
+          applied: false,
+          duration: profile.poisonDurationTurns,
+        };
+      }
+
+      this.setPlayerPoisonedTurns(
+        encounter,
+        Math.max(this.getPlayerPoisonedTurns(encounter), profile.poisonDurationTurns),
+      );
+      this.incrementTelemetryCounter(encounter, 'telemetryRecapPoisonApplied');
+      return {
+        applied: true,
+        duration: profile.poisonDurationTurns,
+      };
+    }
+
+    if (debuff === 'cecite') {
+      if (Math.random() >= profile.ceciteApplyChance) {
+        return {
+          applied: false,
+          duration: profile.ceciteDurationTurns,
+        };
+      }
+
+      this.setPlayerBlindedTurns(
+        encounter,
+        Math.max(this.getPlayerBlindedTurns(encounter), profile.ceciteDurationTurns),
+      );
+      this.incrementTelemetryCounter(encounter, 'telemetryRecapCeciteApplied');
+      return {
+        applied: true,
+        duration: profile.ceciteDurationTurns,
+      };
+    }
+
+    if (Math.random() >= profile.obscuriteApplyChance) {
+      return {
+        applied: false,
+        duration: profile.obscuriteDurationTurns,
+      };
+    }
+
+    this.setPlayerDarkenedTurns(
+      encounter,
+      Math.max(this.getPlayerDarkenedTurns(encounter), profile.obscuriteDurationTurns),
+    );
+    this.incrementTelemetryCounter(encounter, 'telemetryRecapObscuriteApplied');
+    return {
+      applied: true,
+      duration: profile.obscuriteDurationTurns,
+    };
+  }
+
   private rollPlayerBlindMiss(encounter: CombatEncounterState, action: CombatActionName): boolean {
     if (this.getPlayerBlindedTurns(encounter) <= 0) {
       return false;
@@ -1563,7 +1641,8 @@ export class CombatService {
       return false;
     }
 
-    return Math.random() < PLAYER_BLINDED_MISS_CHANCE;
+    const profile = this.resolveStatusBalanceProfile(encounter.towerFloor);
+    return Math.random() < profile.ceciteMissChance;
   }
 
   private isAvatarEnragedOrCrossing(encounter: CombatEncounterState): boolean {
@@ -1628,18 +1707,20 @@ export class CombatService {
   }
 
   private applyEnemyIntentStateForForecast(encounter: CombatEncounterState, intent: EnemyIntent): void {
+    const statusProfile = this.resolveStatusBalanceProfile(encounter.towerFloor);
+
     switch (intent) {
       case 'root_smash':
         this.setPlayerBlindedTurns(
           encounter,
-          Math.max(this.getPlayerBlindedTurns(encounter), PLAYER_BLINDED_DURATION_TURNS),
+          Math.max(this.getPlayerBlindedTurns(encounter), statusProfile.ceciteDurationTurns),
         );
         break;
       case 'cinder_burst':
         encounter.enemy.currentMp = Math.max(0, encounter.enemy.currentMp - 3);
         this.setPlayerPoisonedTurns(
           encounter,
-          Math.max(this.getPlayerPoisonedTurns(encounter), PLAYER_POISON_DURATION_TURNS),
+          Math.max(this.getPlayerPoisonedTurns(encounter), statusProfile.poisonDurationTurns),
         );
         break;
       case 'molten_shell':
@@ -1655,7 +1736,7 @@ export class CombatService {
         this.setPlayerRallyTurns(encounter, 0);
         this.setPlayerDarkenedTurns(
           encounter,
-          Math.max(this.getPlayerDarkenedTurns(encounter), PLAYER_DARKENED_DURATION_TURNS),
+          Math.max(this.getPlayerDarkenedTurns(encounter), statusProfile.obscuriteDurationTurns),
         );
         break;
       case 'cataclysm_ray':

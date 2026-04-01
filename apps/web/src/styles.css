@@ -2137,9 +2137,11 @@ body::before {
   border: 1px solid rgba(127, 164, 255, 0.26);
   background: rgba(127, 164, 255, 0.08);
   color: #d8e4ff;
-  padding: 9px 10px;
-  font-size: 0.76rem;
-  line-height: 1.45;
+  padding: 10px 12px;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  white-space: pre-line;
+  letter-spacing: 0.01em;
 }
 
 .hud-combat-log {
@@ -2201,6 +2203,12 @@ body::before {
   .hud-combat-meta,
   .hud-combat-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hud-combat-recap {
+    padding: 9px 10px;
+    font-size: 0.7rem;
+    line-height: 1.45;
   }
 
   .hud-intent-help-popover {

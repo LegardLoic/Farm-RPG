@@ -1506,6 +1506,65 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 - QA:
   - regression web etendue avec assertions lot 97 (mapping action + selectors CSS + keyframes).
 
+### Lot 98 - Balance combat statuts: calibration paliers 3/5/8/10
+- Backend combat:
+  - ajout d'une table de calibration des debuffs par tier d'etage:
+    - `floor_1_2`
+    - `floor_3_4` (palier 3)
+    - `floor_5_7` (palier 5)
+    - `floor_8_9` (palier 8)
+    - `floor_10_plus` (palier 10+)
+  - tuning par tier:
+    - duree `Poison`
+    - chance d'application `Poison`
+    - duree `Cecite`
+    - chance d'application `Cecite`
+    - chance de miss sous `Cecite`
+    - duree `Obscurite`
+    - chance d'application `Obscurite`.
+  - application des debuffs ennemis (`root_smash`, `cinder_burst`, `null_sigil`) branchee sur la calibration dynamique.
+  - forecast combat aligne sur les nouvelles durees calibrees pour coherence du telegraphe.
+- QA:
+  - tests backend ajoutes:
+    - verification des paliers `3/5/8/10`
+    - verification d'un echec d'application `Poison` sur roll défavorable
+    - verification du scaling de chance de miss `Cecite` selon l'etage.
+
+### Lot 99 - Economie progression: calibration gains XP boucle ferme
+- Backend shops:
+  - ajout d'un barème d'XP de vente au marché village par crop:
+    - `turnip`: 2 XP / unité
+    - `carrot`: 3 XP / unité
+    - `wheat`: 4 XP / unité
+  - ajout d'un tiering de progression story pour la vente (multiplicateur XP):
+    - `farm_bootstrap` (base)
+    - `watch_support` (`story_floor_3_cleared`)
+    - `supply_route` (`story_floor_5_cleared`)
+    - `vanguard_supply` (`story_floor_8_cleared`)
+    - `act1_war_effort` (`story_act_1_complete`)
+  - `POST /shops/village-market/sell-crop` applique maintenant les gains XP+gold dans une mise à jour atomique de progression (`level/xp/xp_to_next/gold`).
+  - payload de vente enrichi avec:
+    - `totalExperienceGained`
+    - `economyTierKey`
+    - `progression` (snapshot après transaction).
+- QA:
+  - tests crosscut shops renforcés:
+    - vérification gains XP sur vente standard
+    - vérification scaling XP selon tier story.
+
+### Lot 100 - QA ergonomie combat: recap HUD lisible desktop/mobile
+- Frontend combat HUD:
+  - recap combat réordonné pour lecture rapide:
+    - ligne 1: outcome + round + DMG/Heal/MP
+    - ligne 2: statuts appliqués + cleanse + blind misses
+    - ligne 3: rewards (XP/Gold/Loot)
+    - ligne 4 conditionnelle: penalties en cas de défaite/fuite.
+  - format recap multi-lignes via `white-space: pre-line` pour réduire la densité horizontale.
+  - ajustements responsive du bloc recap (padding/font-size/line-height) sous 700px pour meilleure lisibilité mobile.
+- QA:
+  - régression web validée (`@farm-rpg/web`).
+  - suite globale validée (`npm run test`).
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1516,6 +1575,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - endpoints ferme transactionnels (`plant/water/harvest`) avec validations metier serveur
   - endpoint temps `sleep` pour avance de jour + reset arrosage journalier
   - crafting ferme (recettes recoltes -> consommables combat) + etat `crafting` expose au HUD
+  - ventes marche village calibrées avec progression XP par crop + palier story
   - boucle verticale exposee via `loop` + endpoint `POST /gameplay/combat/prepare`
   - consommation one-shot des bonus de preparation sur `combat/start`
   - etat village par flags
@@ -1527,6 +1587,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - persistence encounter
   - attribution rewards serveur autoritaire
   - bosses scriptes sur paliers 3/5/8/10
+  - debuffs `Poison/Cecite/Obscurite` calibres dynamiquement par paliers 3/5/8/10
   - loot multi-sources (ennemi + floor table + boss bonus) avec rarete
 - Quetes:
   - definitions cote serveur
@@ -1692,13 +1753,13 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 98 - Balance combat statuts: calibration fine des durees/chances (`Poison`, `Cecite`, `Obscurite`) sur paliers 3/5/8/10.
-2. Lot 99 - Economie progression: calibration finale des gains gold/XP entre boucle tour et future boucle ferme.
-3. Lot 100 - QA ergonomie combat: iteration UX sur lisibilite du recap (densite, ordre infos, mobile).
-4. Lot 101 - Quetes narratives village: premieres micro-quetes dialoguees reliees aux etats PNJ.
-5. Lot 102 - Premiere passe dialogues contextuels PNJ relies au tier de relation.
-6. Lot 103 - Hook scenario ferme: premiers evenements declenches par jour + progression recoltes.
-7. Lot 104 - Trigger scenario tour: premiers beats narratifs relies aux paliers 3/5/8/10.
-8. Lot 105 - Passe accessibilite HUD combat (contraste, focus, lisibilite mobile).
+1. Lot 101 - Quetes narratives village: premieres micro-quetes dialoguees reliees aux etats PNJ.
+2. Lot 102 - Premiere passe dialogues contextuels PNJ relies au tier de relation.
+3. Lot 103 - Hook scenario ferme: premiers evenements declenches par jour + progression recoltes.
+4. Lot 104 - Trigger scenario tour: premiers beats narratifs relies aux paliers 3/5/8/10.
+5. Lot 105 - Passe accessibilite HUD combat (contraste, focus, lisibilite mobile).
+6. Lot 106 - Telemetrie balancing: extraction KPI debuffs/reactions pour iterations tuning.
+7. Lot 107 - Economie UI: affichage explicite des gains XP de vente dans le panneau Market.
+8. Lot 108 - QA mobile touch: revue interactions combat/farm en viewport reduit.
 
 
