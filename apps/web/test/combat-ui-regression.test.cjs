@@ -334,6 +334,17 @@ test('tower scenario floor milestone narrative wiring exists for lot 104', () =>
   assert.equal(stylesSource.includes('.hud-tower-story-narrative'), true);
 });
 
+test('combat accessibility pass wiring exists for lot 105', () => {
+  assert.equal(gameSceneSource.includes('data-hud="combatStatus" role="status" aria-live="polite" aria-atomic="true"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="combatRecap" role="status" aria-live="polite" aria-atomic="true"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="combatError" role="alert" aria-live="assertive"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="combatLogs" role="log" aria-live="polite" aria-relevant="additions text"'), true);
+  assert.equal(stylesSource.includes('--focus-ring:'), true);
+  assert.equal(stylesSource.includes('.hud-combat-button:focus-visible'), true);
+  assert.equal(stylesSource.includes('.hud-combat .hud-combat-stat'), true);
+  assert.equal(stylesSource.includes('@media (prefers-reduced-motion: reduce)'), true);
+});
+
 test('combat preparation loop panel wiring exists for lot 95', () => {
   assert.equal(gameSceneSource.includes('data-hud="loopSummary"'), true);
   assert.equal(gameSceneSource.includes('data-hud="loopStage"'), true);

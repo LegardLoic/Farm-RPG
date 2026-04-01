@@ -1439,15 +1439,15 @@ export class GameScene extends Phaser.Scene {
               <div class="hud-combat-kicker">Combat tour par tour</div>
               <div class="hud-combat-name" data-hud="combatName">Aucun combat actif</div>
             </div>
-            <div class="hud-combat-status" data-hud="combatStatus"></div>
+            <div class="hud-combat-status" data-hud="combatStatus" role="status" aria-live="polite" aria-atomic="true"></div>
           </div>
           <div class="hud-combat-meta">
             <div class="hud-combat-stat"><span>Encounter</span><strong data-hud="combatEncounterId">-</strong></div>
             <div class="hud-combat-stat"><span>Tour</span><strong data-hud="combatTurn">-</strong></div>
             <div class="hud-combat-stat"><span>Round</span><strong data-hud="combatRound">-</strong></div>
-            <div class="hud-combat-stat"><span>Resultat</span><strong data-hud="combatResult">Aucun combat actif.</strong></div>
+            <div class="hud-combat-stat"><span>Resultat</span><strong data-hud="combatResult" aria-live="polite" aria-atomic="true">Aucun combat actif.</strong></div>
           </div>
-          <div class="hud-combat-recap" data-hud="combatRecap">Recap: -</div>
+          <div class="hud-combat-recap" data-hud="combatRecap" role="status" aria-live="polite" aria-atomic="true">Recap: -</div>
           <div class="hud-combat-grid">
             <div class="combat-card">
               <span>Player</span>
@@ -1508,8 +1508,8 @@ export class GameScene extends Phaser.Scene {
             <button class="hud-combat-button" data-combat-action="sunder">Sunder (-Def)</button>
             <button class="hud-combat-button danger" data-combat-action="forfeit">Fuir</button>
           </div>
-          <div class="hud-combat-error" data-hud="combatError" hidden></div>
-          <ul class="hud-combat-log" data-hud="combatLogs"></ul>
+          <div class="hud-combat-error" data-hud="combatError" role="alert" aria-live="assertive" hidden></div>
+          <ul class="hud-combat-log" data-hud="combatLogs" role="log" aria-live="polite" aria-relevant="additions text"></ul>
         </div>
         <div class="hud-quests">
           <div class="hud-quests-header">
