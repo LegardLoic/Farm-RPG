@@ -168,7 +168,36 @@ const VILLAGE_SCENE_PLAYER_SPAWN = { x: 804, y: 734 };
 
 type FrontSceneMode = 'farm' | 'village';
 type VillageSceneZoneKey = 'mayor' | 'market' | 'forge' | 'calm' | 'farm_exit' | 'tower_exit';
-type VillageSceneZoneActionKey = 'talk-mayor' | 'talk-merchant' | 'talk-blacksmith' | 'talk-secondary' | 'go-farm' | 'go-tower';
+type VillageSceneZoneActionKey =
+  | 'talk-mayor'
+  | 'talk-merchant'
+  | 'talk-blacksmith'
+  | 'talk-secondary'
+  | 'open-market'
+  | 'open-forge'
+  | 'go-farm'
+  | 'go-tower';
+type VillageShopType = 'market' | 'forge';
+type VillageShopTabKey = 'buy' | 'sell' | 'weapons' | 'armors' | 'accessories';
+type ForgeShopCategoryKey = 'weapons' | 'armors' | 'accessories';
+
+type VillageShopPanelEntry = {
+  entryKey: string;
+  source: 'market-buy' | 'market-sell' | 'forge';
+  name: string;
+  description: string;
+  priceValue: number;
+  priceLabel: string;
+  actionLabel: string;
+  canTransact: boolean;
+  offerKey: string | null;
+  itemKey: string;
+  ownedQuantity: number | null;
+  usageLabel: string;
+  detailMeta: string;
+  comparisonLabel: string;
+  badgeLabel: string;
+};
 
 type VillageSceneZoneConfig = {
   key: VillageSceneZoneKey;
@@ -214,9 +243,9 @@ const VILLAGE_SCENE_ZONES: VillageSceneZoneConfig[] = [
     height: 176,
     title: 'Marche',
     role: 'Marchande - economie locale',
-    hint: 'Achat/vente au lot 3. Dialogue disponible ici.',
-    actionLabel: 'Parler a la Marchande',
-    actionKey: 'talk-merchant',
+    hint: 'Achete des graines, vends les recoltes, puis repars vite.',
+    actionLabel: 'Ouvrir le Marche',
+    actionKey: 'open-market',
     npcKey: 'merchant',
   },
   {
@@ -227,9 +256,9 @@ const VILLAGE_SCENE_ZONES: VillageSceneZoneConfig[] = [
     height: 176,
     title: 'Forge',
     role: 'Forgeron - progression materielle',
-    hint: 'Comparaison et equipements au lot 3.',
-    actionLabel: 'Parler au Forgeron',
-    actionKey: 'talk-blacksmith',
+    hint: 'Compare les paliers d equipement puis investis ton or.',
+    actionLabel: 'Ouvrir la Forge',
+    actionKey: 'open-forge',
     npcKey: 'blacksmith',
   },
   {
@@ -268,6 +297,17 @@ const VILLAGE_SCENE_ZONES: VillageSceneZoneConfig[] = [
     actionLabel: 'Retourner a la Ferme',
     actionKey: 'go-farm',
   },
+];
+
+const VILLAGE_MARKET_SHOP_TABS: Array<{ key: VillageShopTabKey; label: string }> = [
+  { key: 'buy', label: 'Acheter' },
+  { key: 'sell', label: 'Vendre' },
+];
+
+const VILLAGE_FORGE_SHOP_TABS: Array<{ key: VillageShopTabKey; label: string }> = [
+  { key: 'weapons', label: 'Armes' },
+  { key: 'armors', label: 'Armures' },
+  { key: 'accessories', label: 'Accessoires' },
 ];
 
 type CombatUnitState = {
@@ -444,6 +484,8 @@ type BlacksmithOfferState = {
   name: string;
   description: string;
   goldPrice: number;
+  tier: 1 | 2 | 3;
+  requiredFlags: string[];
 };
 
 type VillageSeedOfferState = {
@@ -880,6 +922,16 @@ function isIntroNarrativeStepKey(value: string): value is IntroNarrativeStepKey 
   return value === 'arrive_village' || value === 'meet_mayor' || value === 'farm_assignment' || value === 'completed';
 }
 
+function isVillageShopTabKey(value: string): value is VillageShopTabKey {
+  return (
+    value === 'buy' ||
+    value === 'sell' ||
+    value === 'weapons' ||
+    value === 'armors' ||
+    value === 'accessories'
+  );
+}
+
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -952,6 +1004,20 @@ export class GameScene extends Phaser.Scene {
   private villageContextFeedbackValue: HTMLElement | null = null;
   private villageContextInteractButton: HTMLButtonElement | null = null;
   private villageContextCycleButton: HTMLButtonElement | null = null;
+  private villageShopPanelRoot: HTMLElement | null = null;
+  private villageShopNpcValue: HTMLElement | null = null;
+  private villageShopTitleValue: HTMLElement | null = null;
+  private villageShopSummaryValue: HTMLElement | null = null;
+  private villageShopTabsRoot: HTMLElement | null = null;
+  private villageShopEntriesRoot: HTMLElement | null = null;
+  private villageShopDetailNameValue: HTMLElement | null = null;
+  private villageShopDetailMetaValue: HTMLElement | null = null;
+  private villageShopDetailDescriptionValue: HTMLElement | null = null;
+  private villageShopDetailComparisonValue: HTMLElement | null = null;
+  private villageShopTransactionValue: HTMLElement | null = null;
+  private villageShopConfirmButton: HTMLButtonElement | null = null;
+  private villageShopTalkButton: HTMLButtonElement | null = null;
+  private villageShopErrorValue: HTMLElement | null = null;
   private farmCraftingPanel: HTMLElement | null = null;
   private farmCraftingSummaryValue: HTMLElement | null = null;
   private farmCraftingListRoot: HTMLElement | null = null;
@@ -1038,6 +1104,11 @@ export class GameScene extends Phaser.Scene {
   private villageMarketBusy = false;
   private villageMarketError: string | null = null;
   private villageMarketRenderSignature = '';
+  private villageShopPanelOpen = false;
+  private villageShopType: VillageShopType = 'market';
+  private villageShopTab: VillageShopTabKey = 'buy';
+  private villageShopSelectedEntryKey: string | null = null;
+  private villageShopRenderSignature = '';
   private farmState: FarmState | null = null;
   private farmStoryState: FarmStoryState | null = null;
   private farmBusy = false;
@@ -1224,6 +1295,7 @@ export class GameScene extends Phaser.Scene {
     const loopAction = button.dataset.loopAction;
     const farmAction = button.dataset.farmAction;
     const villageAction = button.dataset.villageAction;
+    const villageShopAction = button.dataset.villageShopAction;
     const farmCraftAction = button.dataset.farmCraftAction;
     const saveAction = button.dataset.saveAction;
     const profileAction = button.dataset.profileAction;
@@ -1374,6 +1446,37 @@ export class GameScene extends Phaser.Scene {
     if (villageAction === 'cycle') {
       this.cycleVillageTarget(1, true);
       this.updateHud();
+      return;
+    }
+
+    if (villageShopAction === 'close') {
+      this.closeVillageShopPanel('Retour au hub village.');
+      return;
+    }
+
+    if (villageShopAction === 'tab') {
+      const tabKey = button.dataset.shopTab;
+      if (tabKey && isVillageShopTabKey(tabKey)) {
+        this.setVillageShopTab(tabKey);
+      }
+      return;
+    }
+
+    if (villageShopAction === 'select') {
+      const entryKey = button.dataset.shopEntryKey?.trim();
+      if (entryKey) {
+        this.selectVillageShopEntry(entryKey);
+      }
+      return;
+    }
+
+    if (villageShopAction === 'confirm') {
+      void this.handleVillageShopPrimaryAction();
+      return;
+    }
+
+    if (villageShopAction === 'talk') {
+      void this.handleVillageShopTalkAction();
       return;
     }
 
@@ -1705,6 +1808,36 @@ export class GameScene extends Phaser.Scene {
             <p class="hud-village-context-feedback" data-hud="villageContextFeedback" role="status" aria-live="polite">
               Clique une zone du village ou approche-toi d'un lieu clef.
             </p>
+          </div>
+          <div class="hud-village-shop-panel" data-hud="villageShopPanel" hidden>
+            <div class="hud-village-shop-header">
+              <div class="hud-village-shop-identity">
+                <span data-hud="villageShopNpc">Marchande</span>
+                <strong data-hud="villageShopTitle">Marche du village</strong>
+              </div>
+              <button class="hud-village-shop-close" data-village-shop-action="close">Fermer</button>
+            </div>
+            <p class="hud-village-shop-summary" data-hud="villageShopSummary">
+              Ouvre le Marche ou la Forge depuis la scene pour lancer des transactions.
+            </p>
+            <div class="hud-village-shop-tabs" data-hud="villageShopTabs"></div>
+            <ul class="hud-village-shop-list" data-hud="villageShopEntries"></ul>
+            <div class="hud-village-shop-detail">
+              <strong data-hud="villageShopDetailName">Selectionne un objet</strong>
+              <p class="hud-village-shop-detail-meta" data-hud="villageShopDetailMeta">-</p>
+              <p class="hud-village-shop-detail-description" data-hud="villageShopDetailDescription">
+                Le detail apparait ici.
+              </p>
+              <p class="hud-village-shop-detail-comparison" data-hud="villageShopDetailComparison">-</p>
+            </div>
+            <div class="hud-village-shop-error" data-hud="villageShopError" hidden></div>
+            <div class="hud-village-shop-transaction">
+              <p class="hud-village-shop-transaction-line" data-hud="villageShopTransaction">Or: 0 po</p>
+              <div class="hud-village-shop-actions">
+                <button class="hud-village-shop-action primary" data-village-shop-action="confirm">Valider</button>
+                <button class="hud-village-shop-action secondary" data-village-shop-action="talk">Parler</button>
+              </div>
+            </div>
           </div>
         </div>
         <div class="hud-grid">
@@ -2201,6 +2334,26 @@ export class GameScene extends Phaser.Scene {
     this.villageContextFeedbackValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageContextFeedback"]');
     this.villageContextInteractButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-village-action="interact"]');
     this.villageContextCycleButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-village-action="cycle"]');
+    this.villageShopPanelRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageShopPanel"]');
+    this.villageShopNpcValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageShopNpc"]');
+    this.villageShopTitleValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageShopTitle"]');
+    this.villageShopSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageShopSummary"]');
+    this.villageShopTabsRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageShopTabs"]');
+    this.villageShopEntriesRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageShopEntries"]');
+    this.villageShopDetailNameValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageShopDetailName"]');
+    this.villageShopDetailMetaValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageShopDetailMeta"]');
+    this.villageShopDetailDescriptionValue = this.hudRoot.querySelector<HTMLElement>(
+      '[data-hud="villageShopDetailDescription"]',
+    );
+    this.villageShopDetailComparisonValue = this.hudRoot.querySelector<HTMLElement>(
+      '[data-hud="villageShopDetailComparison"]',
+    );
+    this.villageShopTransactionValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageShopTransaction"]');
+    this.villageShopConfirmButton = this.hudRoot.querySelector<HTMLButtonElement>(
+      '[data-village-shop-action="confirm"]',
+    );
+    this.villageShopTalkButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-village-shop-action="talk"]');
+    this.villageShopErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageShopError"]');
     this.farmCraftingPanel = this.hudRoot.querySelector<HTMLElement>('.hud-farm-crafting');
     this.farmCraftingSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmCraftingSummary"]');
     this.farmCraftingListRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmCraftingRecipes"]');
@@ -2463,6 +2616,20 @@ export class GameScene extends Phaser.Scene {
     this.villageContextFeedbackValue = null;
     this.villageContextInteractButton = null;
     this.villageContextCycleButton = null;
+    this.villageShopPanelRoot = null;
+    this.villageShopNpcValue = null;
+    this.villageShopTitleValue = null;
+    this.villageShopSummaryValue = null;
+    this.villageShopTabsRoot = null;
+    this.villageShopEntriesRoot = null;
+    this.villageShopDetailNameValue = null;
+    this.villageShopDetailMetaValue = null;
+    this.villageShopDetailDescriptionValue = null;
+    this.villageShopDetailComparisonValue = null;
+    this.villageShopTransactionValue = null;
+    this.villageShopConfirmButton = null;
+    this.villageShopTalkButton = null;
+    this.villageShopErrorValue = null;
     this.farmCraftingPanel = null;
     this.farmCraftingSummaryValue = null;
     this.farmCraftingListRoot = null;
@@ -2640,6 +2807,7 @@ export class GameScene extends Phaser.Scene {
     this.updateVillageMarketHud();
     this.updateFarmHud();
     this.updateVillageMvpHud();
+    this.updateVillageShopPanel();
     this.updateFarmCraftingHud();
     this.updateLoopHud();
     this.updateTowerStoryHud();
@@ -2871,6 +3039,487 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private openVillageShopPanel(shopType: VillageShopType, feedbackMessage: string): void {
+    if (this.villageShopType !== shopType) {
+      this.villageShopType = shopType;
+      this.villageShopTab = shopType === 'market' ? 'buy' : 'weapons';
+      this.villageShopSelectedEntryKey = null;
+    }
+
+    this.villageShopPanelOpen = true;
+    this.villageShopRenderSignature = '';
+    this.villageFeedbackMessage = feedbackMessage;
+    this.updateHud();
+  }
+
+  private closeVillageShopPanel(feedbackMessage?: string): void {
+    if (!this.villageShopPanelOpen) {
+      return;
+    }
+
+    this.villageShopPanelOpen = false;
+    this.villageShopSelectedEntryKey = null;
+    this.villageShopRenderSignature = '';
+    if (feedbackMessage) {
+      this.villageFeedbackMessage = feedbackMessage;
+    }
+    this.updateHud();
+  }
+
+  private setVillageShopTab(tabKey: VillageShopTabKey): void {
+    const tabs = this.getVillageShopTabs();
+    if (!tabs.some((tab) => tab.key === tabKey) || this.villageShopTab === tabKey) {
+      return;
+    }
+
+    this.villageShopTab = tabKey;
+    this.villageShopSelectedEntryKey = null;
+    this.villageShopRenderSignature = '';
+    this.updateHud();
+  }
+
+  private selectVillageShopEntry(entryKey: string): void {
+    if (this.villageShopSelectedEntryKey === entryKey) {
+      return;
+    }
+    this.villageShopSelectedEntryKey = entryKey;
+    this.villageShopRenderSignature = '';
+    this.updateHud();
+  }
+
+  private getVillageShopTabs(): Array<{ key: VillageShopTabKey; label: string }> {
+    return this.villageShopType === 'market' ? VILLAGE_MARKET_SHOP_TABS : VILLAGE_FORGE_SHOP_TABS;
+  }
+
+  private getVillageShopEntries(): VillageShopPanelEntry[] {
+    if (this.villageShopType === 'market') {
+      if (this.villageShopTab === 'sell') {
+        return this.villageMarketBuybackOffers.map((offer) => ({
+          entryKey: `market-sell:${offer.itemKey}`,
+          source: 'market-sell',
+          name: offer.name,
+          description: offer.description,
+          priceValue: offer.goldValue,
+          priceLabel: `+${offer.goldValue} po`,
+          actionLabel: `Vendre x1 (+${offer.goldValue} po)`,
+          canTransact: this.villageMarketUnlocked && !this.villageMarketBusy && offer.ownedQuantity > 0,
+          offerKey: null,
+          itemKey: offer.itemKey,
+          ownedQuantity: offer.ownedQuantity,
+          usageLabel: 'Recolte vendable au comptoir du village.',
+          detailMeta: `Recolte • Stock ${offer.ownedQuantity} • Vente ${offer.goldValue} po`,
+          comparisonLabel: offer.ownedQuantity > 0
+            ? 'Transaction immediate: conversion en or sans menu supplementaire.'
+            : 'Stock vide: retourne a la ferme pour recolter.',
+          badgeLabel: `Stock ${offer.ownedQuantity}`,
+        }));
+      }
+
+      return this.villageMarketSeedOffers.map((offer) => ({
+        entryKey: `market-buy:${offer.offerKey}`,
+        source: 'market-buy',
+        name: offer.name,
+        description: offer.description,
+        priceValue: offer.goldPrice,
+        priceLabel: `${offer.goldPrice} po`,
+        actionLabel: `Acheter x1 (${offer.goldPrice} po)`,
+        canTransact: this.villageMarketUnlocked && !this.villageMarketBusy && this.hudState.gold >= offer.goldPrice,
+        offerKey: offer.offerKey,
+        itemKey: offer.itemKey,
+        ownedQuantity: null,
+        usageLabel: 'Graine a planter sur une parcelle de ferme.',
+        detailMeta: `Graine • Cout ${offer.goldPrice} po`,
+        comparisonLabel: this.hudState.gold >= offer.goldPrice
+          ? 'Accessible maintenant: achat direct puis retour a la ferme.'
+          : 'Or insuffisant: vends des recoltes ou progresse en Tour.',
+        badgeLabel: this.hudState.gold >= offer.goldPrice ? 'Disponible' : 'Hors budget',
+      }));
+    }
+
+    const category = this.villageShopTab === 'armors' || this.villageShopTab === 'accessories'
+      ? this.villageShopTab
+      : 'weapons';
+    const recommendedTier = this.getForgeRecommendedTier();
+
+    return this.blacksmithOffers
+      .filter((offer) => this.getForgeOfferCategory(offer) === category)
+      .sort((left, right) => left.tier - right.tier || left.goldPrice - right.goldPrice || left.name.localeCompare(right.name))
+      .map((offer) => ({
+        entryKey: `forge:${offer.offerKey}`,
+        source: 'forge',
+        name: offer.name,
+        description: offer.description,
+        priceValue: offer.goldPrice,
+        priceLabel: `${offer.goldPrice} po`,
+        actionLabel: `Acheter (${offer.goldPrice} po)`,
+        canTransact: this.hudState.blacksmithUnlocked && !this.blacksmithBusy && this.hudState.gold >= offer.goldPrice,
+        offerKey: offer.offerKey,
+        itemKey: offer.itemKey,
+        ownedQuantity: null,
+        usageLabel: `${this.getForgeCategoryLabel(category)} de ${this.getForgeTierLabel(offer.tier)}.`,
+        detailMeta: `${this.getForgeCategoryLabel(category)} • ${this.getForgeTierLabel(offer.tier)} • ${offer.goldPrice} po`,
+        comparisonLabel: this.getForgeComparisonLabel(offer),
+        badgeLabel: offer.tier > recommendedTier
+          ? `${this.getForgeTierLabel(offer.tier)} • Exigeant`
+          : offer.tier < recommendedTier
+            ? `${this.getForgeTierLabel(offer.tier)} • Stable`
+            : `${this.getForgeTierLabel(offer.tier)} • Aligne`,
+      }));
+  }
+
+  private getVillageShopSelectedEntry(entries: VillageShopPanelEntry[]): VillageShopPanelEntry | null {
+    if (entries.length === 0) {
+      this.villageShopSelectedEntryKey = null;
+      return null;
+    }
+
+    const selected = this.villageShopSelectedEntryKey
+      ? entries.find((entry) => entry.entryKey === this.villageShopSelectedEntryKey) ?? null
+      : null;
+    if (selected) {
+      return selected;
+    }
+
+    const first = entries[0] ?? null;
+    this.villageShopSelectedEntryKey = first?.entryKey ?? null;
+    return first;
+  }
+
+  private computeVillageShopRenderSignature(
+    tabs: Array<{ key: VillageShopTabKey; label: string }>,
+    entries: VillageShopPanelEntry[],
+    selectedEntry: VillageShopPanelEntry | null,
+  ): string {
+    const tabParts = tabs.map((tab) => `${tab.key}:${tab.label}`);
+    const entryParts = entries.map((entry) => (
+      `${entry.entryKey}:${entry.priceValue}:${entry.canTransact ? '1' : '0'}:${entry.ownedQuantity ?? '-'}:${entry.badgeLabel}`
+    ));
+
+    return [
+      this.frontSceneMode,
+      this.villageShopPanelOpen ? '1' : '0',
+      this.villageShopType,
+      this.villageShopTab,
+      this.villageShopSelectedEntryKey ?? '',
+      this.isAuthenticated ? '1' : '0',
+      this.hudState.gold,
+      this.blacksmithBusy ? '1' : '0',
+      this.villageMarketBusy ? '1' : '0',
+      this.villageNpcBusy ? '1' : '0',
+      this.getVillageShopActiveError() ?? '',
+      selectedEntry?.entryKey ?? '',
+      tabParts.join(','),
+      entryParts.join(';'),
+    ].join('|');
+  }
+
+  private renderVillageShopTabs(tabs: Array<{ key: VillageShopTabKey; label: string }>): void {
+    if (!this.villageShopTabsRoot) {
+      return;
+    }
+
+    this.villageShopTabsRoot.replaceChildren();
+    for (const tab of tabs) {
+      const button = document.createElement('button');
+      button.classList.add('hud-village-shop-tab');
+      if (tab.key === this.villageShopTab) {
+        button.classList.add('active');
+      }
+      button.dataset.villageShopAction = 'tab';
+      button.dataset.shopTab = tab.key;
+      button.textContent = tab.label;
+      this.villageShopTabsRoot.appendChild(button);
+    }
+  }
+
+  private renderVillageShopEntries(entries: VillageShopPanelEntry[]): void {
+    if (!this.villageShopEntriesRoot) {
+      return;
+    }
+
+    this.villageShopEntriesRoot.replaceChildren();
+    if (entries.length === 0) {
+      const empty = document.createElement('li');
+      empty.classList.add('hud-village-shop-entry-empty');
+      empty.textContent = this.villageShopType === 'market'
+        ? 'Aucune offre visible pour cet onglet.'
+        : 'Catalogue de forge vide pour cette categorie.';
+      this.villageShopEntriesRoot.appendChild(empty);
+      return;
+    }
+
+    for (const entry of entries) {
+      const row = document.createElement('li');
+      row.classList.add('hud-village-shop-entry-row');
+
+      const button = document.createElement('button');
+      button.classList.add('hud-village-shop-entry');
+      button.dataset.villageShopAction = 'select';
+      button.dataset.shopEntryKey = entry.entryKey;
+      button.dataset.selected = entry.entryKey === this.villageShopSelectedEntryKey ? '1' : '0';
+
+      const header = document.createElement('div');
+      header.classList.add('hud-village-shop-entry-header');
+      const name = document.createElement('strong');
+      name.textContent = entry.name;
+      const price = document.createElement('span');
+      price.textContent = entry.priceLabel;
+      header.append(name, price);
+
+      const meta = document.createElement('p');
+      meta.classList.add('hud-village-shop-entry-meta');
+      meta.textContent = entry.badgeLabel;
+
+      button.append(header, meta);
+      row.appendChild(button);
+      this.villageShopEntriesRoot.appendChild(row);
+    }
+  }
+
+  private updateVillageShopPanel(): void {
+    if (!this.villageShopPanelRoot) {
+      return;
+    }
+
+    const visible = this.frontSceneMode === 'village' && this.villageShopPanelOpen;
+    this.villageShopPanelRoot.hidden = !visible;
+    if (!visible) {
+      this.villageShopRenderSignature = '';
+      return;
+    }
+
+    const tabs = this.getVillageShopTabs();
+    if (!tabs.some((tab) => tab.key === this.villageShopTab)) {
+      this.villageShopTab = tabs[0]?.key ?? (this.villageShopType === 'market' ? 'buy' : 'weapons');
+      this.villageShopSelectedEntryKey = null;
+    }
+
+    const entries = this.getVillageShopEntries();
+    const selectedEntry = this.getVillageShopSelectedEntry(entries);
+    const signature = this.computeVillageShopRenderSignature(tabs, entries, selectedEntry);
+    if (signature === this.villageShopRenderSignature) {
+      return;
+    }
+    this.villageShopRenderSignature = signature;
+
+    if (this.villageShopNpcValue) {
+      this.villageShopNpcValue.textContent = this.villageShopType === 'market' ? 'Marchande' : 'Forgeron';
+    }
+    if (this.villageShopTitleValue) {
+      this.villageShopTitleValue.textContent = this.villageShopType === 'market' ? 'Marche du village' : 'Forge du village';
+    }
+    if (this.villageShopSummaryValue) {
+      this.villageShopSummaryValue.textContent = this.getVillageShopSummaryLabel();
+    }
+
+    this.renderVillageShopTabs(tabs);
+    this.renderVillageShopEntries(entries);
+
+    if (this.villageShopDetailNameValue) {
+      this.villageShopDetailNameValue.textContent = selectedEntry?.name ?? 'Selectionne un objet';
+    }
+    if (this.villageShopDetailMetaValue) {
+      this.villageShopDetailMetaValue.textContent = selectedEntry?.detailMeta ?? '-';
+    }
+    if (this.villageShopDetailDescriptionValue) {
+      this.villageShopDetailDescriptionValue.textContent =
+        selectedEntry ? `${selectedEntry.description} ${selectedEntry.usageLabel}` : 'Le detail apparait ici.';
+    }
+    if (this.villageShopDetailComparisonValue) {
+      this.villageShopDetailComparisonValue.textContent = selectedEntry?.comparisonLabel ?? '-';
+    }
+
+    const activeError = this.getVillageShopActiveError();
+    if (this.villageShopErrorValue) {
+      this.villageShopErrorValue.hidden = !activeError;
+      this.villageShopErrorValue.textContent = activeError ?? '';
+    }
+
+    if (this.villageShopTransactionValue) {
+      if (selectedEntry) {
+        const stockPart = selectedEntry.ownedQuantity === null ? '' : ` | Stock ${selectedEntry.ownedQuantity}`;
+        this.villageShopTransactionValue.textContent =
+          `Action: ${selectedEntry.actionLabel}${stockPart} | Or ${this.hudState.gold} po`;
+      } else {
+        this.villageShopTransactionValue.textContent = `Or actuel: ${this.hudState.gold} po`;
+      }
+    }
+
+    if (this.villageShopConfirmButton) {
+      if (!selectedEntry) {
+        this.villageShopConfirmButton.textContent = 'Selectionner un objet';
+        this.villageShopConfirmButton.disabled = true;
+      } else {
+        const busy = selectedEntry.source === 'forge' ? this.blacksmithBusy : this.villageMarketBusy;
+        this.villageShopConfirmButton.textContent = busy ? 'Transaction...' : selectedEntry.actionLabel;
+        this.villageShopConfirmButton.disabled = !selectedEntry.canTransact;
+      }
+    }
+
+    if (this.villageShopTalkButton) {
+      const npcKey: VillageNpcKey = this.villageShopType === 'market' ? 'merchant' : 'blacksmith';
+      const npc = this.villageNpcState[npcKey];
+      const relation = this.villageNpcRelationships[npcKey];
+      const canTalk = this.isAuthenticated && npc.available && relation.canTalkToday && !this.villageNpcBusy;
+      this.villageShopTalkButton.disabled = !canTalk;
+      this.villageShopTalkButton.textContent = this.getVillageShopTalkButtonLabel(npcKey);
+    }
+  }
+
+  private getVillageShopSummaryLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Connexion requise pour utiliser ce shop.';
+    }
+
+    if (this.villageShopType === 'market') {
+      if (!this.villageMarketUnlocked) {
+        return 'Marche en reprise: quelques echanges restent verrouilles.';
+      }
+      if (this.villageMarketBusy) {
+        return 'Synchronisation des etals en cours...';
+      }
+      return `${this.villageMarketSeedOffers.length} graines a l achat • ${this.villageMarketBuybackOffers.length} recoltes en rachat`;
+    }
+
+    if (!this.hudState.blacksmithUnlocked) {
+      return this.hudState.blacksmithCurseLifted
+        ? 'Forge en reprise: catalogue limite.'
+        : 'Forge entravee: progression de Tour requise.';
+    }
+    if (this.blacksmithBusy) {
+      return 'Forgeron en train de trier les offres...';
+    }
+    return `${this.blacksmithOffers.length} offres de forge • lecture par categories`;
+  }
+
+  private getVillageShopActiveError(): string | null {
+    return this.villageShopType === 'market' ? this.villageMarketError : this.blacksmithError;
+  }
+
+  private getVillageShopTalkButtonLabel(npcKey: VillageNpcKey): string {
+    if (this.villageNpcBusy) {
+      return 'Parler...';
+    }
+    if (!this.isAuthenticated) {
+      return 'Connexion requise';
+    }
+    const npc = this.villageNpcState[npcKey];
+    if (!npc.available) {
+      return 'Indispo';
+    }
+    const relation = this.villageNpcRelationships[npcKey];
+    return relation.canTalkToday ? 'Parler' : 'Deja vu';
+  }
+
+  private getForgeOfferCategory(offer: BlacksmithOfferState): ForgeShopCategoryKey {
+    const key = `${offer.offerKey} ${offer.itemKey}`.toLowerCase();
+    if (/(sword|dagger|hammer|shield|blade|staff|axe|bow|spear|lance|focus)/.test(key)) {
+      return 'weapons';
+    }
+    if (/(armor|armour|chest|helm|helmet|leg|boot|glove|gauntlet|plate|leather)/.test(key)) {
+      return 'armors';
+    }
+    return 'accessories';
+  }
+
+  private getForgeCategoryLabel(category: ForgeShopCategoryKey): string {
+    if (category === 'weapons') {
+      return 'Arme';
+    }
+    if (category === 'armors') {
+      return 'Armure';
+    }
+    return 'Accessoire';
+  }
+
+  private getForgeTierLabel(tier: number): string {
+    if (tier >= 3) {
+      return 'Palier III';
+    }
+    if (tier === 2) {
+      return 'Palier II';
+    }
+    return 'Palier I';
+  }
+
+  private getForgeRecommendedTier(): 1 | 2 | 3 {
+    if (this.hudState.towerHighestFloor >= 8) {
+      return 3;
+    }
+    if (this.hudState.towerHighestFloor >= 5) {
+      return 2;
+    }
+    return 1;
+  }
+
+  private getForgeComparisonLabel(offer: BlacksmithOfferState): string {
+    const recommended = this.getForgeRecommendedTier();
+    if (offer.tier > recommended) {
+      return `Comparaison simple: ${this.getForgeTierLabel(offer.tier)} au-dessus du palier conseille (${this.getForgeTierLabel(recommended)}).`;
+    }
+    if (offer.tier < recommended) {
+      return `Comparaison simple: ${this.getForgeTierLabel(offer.tier)} plus conservateur que ton palier conseille (${this.getForgeTierLabel(recommended)}).`;
+    }
+    return `Comparaison simple: ${this.getForgeTierLabel(offer.tier)} aligne avec ton palier conseille actuel.`;
+  }
+
+  private async handleVillageShopPrimaryAction(): Promise<void> {
+    const entries = this.getVillageShopEntries();
+    const selectedEntry = this.getVillageShopSelectedEntry(entries);
+    if (!selectedEntry) {
+      this.villageFeedbackMessage = 'Selectionne une offre avant de valider.';
+      this.updateHud();
+      return;
+    }
+
+    if (!selectedEntry.canTransact) {
+      this.villageFeedbackMessage = selectedEntry.source === 'market-sell'
+        ? 'Stock insuffisant ou transaction indisponible.'
+        : 'Transaction indisponible pour le moment.';
+      this.updateHud();
+      return;
+    }
+
+    if (selectedEntry.source === 'market-buy') {
+      if (selectedEntry.offerKey) {
+        await this.buyVillageSeedOffer(selectedEntry.offerKey);
+        if (!this.villageMarketError) {
+          this.villageFeedbackMessage = `${selectedEntry.name} achete au Marche.`;
+        }
+      }
+      this.updateHud();
+      return;
+    }
+
+    if (selectedEntry.source === 'market-sell') {
+      await this.sellVillageCrop(selectedEntry.itemKey);
+      if (!this.villageMarketError) {
+        this.villageFeedbackMessage = `${selectedEntry.name} vendu au Marche.`;
+      }
+      this.updateHud();
+      return;
+    }
+
+    if (selectedEntry.offerKey) {
+      await this.buyBlacksmithOffer(selectedEntry.offerKey);
+      if (!this.blacksmithError) {
+        this.villageFeedbackMessage = `${selectedEntry.name} commande a la Forge.`;
+      }
+      this.updateHud();
+    }
+  }
+
+  private async handleVillageShopTalkAction(): Promise<void> {
+    const npcKey: VillageNpcKey = this.villageShopType === 'market' ? 'merchant' : 'blacksmith';
+    await this.interactVillageNpc(npcKey);
+    if (!this.villageNpcError) {
+      this.villageFeedbackMessage = npcKey === 'merchant'
+        ? 'Discussion tenue avec la Marchande.'
+        : 'Discussion tenue avec le Forgeron.';
+    }
+    this.updateHud();
+  }
+
   private syncHudSceneMode(): void {
     if (!this.hudPanelRoot) {
       return;
@@ -2952,6 +3601,11 @@ export class GameScene extends Phaser.Scene {
     }
     if (!this.isAuthenticated) {
       return 'Connexion requise pour parler aux PNJ et changer de zone.';
+    }
+    if (this.villageShopPanelOpen) {
+      return this.villageShopType === 'market'
+        ? 'Marche ouvert: selectionne une offre puis valide.'
+        : 'Forge ouverte: compare les categories avant achat.';
     }
     return 'Approche une zone, puis E pour interagir. R pour changer de cible.';
   }
@@ -4687,7 +5341,7 @@ export class GameScene extends Phaser.Scene {
 
   private computeBlacksmithRenderSignature(): string {
     const offers = this.blacksmithOffers.map((offer) => (
-      `${offer.offerKey}:${offer.goldPrice}:${offer.name}:${offer.description}`
+      `${offer.offerKey}:${offer.goldPrice}:${offer.name}:${offer.description}:${offer.tier}:${offer.requiredFlags.join(',')}`
     ));
 
     return [
@@ -6830,6 +7484,11 @@ export class GameScene extends Phaser.Scene {
     };
     this.villageNpcBusy = false;
     this.villageNpcError = null;
+    this.villageShopPanelOpen = false;
+    this.villageShopType = 'market';
+    this.villageShopTab = 'buy';
+    this.villageShopSelectedEntryKey = null;
+    this.villageShopRenderSignature = '';
     this.farmState = null;
     this.farmBusy = false;
     this.farmError = null;
@@ -6892,6 +7551,7 @@ export class GameScene extends Phaser.Scene {
     this.blacksmithBusy = false;
     this.blacksmithError = null;
     this.blacksmithRenderSignature = '';
+    this.villageShopRenderSignature = '';
   }
 
   private resetVillageMarketState(): void {
@@ -6901,6 +7561,7 @@ export class GameScene extends Phaser.Scene {
     this.villageMarketBusy = false;
     this.villageMarketError = null;
     this.villageMarketRenderSignature = '';
+    this.villageShopRenderSignature = '';
   }
 
   private resetQuestState(): void {
@@ -9953,10 +10614,18 @@ export class GameScene extends Phaser.Scene {
     const name = this.asString(value.name);
     const description = this.asString(value.description);
     const goldPrice = this.asNumber(value.goldPrice);
+    const tierRaw = this.asNumber(value.tier);
+    const requiredFlags = Array.isArray(value.requiredFlags)
+      ? value.requiredFlags
+          .map((entry) => this.asString(entry))
+          .filter((entry): entry is string => entry !== null)
+      : [];
 
     if (!offerKey || !itemKey || !name || !description || goldPrice === null) {
       return null;
     }
+
+    const tier = tierRaw === 2 || tierRaw === 3 ? tierRaw : 1;
 
     return {
       offerKey,
@@ -9964,6 +10633,8 @@ export class GameScene extends Phaser.Scene {
       name,
       description,
       goldPrice: Math.max(0, Math.round(goldPrice)),
+      tier,
+      requiredFlags,
     };
   }
 
@@ -11058,6 +11729,12 @@ export class GameScene extends Phaser.Scene {
     if (zone.key === 'tower_exit') {
       return '#f0c5d6';
     }
+    if (zone.key === 'market' && !this.villageMarketUnlocked) {
+      return '#f2d5a8';
+    }
+    if (zone.key === 'forge' && !this.hudState.blacksmithUnlocked) {
+      return '#f2bead';
+    }
     const interactionState = this.getVillageZoneInteractionState(zone);
     if (interactionState.enabled) {
       return '#c8f2da';
@@ -11071,6 +11748,26 @@ export class GameScene extends Phaser.Scene {
   private getVillageZoneInteractionState(zone: VillageSceneZoneConfig): { enabled: boolean; reason: string } {
     if (!this.isAuthenticated) {
       return { enabled: false, reason: 'Connexion requise pour interagir dans le village.' };
+    }
+
+    if (zone.key === 'market') {
+      return {
+        enabled: true,
+        reason: this.villageMarketUnlocked
+          ? 'Marche pret: achete des graines ou vends tes recoltes.'
+          : 'Marche encore limite. Les premiers paliers du monde debloquent les echanges.',
+      };
+    }
+
+    if (zone.key === 'forge') {
+      return {
+        enabled: true,
+        reason: this.hudState.blacksmithUnlocked
+          ? 'Forge active: compare les paliers puis equipe-toi.'
+          : this.hudState.blacksmithCurseLifted
+            ? 'Forge en reprise: catalogue encore fragile.'
+            : 'Forge entravee: avance dans la Tour pour la relancer.',
+      };
     }
 
     if (zone.npcKey) {
@@ -11390,10 +12087,16 @@ export class GameScene extends Phaser.Scene {
     if (mode === 'farm') {
       this.farmFeedbackMessage = feedbackMessage;
       this.villageFeedbackMessage = null;
+      this.villageShopPanelOpen = false;
+      this.villageShopRenderSignature = '';
       this.player.setPosition(FARM_SCENE_PLAYER_SPAWN.x, FARM_SCENE_PLAYER_SPAWN.y);
     } else {
       this.villageFeedbackMessage = feedbackMessage;
       this.farmFeedbackMessage = null;
+      if (modeChanged) {
+        this.villageShopPanelOpen = false;
+        this.villageShopRenderSignature = '';
+      }
       this.player.setPosition(VILLAGE_SCENE_PLAYER_SPAWN.x, VILLAGE_SCENE_PLAYER_SPAWN.y);
       this.ensureVillageSelectedZone();
     }
@@ -11446,6 +12149,22 @@ export class GameScene extends Phaser.Scene {
     if (!interactionState.enabled) {
       this.villageFeedbackMessage = interactionState.reason;
       this.updateHud();
+      return;
+    }
+
+    const shopInteraction = zone.actionKey === 'open-market' || zone.actionKey === 'open-forge';
+    if (!shopInteraction && this.villageShopPanelOpen) {
+      this.villageShopPanelOpen = false;
+      this.villageShopRenderSignature = '';
+    }
+
+    if (zone.actionKey === 'open-market') {
+      this.openVillageShopPanel('market', 'Marche du village ouvert: mode achat/vente actif.');
+      return;
+    }
+
+    if (zone.actionKey === 'open-forge') {
+      this.openVillageShopPanel('forge', 'Forge ouverte: compare les categories avant achat.');
       return;
     }
 

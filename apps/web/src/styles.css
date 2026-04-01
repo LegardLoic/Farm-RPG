@@ -279,6 +279,226 @@ body::before {
   color: #ffd0d0;
 }
 
+.hud-village-shop-panel {
+  border: 1px solid rgba(214, 194, 142, 0.26);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(10, 14, 18, 0.52);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hud-village-shop-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.hud-village-shop-identity {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hud-village-shop-identity span {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #c1cedd;
+}
+
+.hud-village-shop-identity strong {
+  font-size: 0.8rem;
+  color: #f3ead8;
+}
+
+.hud-village-shop-summary {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: #c0cfdf;
+}
+
+.hud-village-shop-tabs {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hud-village-shop-tab,
+.hud-village-shop-close,
+.hud-village-shop-action {
+  border: 1px solid rgba(214, 194, 142, 0.38);
+  background: rgba(214, 194, 142, 0.16);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 9px;
+  font-size: 0.73rem;
+  cursor: pointer;
+}
+
+.hud-village-shop-close {
+  border-color: rgba(185, 195, 212, 0.36);
+  background: rgba(185, 195, 212, 0.13);
+  white-space: nowrap;
+}
+
+.hud-village-shop-tab.active {
+  border-color: rgba(127, 209, 199, 0.52);
+  background: rgba(127, 209, 199, 0.2);
+  color: #dcfff9;
+}
+
+.hud-village-shop-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 178px;
+  overflow: auto;
+}
+
+.hud-village-shop-entry-row {
+  display: flex;
+}
+
+.hud-village-shop-entry {
+  width: 100%;
+  border: 1px solid rgba(185, 195, 212, 0.22);
+  background: rgba(8, 12, 18, 0.46);
+  border-radius: 10px;
+  padding: 8px;
+  text-align: left;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.hud-village-shop-entry[data-selected="1"] {
+  border-color: rgba(127, 209, 199, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(127, 209, 199, 0.22);
+  background: rgba(127, 209, 199, 0.11);
+}
+
+.hud-village-shop-entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud-village-shop-entry-header strong {
+  font-size: 0.78rem;
+  color: #e8f1ff;
+}
+
+.hud-village-shop-entry-header span {
+  font-size: 0.7rem;
+  color: #f0cfa0;
+  letter-spacing: 0.04em;
+}
+
+.hud-village-shop-entry-meta {
+  margin: 0;
+  font-size: 0.69rem;
+  line-height: 1.3;
+  color: #a9bed6;
+}
+
+.hud-village-shop-entry-empty {
+  border: 1px solid rgba(185, 195, 212, 0.2);
+  border-radius: 10px;
+  padding: 8px;
+  font-size: 0.72rem;
+  color: #98a8bb;
+  font-style: italic;
+  background: rgba(8, 12, 18, 0.4);
+}
+
+.hud-village-shop-detail {
+  border: 1px solid rgba(127, 209, 199, 0.22);
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(7, 12, 10, 0.36);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hud-village-shop-detail strong {
+  font-size: 0.79rem;
+  color: #e9f3e5;
+}
+
+.hud-village-shop-detail-meta,
+.hud-village-shop-detail-description,
+.hud-village-shop-detail-comparison {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.hud-village-shop-detail-meta {
+  color: #b7c9dc;
+}
+
+.hud-village-shop-detail-description {
+  color: #d6e4f2;
+}
+
+.hud-village-shop-detail-comparison {
+  color: #c9e7dc;
+}
+
+.hud-village-shop-error {
+  border: 1px solid rgba(242, 111, 111, 0.4);
+  background: rgba(242, 111, 111, 0.14);
+  color: #ffd1d1;
+  border-radius: 10px;
+  padding: 8px 9px;
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.hud-village-shop-transaction {
+  border: 1px solid rgba(185, 195, 212, 0.2);
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(6, 10, 16, 0.46);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.hud-village-shop-transaction-line {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #d1dfef;
+}
+
+.hud-village-shop-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.hud-village-shop-action.primary {
+  border-color: rgba(226, 182, 109, 0.46);
+  background: rgba(226, 182, 109, 0.19);
+}
+
+.hud-village-shop-action.secondary {
+  border-color: rgba(127, 209, 199, 0.44);
+  background: rgba(127, 209, 199, 0.16);
+}
+
 .hud-farm-overview {
   margin-top: 4px;
   display: flex;
@@ -559,6 +779,10 @@ body::before {
 .hud-hero-profile-button:focus-visible,
 .hud-intro-button:focus-visible,
 .hud-shop-buy:focus-visible,
+.hud-village-shop-close:focus-visible,
+.hud-village-shop-tab:focus-visible,
+.hud-village-shop-entry:focus-visible,
+.hud-village-shop-action:focus-visible,
 .hud-farm-action:focus-visible,
 .hud-village-action:focus-visible,
 .hud-loop-button:focus-visible,
@@ -2023,6 +2247,14 @@ body::before {
 }
 
 .hud-shop-buy:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.hud-village-shop-close:disabled,
+.hud-village-shop-tab:disabled,
+.hud-village-shop-entry:disabled,
+.hud-village-shop-action:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
