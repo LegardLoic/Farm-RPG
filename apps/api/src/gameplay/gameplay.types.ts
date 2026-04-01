@@ -226,3 +226,25 @@ export interface GameplayTowerState {
   mvpCompleted: boolean;
   nextBossFloor: number | null;
 }
+
+export interface GameplayTowerStoryEventState {
+  key: string;
+  milestoneFloor: number;
+  milestoneFlagKey: string;
+  reportFlagKey: string;
+  reached: boolean;
+  reported: boolean;
+  title: string;
+  narrative: string;
+}
+
+export interface GameplayTowerStoryState {
+  highestFloor: number;
+  reachedEvents: number;
+  reportedEvents: number;
+  totalEvents: number;
+  activeEventKey: string | null;
+  activeEventTitle: string;
+  activeEventNarrative: string;
+  events: GameplayTowerStoryEventState[];
+}

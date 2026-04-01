@@ -78,6 +78,50 @@ export const FARM_STORY_EVENTS: FarmStoryEventDefinition[] = [
   },
 ];
 
+export type TowerStoryEventDefinition = {
+  key: string;
+  milestoneFloor: number;
+  milestoneFlagKey: string;
+  reportFlagKey: string;
+  title: string;
+  narrative: string;
+};
+
+export const TOWER_STORY_EVENTS: TowerStoryEventDefinition[] = [
+  {
+    key: 'tower_story_floor_3',
+    milestoneFloor: 3,
+    milestoneFlagKey: 'floor_3_cleared',
+    reportFlagKey: 'story_floor_3_cleared',
+    title: 'Fumee sur les champs',
+    narrative: 'Le village attend ton premier rapport sur la corruption apercue en tour.',
+  },
+  {
+    key: 'tower_story_floor_5',
+    milestoneFloor: 5,
+    milestoneFlagKey: 'floor_5_cleared',
+    reportFlagKey: 'story_floor_5_cleared',
+    title: 'Cloche de garde',
+    narrative: 'Le poste de veille demande un compte-rendu tactique du palier 5.',
+  },
+  {
+    key: 'tower_story_floor_8',
+    milestoneFloor: 8,
+    milestoneFlagKey: 'floor_8_cleared',
+    reportFlagKey: 'story_floor_8_cleared',
+    title: 'Vanguard en cendres',
+    narrative: 'Les eclaireurs veulent tes notes sur les formations ennemies du palier 8.',
+  },
+  {
+    key: 'tower_story_floor_10',
+    milestoneFloor: 10,
+    milestoneFlagKey: 'boss_floor_10_defeated',
+    reportFlagKey: 'story_act_1_complete',
+    title: 'Coeur de la malediction',
+    narrative: 'Le conseil attend ton rapport final de phase 1 apres la victoire au palier 10.',
+  },
+];
+
 export const VILLAGE_NPC_KEYS = ['mayor', 'blacksmith', 'merchant'] as const;
 export type VillageNpcKey = (typeof VILLAGE_NPC_KEYS)[number];
 

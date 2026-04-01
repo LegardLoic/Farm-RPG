@@ -231,6 +231,7 @@ body::before {
 .hud-farm,
 .hud-farm-crafting,
 .hud-loop,
+.hud-tower-story,
 .hud-autosave,
 .hud-saves {
   margin-top: 10px;
@@ -361,6 +362,12 @@ body::before {
 }
 
 .hud-loop {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hud-tower-story {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -999,6 +1006,13 @@ body::before {
   gap: 12px;
 }
 
+.hud-tower-story-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
 .hud-autosave-header {
   display: flex;
   justify-content: space-between;
@@ -1042,6 +1056,13 @@ body::before {
 }
 
 .hud-farm-crafting-header span {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.hud-tower-story-header span {
   font-size: 0.76rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -1099,6 +1120,18 @@ body::before {
 .hud-farm-crafting-header strong {
   font-size: 0.75rem;
   color: var(--accent-2);
+}
+
+.hud-tower-story-header strong {
+  font-size: 0.75rem;
+  color: var(--accent);
+}
+
+.hud-tower-story-narrative {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: #dbe8f8;
 }
 
 .hud-autosave-header strong {

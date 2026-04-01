@@ -30,6 +30,7 @@ import {
   VILLAGE_NPC_KEYS,
   VILLAGE_NPC_RELATIONSHIPS_TABLE,
   PLAYER_PROGRESSION_TABLE,
+  TOWER_STORY_EVENTS,
   type VillageNpcKey,
   WORLD_STATE_TABLE,
   WORLD_FLAGS_TABLE,
@@ -49,6 +50,7 @@ import type {
   GameplayFarmWaterResult,
   GameplayIntroState,
   GameplayLoopState,
+  GameplayTowerStoryState,
   GameplayVillageNpcInteractResult,
   GameplayVillageNpcRelationshipTier,
   GameplayVillageState,
@@ -407,6 +409,18 @@ export class GameplayService {
       : (world?.farmHarvestTotal ?? 0);
 
     return this.buildFarmStoryState(worldFlags, day, harvestTotal);
+  }
+
+  async getTowerStoryState(
+    userId: string,
+    currentHighestFloor?: number,
+  ): Promise<GameplayTowerStoryState> {
+    const worldFlags = new Set(await this.getWorldFlags(userId));
+    const highestFloor = typeof currentHighestFloor === 'number' && Number.isFinite(currentHighestFloor)
+      ? Math.max(1, Math.floor(currentHighestFloor))
+      : (await this.getTowerState(this.databaseService, userId)).highestFloor;
+
+    return this.buildTowerStoryState(worldFlags, highestFloor);
   }
 
   async craftFarmRecipe(userId: string, recipeKey: string, quantity: number): Promise<{
@@ -1056,6 +1070,68 @@ export class GameplayService {
       activeEventKey: null,
       activeEventTitle: 'Scenario ferme (lot 103) complete',
       activeEventNarrative: 'Tous les beats jour/recolte de la premiere passe ont ete declenches.',
+      events,
+    };
+  }
+
+  private buildTowerStoryState(
+    worldFlags: Set<string>,
+    highestFloor: number,
+  ): GameplayTowerStoryState {
+    const events = TOWER_STORY_EVENTS.map((event) => {
+      const reached = highestFloor >= event.milestoneFloor || worldFlags.has(event.milestoneFlagKey);
+      const reported = worldFlags.has(event.reportFlagKey);
+      return {
+        key: event.key,
+        milestoneFloor: event.milestoneFloor,
+        milestoneFlagKey: event.milestoneFlagKey,
+        reportFlagKey: event.reportFlagKey,
+        reached,
+        reported,
+        title: event.title,
+        narrative: event.narrative,
+      };
+    });
+
+    const activePendingReport = events.find((event) => event.reached && !event.reported) ?? null;
+    const nextUnreached = events.find((event) => !event.reached) ?? null;
+    const reachedEvents = events.filter((event) => event.reached).length;
+    const reportedEvents = events.filter((event) => event.reported).length;
+
+    if (activePendingReport) {
+      return {
+        highestFloor: Math.max(1, highestFloor),
+        reachedEvents,
+        reportedEvents,
+        totalEvents: events.length,
+        activeEventKey: activePendingReport.key,
+        activeEventTitle: `${activePendingReport.title} (rapport en attente)`,
+        activeEventNarrative: activePendingReport.narrative,
+        events,
+      };
+    }
+
+    if (nextUnreached) {
+      return {
+        highestFloor: Math.max(1, highestFloor),
+        reachedEvents,
+        reportedEvents,
+        totalEvents: events.length,
+        activeEventKey: nextUnreached.key,
+        activeEventTitle: `${nextUnreached.title} (palier ${nextUnreached.milestoneFloor})`,
+        activeEventNarrative: nextUnreached.narrative,
+        events,
+      };
+    }
+
+    return {
+      highestFloor: Math.max(1, highestFloor),
+      reachedEvents,
+      reportedEvents,
+      totalEvents: events.length,
+      activeEventKey: null,
+      activeEventTitle: 'Tower story phase 1 complete',
+      activeEventNarrative: 'Tous les beats narratifs relies aux paliers 3/5/8/10 sont atteints.',
       events,
     };
   }
