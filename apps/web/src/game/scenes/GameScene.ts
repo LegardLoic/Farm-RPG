@@ -731,6 +731,9 @@ export class GameScene extends Phaser.Scene {
   private villageNpcMayorValue: HTMLElement | null = null;
   private villageNpcBlacksmithValue: HTMLElement | null = null;
   private villageNpcMerchantValue: HTMLElement | null = null;
+  private villageNpcMayorDialogueValue: HTMLElement | null = null;
+  private villageNpcBlacksmithDialogueValue: HTMLElement | null = null;
+  private villageNpcMerchantDialogueValue: HTMLElement | null = null;
   private villageNpcErrorValue: HTMLElement | null = null;
   private villageNpcTalkMayorButton: HTMLButtonElement | null = null;
   private villageNpcTalkBlacksmithButton: HTMLButtonElement | null = null;
@@ -1471,7 +1474,10 @@ export class GameScene extends Phaser.Scene {
           <div class="hud-village-npc-error" data-hud="villageNpcError" hidden></div>
           <div class="hud-village-npc-grid">
             <div class="hud-village-npc-line">
-              <span>Maire</span>
+              <div class="hud-village-npc-copy">
+                <span>Maire</span>
+                <p class="hud-village-npc-dialogue" data-hud="villageNpcMayorDialogue">-</p>
+              </div>
               <div class="hud-village-npc-actions">
                 <strong data-hud="villageNpcMayor">-</strong>
                 <button class="hud-village-npc-button" data-village-npc-action="talk" data-npc-key="mayor">
@@ -1480,7 +1486,10 @@ export class GameScene extends Phaser.Scene {
               </div>
             </div>
             <div class="hud-village-npc-line">
-              <span>Forgeron</span>
+              <div class="hud-village-npc-copy">
+                <span>Forgeron</span>
+                <p class="hud-village-npc-dialogue" data-hud="villageNpcBlacksmithDialogue">-</p>
+              </div>
               <div class="hud-village-npc-actions">
                 <strong data-hud="villageNpcBlacksmith">-</strong>
                 <button class="hud-village-npc-button" data-village-npc-action="talk" data-npc-key="blacksmith">
@@ -1489,7 +1498,10 @@ export class GameScene extends Phaser.Scene {
               </div>
             </div>
             <div class="hud-village-npc-line">
-              <span>Marchand</span>
+              <div class="hud-village-npc-copy">
+                <span>Marchand</span>
+                <p class="hud-village-npc-dialogue" data-hud="villageNpcMerchantDialogue">-</p>
+              </div>
               <div class="hud-village-npc-actions">
                 <strong data-hud="villageNpcMerchant">-</strong>
                 <button class="hud-village-npc-button" data-village-npc-action="talk" data-npc-key="merchant">
@@ -1785,6 +1797,13 @@ export class GameScene extends Phaser.Scene {
     this.villageNpcMayorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcMayor"]');
     this.villageNpcBlacksmithValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcBlacksmith"]');
     this.villageNpcMerchantValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcMerchant"]');
+    this.villageNpcMayorDialogueValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcMayorDialogue"]');
+    this.villageNpcBlacksmithDialogueValue = this.hudRoot.querySelector<HTMLElement>(
+      '[data-hud="villageNpcBlacksmithDialogue"]',
+    );
+    this.villageNpcMerchantDialogueValue = this.hudRoot.querySelector<HTMLElement>(
+      '[data-hud="villageNpcMerchantDialogue"]',
+    );
     this.villageNpcErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcError"]');
     this.villageNpcTalkMayorButton = this.hudRoot.querySelector<HTMLButtonElement>(
       '[data-village-npc-action="talk"][data-npc-key="mayor"]',
@@ -1996,6 +2015,9 @@ export class GameScene extends Phaser.Scene {
     this.villageNpcMayorValue = null;
     this.villageNpcBlacksmithValue = null;
     this.villageNpcMerchantValue = null;
+    this.villageNpcMayorDialogueValue = null;
+    this.villageNpcBlacksmithDialogueValue = null;
+    this.villageNpcMerchantDialogueValue = null;
     this.villageNpcErrorValue = null;
     this.villageNpcTalkMayorButton = null;
     this.villageNpcTalkBlacksmithButton = null;
@@ -2213,6 +2235,18 @@ export class GameScene extends Phaser.Scene {
 
     if (this.villageNpcMerchantValue) {
       this.villageNpcMerchantValue.textContent = this.getVillageNpcEntryLabel('merchant');
+    }
+
+    if (this.villageNpcMayorDialogueValue) {
+      this.villageNpcMayorDialogueValue.textContent = this.getVillageNpcDialogueLabel('mayor');
+    }
+
+    if (this.villageNpcBlacksmithDialogueValue) {
+      this.villageNpcBlacksmithDialogueValue.textContent = this.getVillageNpcDialogueLabel('blacksmith');
+    }
+
+    if (this.villageNpcMerchantDialogueValue) {
+      this.villageNpcMerchantDialogueValue.textContent = this.getVillageNpcDialogueLabel('merchant');
     }
 
     if (this.villageNpcErrorValue) {
@@ -8036,6 +8070,153 @@ export class GameScene extends Phaser.Scene {
     const availability = entry.available ? 'Disponible' : 'Indisponible';
     const relationship = this.villageNpcRelationships[npcKey];
     return `${this.formatVillageNpcStateLabel(entry.stateKey)} | ${availability} | Amitie ${relationship.friendship} (${this.formatVillageRelationshipTierLabel(relationship.tier)})`;
+  }
+
+  private getVillageNpcDialogueLabel(npcKey: VillageNpcKey): string {
+    if (!this.isAuthenticated) {
+      return 'Connecte-toi pour ecouter les echos du village.';
+    }
+
+    const npc = this.villageNpcState[npcKey];
+    const relationship = this.villageNpcRelationships[npcKey];
+
+    if (!npc.available) {
+      return this.getVillageNpcUnavailableDialogue(npcKey, npc.stateKey);
+    }
+
+    if (!relationship.canTalkToday) {
+      return this.getVillageNpcCooldownDialogue(npcKey, relationship.tier);
+    }
+
+    if (npcKey === 'mayor') {
+      return this.getMayorContextDialogue(relationship.tier, npc.stateKey);
+    }
+
+    if (npcKey === 'blacksmith') {
+      return this.getBlacksmithContextDialogue(relationship.tier, npc.stateKey);
+    }
+
+    return this.getMerchantContextDialogue(relationship.tier, npc.stateKey);
+  }
+
+  private getVillageNpcUnavailableDialogue(npcKey: VillageNpcKey, stateKey: string): string {
+    if (npcKey === 'mayor') {
+      if (stateKey === 'offscreen') {
+        return 'Le maire est en tournee, laisse un rapport au tableau.';
+      }
+      if (stateKey === 'awaiting_meeting') {
+        return 'Le maire attend encore ton premier compte-rendu.';
+      }
+    }
+
+    if (npcKey === 'blacksmith') {
+      if (stateKey === 'cursed') {
+        return 'La forge grince sous la malediction, la lame devra attendre.';
+      }
+      if (stateKey === 'recovering') {
+        return 'Le forgeron reprend son souffle; reviens apres une nouvelle expedition.';
+      }
+    }
+
+    if (npcKey === 'merchant') {
+      if (stateKey === 'absent') {
+        return 'Le marchand est encore sur les routes, sans etal aujourd hui.';
+      }
+      if (stateKey === 'setting_stall') {
+        return 'Le marchand installe ses caisses, le marche ouvre bientot.';
+      }
+    }
+
+    return `${this.getVillageNpcDisplayName(npcKey)} n est pas disponible pour parler.`;
+  }
+
+  private getVillageNpcCooldownDialogue(
+    npcKey: VillageNpcKey,
+    tier: VillageNpcRelationshipTier,
+  ): string {
+    if (tier === 'ally') {
+      return `${this.getVillageNpcDisplayName(npcKey)} a deja partage les infos du jour.`;
+    }
+    if (tier === 'trusted') {
+      return `${this.getVillageNpcDisplayName(npcKey)} t a deja briefe pour cette journee.`;
+    }
+    if (tier === 'familiar') {
+      return `${this.getVillageNpcDisplayName(npcKey)} te reconnait, mais rien de neuf aujourd hui.`;
+    }
+
+    return `${this.getVillageNpcDisplayName(npcKey)} reste reserve pour le reste de la journee.`;
+  }
+
+  private getMayorContextDialogue(tier: VillageNpcRelationshipTier, stateKey: string): string {
+    if (stateKey === 'tower_strategist') {
+      if (tier === 'ally') {
+        return 'Maire: \"Ton rapport fixe notre plan. On coordonne ferme et tour ensemble.\"';
+      }
+      if (tier === 'trusted') {
+        return 'Maire: \"Priorite au palier suivant. Ravitaille le village avant la montee.\"';
+      }
+      return 'Maire: \"Observe les mouvements en tour et reviens avec des details.\"';
+    }
+
+    if (tier === 'ally') {
+      return 'Maire: \"Bon retour. La population suit ton rythme, continue ainsi.\"';
+    }
+    if (tier === 'trusted') {
+      return 'Maire: \"Tes decisions stabilisent le village, on peut viser plus haut.\"';
+    }
+    if (tier === 'familiar') {
+      return 'Maire: \"Tu prends ta place dans la garde. Un rapport chaque soir.\"';
+    }
+
+    return 'Maire: \"Bienvenue. Commence par securiser des ressources de base.\"';
+  }
+
+  private getBlacksmithContextDialogue(tier: VillageNpcRelationshipTier, stateKey: string): string {
+    if (stateKey === 'masterwork_ready') {
+      if (tier === 'ally') {
+        return 'Forgeron: \"La maitrise est prete. On forge pour les boss maintenant.\"';
+      }
+      if (tier === 'trusted') {
+        return 'Forgeron: \"Apporte des composants rares, je pousse ton equipement plus loin.\"';
+      }
+      return 'Forgeron: \"La forge tourne a plein regime, choisis bien ton prochain achat.\"';
+    }
+
+    if (tier === 'ally') {
+      return 'Forgeron: \"Ta progression est propre. Je peux anticiper ton prochain set.\"';
+    }
+    if (tier === 'trusted') {
+      return 'Forgeron: \"Bon timing. Plus de minerai = meilleures options en boutique.\"';
+    }
+    if (tier === 'familiar') {
+      return 'Forgeron: \"Je note tes besoins. Reviens apres quelques combats.\"';
+    }
+
+    return 'Forgeron: \"Une lame solide avant tout. Le reste viendra.\"';
+  }
+
+  private getMerchantContextDialogue(tier: VillageNpcRelationshipTier, stateKey: string): string {
+    if (stateKey === 'traveling_buyer') {
+      if (tier === 'ally') {
+        return 'Marchand: \"Je couvre les routes longues. Ta ferme garantit nos stocks.\"';
+      }
+      if (tier === 'trusted') {
+        return 'Marchand: \"On optimise les trajets: livre regulierement et je maintiens les prix.\"';
+      }
+      return 'Marchand: \"Les routes sont ouvertes, garde un flux constant de recoltes.\"';
+    }
+
+    if (tier === 'ally') {
+      return 'Marchand: \"Transactions nettes. Tes livraisons donnent du souffle au village.\"';
+    }
+    if (tier === 'trusted') {
+      return 'Marchand: \"Bon partenariat. Plus de volume, meilleure marge collective.\"';
+    }
+    if (tier === 'familiar') {
+      return 'Marchand: \"Je peux reprendre tes recoltes, commence petit et regulier.\"';
+    }
+
+    return 'Marchand: \"Montre-moi ce que ta ferme peut fournir, puis on negocie.\"';
   }
 
   private formatVillageNpcStateLabel(stateKey: string): string {

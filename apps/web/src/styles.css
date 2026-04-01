@@ -740,12 +740,19 @@ body::before {
 .hud-village-npc-line {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid rgba(185, 195, 212, 0.18);
   background: rgba(6, 10, 16, 0.38);
+}
+
+.hud-village-npc-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .hud-loop-line {
@@ -779,6 +786,14 @@ body::before {
   text-align: right;
 }
 
+.hud-village-npc-dialogue {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: #9fb2c8;
+  max-width: 34ch;
+}
+
 .hud-loop-line strong {
   font-size: 0.75rem;
   color: #d6e3f5;
@@ -787,7 +802,8 @@ body::before {
 
 .hud-village-npc-actions {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 8px;
 }
 
@@ -2203,6 +2219,21 @@ body::before {
   .hud-combat-meta,
   .hud-combat-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hud-village-npc-line {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hud-village-npc-dialogue {
+    max-width: none;
+  }
+
+  .hud-village-npc-actions {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
   }
 
   .hud-combat-recap {
