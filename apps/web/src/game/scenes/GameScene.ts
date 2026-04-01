@@ -380,6 +380,28 @@ type FarmStoryState = {
   events: FarmStoryEventState[];
 };
 
+type TowerStoryEventState = {
+  key: string;
+  milestoneFloor: number;
+  milestoneFlagKey: string;
+  reportFlagKey: string;
+  reached: boolean;
+  reported: boolean;
+  title: string;
+  narrative: string;
+};
+
+type TowerStoryState = {
+  highestFloor: number;
+  reachedEvents: number;
+  reportedEvents: number;
+  totalEvents: number;
+  activeEventKey: string | null;
+  activeEventTitle: string;
+  activeEventNarrative: string;
+  events: TowerStoryEventState[];
+};
+
 type FarmCraftIngredientState = {
   itemKey: string;
   requiredQuantity: number;
@@ -754,6 +776,8 @@ export class GameScene extends Phaser.Scene {
   private loopBlockersValue: HTMLElement | null = null;
   private loopErrorValue: HTMLElement | null = null;
   private loopPrepareButton: HTMLButtonElement | null = null;
+  private towerStorySummaryValue: HTMLElement | null = null;
+  private towerStoryNarrativeValue: HTMLElement | null = null;
   private villageNpcSummaryValue: HTMLElement | null = null;
   private villageNpcMayorValue: HTMLElement | null = null;
   private villageNpcBlacksmithValue: HTMLElement | null = null;
@@ -840,6 +864,7 @@ export class GameScene extends Phaser.Scene {
   private loopState: GameplayLoopState | null = null;
   private loopBusy = false;
   private loopError: string | null = null;
+  private towerStoryState: TowerStoryState | null = null;
   private villageNpcState: VillageNpcHudState = {
     mayor: { stateKey: 'offscreen', available: false },
     blacksmith: { stateKey: 'cursed', available: false },
@@ -1615,6 +1640,15 @@ export class GameScene extends Phaser.Scene {
           </div>
           <div class="hud-loop-error" data-hud="loopError" hidden></div>
         </div>
+        <div class="hud-tower-story">
+          <div class="hud-tower-story-header">
+            <span>Tower Story</span>
+            <strong data-hud="towerStorySummary">Loading...</strong>
+          </div>
+          <p class="hud-tower-story-narrative" data-hud="towerStoryNarrative">
+            Synchronisation des beats narratifs tour...
+          </p>
+        </div>
         <div class="hud-autosave">
           <div class="hud-autosave-header">
             <span>Autosave</span>
@@ -1827,6 +1861,8 @@ export class GameScene extends Phaser.Scene {
     this.loopBlockersValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="loopBlockers"]');
     this.loopErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="loopError"]');
     this.loopPrepareButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-loop-action="prepare"]');
+    this.towerStorySummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="towerStorySummary"]');
+    this.towerStoryNarrativeValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="towerStoryNarrative"]');
     this.villageNpcSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcSummary"]');
     this.villageNpcMayorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcMayor"]');
     this.villageNpcBlacksmithValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageNpcBlacksmith"]');
@@ -2047,6 +2083,8 @@ export class GameScene extends Phaser.Scene {
     this.loopBlockersValue = null;
     this.loopErrorValue = null;
     this.loopPrepareButton = null;
+    this.towerStorySummaryValue = null;
+    this.towerStoryNarrativeValue = null;
     this.villageNpcSummaryValue = null;
     this.villageNpcMayorValue = null;
     this.villageNpcBlacksmithValue = null;
@@ -2136,6 +2174,7 @@ export class GameScene extends Phaser.Scene {
     this.loopState = null;
     this.loopBusy = false;
     this.loopError = null;
+    this.towerStoryState = null;
     this.villageNpcState = {
       mayor: { stateKey: 'offscreen', available: false },
       blacksmith: { stateKey: 'cursed', available: false },
@@ -2198,6 +2237,7 @@ export class GameScene extends Phaser.Scene {
     this.updateFarmHud();
     this.updateFarmCraftingHud();
     this.updateLoopHud();
+    this.updateTowerStoryHud();
     this.updateAutoSaveHud();
     this.updateSaveSlotsHud();
     this.updateDebugQaHud();
@@ -2413,6 +2453,15 @@ export class GameScene extends Phaser.Scene {
       const canPrepare = Boolean(this.isAuthenticated && this.loopState?.preparation.ready);
       this.loopPrepareButton.disabled = !canPrepare || this.loopBusy;
       this.loopPrepareButton.textContent = this.loopBusy ? 'Preparing...' : 'Prepare combat';
+    }
+  }
+
+  private updateTowerStoryHud(): void {
+    if (this.towerStorySummaryValue) {
+      this.towerStorySummaryValue.textContent = this.getTowerStorySummaryLabel();
+    }
+    if (this.towerStoryNarrativeValue) {
+      this.towerStoryNarrativeValue.textContent = this.getTowerStoryNarrativeLabel();
     }
   }
 
@@ -3915,6 +3964,31 @@ export class GameScene extends Phaser.Scene {
     }
 
     return this.loopState.preparation.nextStep;
+  }
+
+  private getTowerStorySummaryLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Login required';
+    }
+
+    if (!this.towerStoryState) {
+      return this.questBusy ? 'Loading...' : 'No data';
+    }
+
+    const towerStory = this.towerStoryState;
+    return `Reported ${towerStory.reportedEvents}/${towerStory.totalEvents} | Reached ${towerStory.reachedEvents}/${towerStory.totalEvents}`;
+  }
+
+  private getTowerStoryNarrativeLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Connecte toi pour suivre les beats narratifs lies aux paliers de tour.';
+    }
+
+    if (!this.towerStoryState) {
+      return 'Aucune donnee Tower Story chargee.';
+    }
+
+    return `${this.towerStoryState.activeEventTitle}: ${this.towerStoryState.activeEventNarrative}`;
   }
 
   private getFarmPlotStatusLabel(plot: FarmPlotState): string {
@@ -6170,6 +6244,11 @@ export class GameScene extends Phaser.Scene {
       }
 
       this.hudState.towerBossFloor10Defeated = Boolean(bossFloor10Defeated);
+    }
+
+    const towerStory = this.normalizeGameplayTowerStoryPayload(payload);
+    if (towerStory) {
+      this.towerStoryState = towerStory;
     }
   }
 
@@ -8614,6 +8693,81 @@ export class GameScene extends Phaser.Scene {
       target: Math.max(1, Math.round(target)),
       progress: Math.max(0, Math.round(progress)),
       unlocked: Boolean(record.unlocked),
+      title,
+      narrative,
+    };
+  }
+
+  private normalizeGameplayTowerStoryPayload(payload: unknown): TowerStoryState | null {
+    const root = this.asRecord(payload);
+    if (!root) {
+      return null;
+    }
+
+    const storyRecord = this.asRecord(root.towerStory) ?? this.asRecord(root.tower_story) ?? null;
+    if (!storyRecord) {
+      return null;
+    }
+
+    const highestFloor = this.asNumber(storyRecord.highestFloor);
+    const reachedEvents = this.asNumber(storyRecord.reachedEvents);
+    const reportedEvents = this.asNumber(storyRecord.reportedEvents);
+    const totalEvents = this.asNumber(storyRecord.totalEvents);
+    const activeEventKeyRaw = this.asString(storyRecord.activeEventKey);
+    const activeEventTitle = this.asString(storyRecord.activeEventTitle);
+    const activeEventNarrative = this.asString(storyRecord.activeEventNarrative);
+    const eventsRaw = Array.isArray(storyRecord.events) ? storyRecord.events : null;
+    if (
+      highestFloor === null ||
+      reachedEvents === null ||
+      reportedEvents === null ||
+      totalEvents === null ||
+      !activeEventTitle ||
+      !activeEventNarrative ||
+      !eventsRaw
+    ) {
+      return null;
+    }
+
+    const events = eventsRaw
+      .map((entry) => this.normalizeTowerStoryEventEntry(entry))
+      .filter((entry): entry is TowerStoryEventState => entry !== null);
+
+    return {
+      highestFloor: Math.max(1, Math.round(highestFloor)),
+      reachedEvents: Math.max(0, Math.round(reachedEvents)),
+      reportedEvents: Math.max(0, Math.round(reportedEvents)),
+      totalEvents: Math.max(0, Math.round(totalEvents)),
+      activeEventKey: activeEventKeyRaw ? activeEventKeyRaw : null,
+      activeEventTitle,
+      activeEventNarrative,
+      events,
+    };
+  }
+
+  private normalizeTowerStoryEventEntry(payload: unknown): TowerStoryEventState | null {
+    const record = this.asRecord(payload);
+    if (!record) {
+      return null;
+    }
+
+    const key = this.asString(record.key);
+    const milestoneFloor = this.asNumber(record.milestoneFloor);
+    const milestoneFlagKey = this.asString(record.milestoneFlagKey);
+    const reportFlagKey = this.asString(record.reportFlagKey);
+    const title = this.asString(record.title);
+    const narrative = this.asString(record.narrative);
+    if (!key || milestoneFloor === null || !milestoneFlagKey || !reportFlagKey || !title || !narrative) {
+      return null;
+    }
+
+    return {
+      key,
+      milestoneFloor: Math.max(1, Math.round(milestoneFloor)),
+      milestoneFlagKey,
+      reportFlagKey,
+      reached: Boolean(record.reached),
+      reported: Boolean(record.reported),
       title,
       narrative,
     };

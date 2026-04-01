@@ -1704,6 +1704,36 @@ test('gameplay farm story state follows day and harvest milestones', async () =>
   assert.equal(story.events.every((event) => event.unlocked), true);
 });
 
+test('gameplay tower story state follows floor milestones 3/5/8/10', async () => {
+  const db = createGameplayDatabaseStub(
+    ['floor_3_cleared', 'story_floor_3_cleared', 'floor_5_cleared'],
+    [],
+    {},
+    {},
+    {
+      current_floor: 8,
+      highest_floor: 8,
+      boss_floor_10_defeated: false,
+    },
+  );
+  const service = new GameplayService(db);
+
+  const story = await service.getTowerStoryState('user-1');
+  assert.equal(story.highestFloor, 8);
+  assert.equal(story.reachedEvents, 3);
+  assert.equal(story.reportedEvents, 1);
+  assert.equal(story.totalEvents, 4);
+  assert.equal(story.activeEventKey, 'tower_story_floor_5');
+  assert.equal(story.activeEventTitle.includes('rapport'), true);
+
+  const floor8 = story.events.find((event) => event.key === 'tower_story_floor_8');
+  const floor10 = story.events.find((event) => event.key === 'tower_story_floor_10');
+  assert.equal(floor8?.reached, true);
+  assert.equal(floor8?.reported, false);
+  assert.equal(floor10?.reached, false);
+  assert.equal(floor10?.reported, false);
+});
+
 test('gameplay crafting state exposes unlocked recipes and max craftable counts', async () => {
   const db = createGameplayDatabaseStub(
     ['intro_farm_assigned'],

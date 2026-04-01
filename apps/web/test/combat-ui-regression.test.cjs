@@ -321,6 +321,19 @@ test('farm scenario day/harvest narrative wiring exists for lot 103', () => {
   assert.equal(stylesSource.includes('.hud-farm-story-narrative'), true);
 });
 
+test('tower scenario floor milestone narrative wiring exists for lot 104', () => {
+  assert.equal(gameSceneSource.includes('data-hud="towerStorySummary"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="towerStoryNarrative"'), true);
+  assert.equal(gameSceneSource.includes('private updateTowerStoryHud(): void'), true);
+  assert.equal(gameSceneSource.includes('private getTowerStorySummaryLabel(): string'), true);
+  assert.equal(gameSceneSource.includes('private getTowerStoryNarrativeLabel(): string'), true);
+  assert.equal(gameSceneSource.includes('private normalizeGameplayTowerStoryPayload(payload: unknown): TowerStoryState | null'), true);
+  assert.equal(gameSceneSource.includes('private normalizeTowerStoryEventEntry(payload: unknown): TowerStoryEventState | null'), true);
+  assert.equal(stylesSource.includes('.hud-tower-story'), true);
+  assert.equal(stylesSource.includes('.hud-tower-story-header'), true);
+  assert.equal(stylesSource.includes('.hud-tower-story-narrative'), true);
+});
+
 test('combat preparation loop panel wiring exists for lot 95', () => {
   assert.equal(gameSceneSource.includes('data-hud="loopSummary"'), true);
   assert.equal(gameSceneSource.includes('data-hud="loopStage"'), true);
