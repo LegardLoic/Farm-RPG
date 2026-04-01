@@ -253,9 +253,21 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         zone TEXT NOT NULL DEFAULT 'Ferme',
         day INTEGER NOT NULL DEFAULT 1 CHECK (day >= 1),
+        farm_harvest_total INTEGER NOT NULL DEFAULT 0 CHECK (farm_harvest_total >= 0),
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+    `);
+
+    await this.query(`
+      ALTER TABLE world_state
+      ADD COLUMN IF NOT EXISTS farm_harvest_total INTEGER NOT NULL DEFAULT 0;
+    `);
+
+    await this.query(`
+      UPDATE world_state
+      SET farm_harvest_total = 0
+      WHERE farm_harvest_total IS NULL OR farm_harvest_total < 0;
     `);
 
     await this.query(`

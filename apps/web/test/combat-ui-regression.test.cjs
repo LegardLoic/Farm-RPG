@@ -310,6 +310,17 @@ test('farm crafting panel wiring exists for lot 92', () => {
   assert.equal(stylesSource.includes('.farm-crafting-ingredients'), true);
 });
 
+test('farm scenario day/harvest narrative wiring exists for lot 103', () => {
+  assert.equal(gameSceneSource.includes('data-hud="farmStorySummary"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="farmStoryNarrative"'), true);
+  assert.equal(gameSceneSource.includes('private getFarmStorySummaryLabel(): string'), true);
+  assert.equal(gameSceneSource.includes('private getFarmStoryNarrativeLabel(): string'), true);
+  assert.equal(gameSceneSource.includes('private normalizeGameplayFarmStoryPayload(payload: unknown): FarmStoryState | null'), true);
+  assert.equal(gameSceneSource.includes('private normalizeFarmStoryEventEntry(payload: unknown): FarmStoryEventState | null'), true);
+  assert.equal(stylesSource.includes('.hud-farm-story-summary'), true);
+  assert.equal(stylesSource.includes('.hud-farm-story-narrative'), true);
+});
+
 test('combat preparation loop panel wiring exists for lot 95', () => {
   assert.equal(gameSceneSource.includes('data-hud="loopSummary"'), true);
   assert.equal(gameSceneSource.includes('data-hud="loopStage"'), true);
