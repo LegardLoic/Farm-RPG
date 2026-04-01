@@ -163,6 +163,112 @@ const FARM_SCENE_ORIGIN_X = 540;
 const FARM_SCENE_ORIGIN_Y = 260;
 const FARM_SCENE_COL_STEP = 128;
 const FARM_SCENE_ROW_STEP = 96;
+const FARM_SCENE_PLAYER_SPAWN = { x: 240, y: 220 };
+const VILLAGE_SCENE_PLAYER_SPAWN = { x: 804, y: 734 };
+
+type FrontSceneMode = 'farm' | 'village';
+type VillageSceneZoneKey = 'mayor' | 'market' | 'forge' | 'calm' | 'farm_exit' | 'tower_exit';
+type VillageSceneZoneActionKey = 'talk-mayor' | 'talk-merchant' | 'talk-blacksmith' | 'talk-secondary' | 'go-farm' | 'go-tower';
+
+type VillageSceneZoneConfig = {
+  key: VillageSceneZoneKey;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  title: string;
+  role: string;
+  hint: string;
+  actionLabel: string;
+  actionKey: VillageSceneZoneActionKey;
+  npcKey?: VillageNpcKey;
+};
+
+type VillageSceneZoneVisual = {
+  config: VillageSceneZoneConfig;
+  frame: Phaser.GameObjects.Rectangle;
+  overlay: Phaser.GameObjects.Rectangle;
+  title: Phaser.GameObjects.Text;
+  state: Phaser.GameObjects.Text;
+};
+
+const VILLAGE_SCENE_ZONES: VillageSceneZoneConfig[] = [
+  {
+    key: 'mayor',
+    x: 286,
+    y: 232,
+    width: 240,
+    height: 168,
+    title: 'Mairie',
+    role: 'Maire - narration principale',
+    hint: 'Accueil du village, suivi de progression.',
+    actionLabel: 'Parler au Maire',
+    actionKey: 'talk-mayor',
+    npcKey: 'mayor',
+  },
+  {
+    key: 'market',
+    x: 1020,
+    y: 540,
+    width: 256,
+    height: 176,
+    title: 'Marche',
+    role: 'Marchande - economie locale',
+    hint: 'Achat/vente au lot 3. Dialogue disponible ici.',
+    actionLabel: 'Parler a la Marchande',
+    actionKey: 'talk-merchant',
+    npcKey: 'merchant',
+  },
+  {
+    key: 'forge',
+    x: 1262,
+    y: 238,
+    width: 240,
+    height: 176,
+    title: 'Forge',
+    role: 'Forgeron - progression materielle',
+    hint: 'Comparaison et equipements au lot 3.',
+    actionLabel: 'Parler au Forgeron',
+    actionKey: 'talk-blacksmith',
+    npcKey: 'blacksmith',
+  },
+  {
+    key: 'calm',
+    x: 350,
+    y: 610,
+    width: 268,
+    height: 170,
+    title: 'Coin calme',
+    role: 'Habitante secondaire',
+    hint: 'Echanges humains et quetes secondaires.',
+    actionLabel: 'Parler',
+    actionKey: 'talk-secondary',
+  },
+  {
+    key: 'tower_exit',
+    x: 806,
+    y: 102,
+    width: 336,
+    height: 124,
+    title: 'Route de la Tour',
+    role: 'Sortie vers la menace',
+    hint: 'Transition tour/combat prevue aux lots 4+.',
+    actionLabel: 'Aller vers la Tour',
+    actionKey: 'go-tower',
+  },
+  {
+    key: 'farm_exit',
+    x: 808,
+    y: 788,
+    width: 356,
+    height: 122,
+    title: 'Chemin de la Ferme',
+    role: 'Retour au refuge',
+    hint: 'Retourner a la ferme pour cultiver et dormir.',
+    actionLabel: 'Retourner a la Ferme',
+    actionKey: 'go-farm',
+  },
+];
 
 type CombatUnitState = {
   hp: number;
@@ -790,8 +896,13 @@ export class GameScene extends Phaser.Scene {
     sleep: Phaser.Input.Keyboard.Key;
     craft: Phaser.Input.Keyboard.Key;
   };
+  private villageHotkeys!: {
+    interact: Phaser.Input.Keyboard.Key;
+    cycleTarget: Phaser.Input.Keyboard.Key;
+  };
 
   private hudRoot: HTMLElement | null = null;
+  private hudPanelRoot: HTMLElement | null = null;
   private loginButton: HTMLButtonElement | null = null;
   private logoutButton: HTMLButtonElement | null = null;
   private combatStartButton: HTMLButtonElement | null = null;
@@ -834,6 +945,13 @@ export class GameScene extends Phaser.Scene {
   private farmContextHarvestButton: HTMLButtonElement | null = null;
   private farmCraftingToggleButton: HTMLButtonElement | null = null;
   private farmGoVillageButton: HTMLButtonElement | null = null;
+  private villageObjectiveValue: HTMLElement | null = null;
+  private villageContextTitleValue: HTMLElement | null = null;
+  private villageContextRoleValue: HTMLElement | null = null;
+  private villageContextHintValue: HTMLElement | null = null;
+  private villageContextFeedbackValue: HTMLElement | null = null;
+  private villageContextInteractButton: HTMLButtonElement | null = null;
+  private villageContextCycleButton: HTMLButtonElement | null = null;
   private farmCraftingPanel: HTMLElement | null = null;
   private farmCraftingSummaryValue: HTMLElement | null = null;
   private farmCraftingListRoot: HTMLElement | null = null;
@@ -933,11 +1051,19 @@ export class GameScene extends Phaser.Scene {
   private farmCraftingBusy = false;
   private farmCraftingError: string | null = null;
   private farmCraftingRenderSignature = '';
+  private frontSceneMode: FrontSceneMode = 'farm';
+  private sceneObstacles: Phaser.GameObjects.Rectangle[] = [];
+  private sceneObstacleColliders: Phaser.Physics.Arcade.Collider[] = [];
   private farmSceneRenderSignature = '';
   private farmSceneBackground: Phaser.GameObjects.Graphics | null = null;
   private farmScenePlotVisuals = new Map<string, FarmScenePlotVisual>();
   private farmSceneStaticLabels: Phaser.GameObjects.GameObject[] = [];
   private farmSceneActionHintLabel: Phaser.GameObjects.Text | null = null;
+  private villageSceneRenderSignature = '';
+  private villageSceneZoneVisuals = new Map<VillageSceneZoneKey, VillageSceneZoneVisual>();
+  private villageSceneActionHintLabel: Phaser.GameObjects.Text | null = null;
+  private villageSelectedZoneKey: VillageSceneZoneKey | null = null;
+  private villageFeedbackMessage: string | null = null;
   private loopState: GameplayLoopState | null = null;
   private loopBusy = false;
   private loopError: string | null = null;
@@ -1097,6 +1223,7 @@ export class GameScene extends Phaser.Scene {
     const villageNpcAction = button.dataset.villageNpcAction;
     const loopAction = button.dataset.loopAction;
     const farmAction = button.dataset.farmAction;
+    const villageAction = button.dataset.villageAction;
     const farmCraftAction = button.dataset.farmCraftAction;
     const saveAction = button.dataset.saveAction;
     const profileAction = button.dataset.profileAction;
@@ -1224,6 +1351,29 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       void this.harvestFarmPlot(plotKey);
+      return;
+    }
+
+    if (villageAction === 'interact') {
+      const targetKey = button.dataset.targetKey;
+      if (
+        targetKey === 'mayor' ||
+        targetKey === 'market' ||
+        targetKey === 'forge' ||
+        targetKey === 'calm' ||
+        targetKey === 'farm_exit' ||
+        targetKey === 'tower_exit'
+      ) {
+        void this.handleVillageInteractionIntent(targetKey);
+      } else {
+        void this.handleVillageInteractionIntent();
+      }
+      return;
+    }
+
+    if (villageAction === 'cycle') {
+      this.cycleVillageTarget(1, true);
+      this.updateHud();
       return;
     }
 
@@ -1399,8 +1549,15 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.player.setTint(velocityX !== 0 || velocityY !== 0 ? 0xd8f1ff : 0xffffff);
+    if (this.frontSceneMode === 'village') {
+      this.updateVillageSelectionFromPlayerPosition();
+    }
     this.updateGamepadInput();
-    this.handleFarmHotkeys();
+    if (this.frontSceneMode === 'farm') {
+      this.handleFarmHotkeys();
+    } else {
+      this.handleVillageHotkeys();
+    }
     this.updateHud();
   }
 
@@ -1424,7 +1581,7 @@ export class GameScene extends Phaser.Scene {
       const idleFrames = this.getStripFrames(playerStrip, 'idle');
       const firstFrame = idleFrames[0] ?? 0;
 
-      this.player = this.physics.add.sprite(240, 220, playerStrip.key, firstFrame);
+      this.player = this.physics.add.sprite(FARM_SCENE_PLAYER_SPAWN.x, FARM_SCENE_PLAYER_SPAWN.y, playerStrip.key, firstFrame);
       this.player.setOrigin(playerStrip.origin?.x ?? playerSprite.origin.x, playerStrip.origin?.y ?? playerSprite.origin.y);
       this.player.setScale(playerStrip.scale?.x ?? playerSprite.scale.x, playerStrip.scale?.y ?? playerSprite.scale.y);
       this.player.setCollideWorldBounds(true);
@@ -1438,7 +1595,7 @@ export class GameScene extends Phaser.Scene {
         throw new Error(`Player sprite texture not loaded: ${playerSprite.key}`);
       }
 
-      this.player = this.physics.add.sprite(240, 220, playerSprite.key);
+      this.player = this.physics.add.sprite(FARM_SCENE_PLAYER_SPAWN.x, FARM_SCENE_PLAYER_SPAWN.y, playerSprite.key);
       this.player.setOrigin(playerSprite.origin.x, playerSprite.origin.y);
       this.player.setScale(playerSprite.scale.x, playerSprite.scale.y);
       this.player.setCollideWorldBounds(true);
@@ -1448,16 +1605,7 @@ export class GameScene extends Phaser.Scene {
       this.playerUsesStripAnimation = false;
     }
 
-    const obstacles = [
-      this.createObstacle(220, 235, 230, 150),
-      this.createObstacle(220, 432, 62, 44),
-      this.createObstacle(1325, 330, 120, 520),
-      this.createObstacle(620, 682, 760, 58),
-    ];
-
-    for (const obstacle of obstacles) {
-      this.physics.add.collider(this.player, obstacle);
-    }
+    this.rebuildSceneObstacles();
   }
 
   private setupInput(): void {
@@ -1475,6 +1623,10 @@ export class GameScene extends Phaser.Scene {
       sleep: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.F),
       craft: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.C),
     };
+    this.villageHotkeys = {
+      interact: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E),
+      cycleTarget: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R),
+    };
   }
 
   private setupHud(): void {
@@ -1484,8 +1636,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.hudRoot.innerHTML = `
-      <div class="hud-panel hud-panel-farm-mvp">
-        <div class="hud-title">Journal de ferme</div>
+      <div class="hud-panel hud-panel-farm-mvp" data-hud="panel">
+        <div class="hud-title">Carnet du hameau</div>
         <div class="hud-farm-overview">
           <div class="hud-farm-overview-grid">
             <div class="hud-farm-overview-stat"><span>Jour</span><strong data-hud="farmDay">Jour 1</strong></div>
@@ -1529,6 +1681,31 @@ export class GameScene extends Phaser.Scene {
           </div>
           <div class="hud-farm-error" data-hud="farmError" hidden></div>
           <ul class="hud-farm-plots" data-hud="farmPlots"></ul>
+        </div>
+        <div class="hud-village-overview">
+          <div class="hud-village-objective">
+            <span>Objectif courant</span>
+            <strong data-hud="villageObjective">Retrouver les visages clefs du village.</strong>
+          </div>
+          <div class="hud-village-context">
+            <div class="hud-village-context-header">
+              <span>Cible active</span>
+              <strong data-hud="villageContextTitle">Place du village</strong>
+            </div>
+            <p class="hud-village-context-role" data-hud="villageContextRole">
+              Hub social, economique et narratif.
+            </p>
+            <p class="hud-village-context-hint" data-hud="villageContextHint">
+              Oriente-toi vers le Maire, la Marchande, la Forge, puis les sorties.
+            </p>
+            <div class="hud-village-context-actions">
+              <button class="hud-village-action" data-village-action="interact">Interagir (E)</button>
+              <button class="hud-village-action secondary" data-village-action="cycle">Cible suivante (R)</button>
+            </div>
+            <p class="hud-village-context-feedback" data-hud="villageContextFeedback" role="status" aria-live="polite">
+              Clique une zone du village ou approche-toi d'un lieu clef.
+            </p>
+          </div>
         </div>
         <div class="hud-grid">
           <div class="hud-stat"><span>Jour</span><strong data-hud="day"></strong></div>
@@ -1969,11 +2146,12 @@ export class GameScene extends Phaser.Scene {
           <br />
           Manette: D-pad/LB/RB navigue HUD, A valide, X Attack, Y Defend, B Fireball.
           <br />
-          Prototype: ferme, village et tour a venir
+          Raccourcis hub: E interagir, R changer de cible (mode village).
         </div>
       </div>
     `;
 
+    this.hudPanelRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="panel"]');
     this.loginButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-hud-action="login"]');
     this.logoutButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-hud-action="logout"]');
     this.combatStartButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-combat-action="start"]');
@@ -2016,6 +2194,13 @@ export class GameScene extends Phaser.Scene {
     this.farmContextHarvestButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-hud="farmContextHarvest"]');
     this.farmCraftingToggleButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-farm-action="toggle-craft"]');
     this.farmGoVillageButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-farm-action="go-village"]');
+    this.villageObjectiveValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageObjective"]');
+    this.villageContextTitleValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageContextTitle"]');
+    this.villageContextRoleValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageContextRole"]');
+    this.villageContextHintValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageContextHint"]');
+    this.villageContextFeedbackValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageContextFeedback"]');
+    this.villageContextInteractButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-village-action="interact"]');
+    this.villageContextCycleButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-village-action="cycle"]');
     this.farmCraftingPanel = this.hudRoot.querySelector<HTMLElement>('.hud-farm-crafting');
     this.farmCraftingSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmCraftingSummary"]');
     this.farmCraftingListRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmCraftingRecipes"]');
@@ -2149,6 +2334,7 @@ export class GameScene extends Phaser.Scene {
       this.farmSeedSelect.addEventListener('change', this.onFarmSeedSelectionChange);
     }
     this.hudRoot.addEventListener('click', this.onHudClick);
+    this.syncHudSceneMode();
     this.updateHud();
   }
 
@@ -2170,6 +2356,7 @@ export class GameScene extends Phaser.Scene {
     this.clearEnemyHudStripOverride();
     this.resetGamepadInputState();
     this.clearFarmSceneVisuals();
+    this.clearVillageSceneVisuals();
 
     if (this.farmSceneBackground) {
       this.farmSceneBackground.destroy();
@@ -2179,6 +2366,15 @@ export class GameScene extends Phaser.Scene {
       label.destroy();
     }
     this.farmSceneStaticLabels = [];
+
+    for (const collider of this.sceneObstacleColliders) {
+      collider.destroy();
+    }
+    this.sceneObstacleColliders = [];
+    for (const obstacle of this.sceneObstacles) {
+      obstacle.destroy();
+    }
+    this.sceneObstacles = [];
 
     if (this.debugQaImportFileInput) {
       this.debugQaImportFileInput.removeEventListener('change', this.onDebugQaImportFileChange);
@@ -2219,6 +2415,7 @@ export class GameScene extends Phaser.Scene {
 
     this.loginButton = null;
     this.logoutButton = null;
+    this.hudPanelRoot = null;
     this.combatStartButton = null;
     this.combatAttackButton = null;
     this.combatDefendButton = null;
@@ -2259,6 +2456,13 @@ export class GameScene extends Phaser.Scene {
     this.farmContextHarvestButton = null;
     this.farmCraftingToggleButton = null;
     this.farmGoVillageButton = null;
+    this.villageObjectiveValue = null;
+    this.villageContextTitleValue = null;
+    this.villageContextRoleValue = null;
+    this.villageContextHintValue = null;
+    this.villageContextFeedbackValue = null;
+    this.villageContextInteractButton = null;
+    this.villageContextCycleButton = null;
     this.farmCraftingPanel = null;
     this.farmCraftingSummaryValue = null;
     this.farmCraftingListRoot = null;
@@ -2361,7 +2565,11 @@ export class GameScene extends Phaser.Scene {
     this.farmCraftingBusy = false;
     this.farmCraftingError = null;
     this.farmCraftingRenderSignature = '';
+    this.frontSceneMode = 'farm';
+    this.villageSelectedZoneKey = null;
+    this.villageFeedbackMessage = null;
     this.farmSceneRenderSignature = '';
+    this.villageSceneRenderSignature = '';
     this.loopState = null;
     this.loopBusy = false;
     this.loopError = null;
@@ -2405,11 +2613,13 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.syncHudSceneMode();
+    const activeAreaLabel = this.getActiveAreaLabel();
     this.setHudText('day', `Jour ${this.hudState.day}`);
     this.setHudText('dayPhase', this.getDayPhaseLabel());
     this.setHudText('farmDay', `Jour ${this.hudState.day}`);
     this.setHudText('farmDayPhase', this.getDayPhaseLabel());
-    this.setHudText('farmZone', this.hudState.area);
+    this.setHudText('farmZone', activeAreaLabel);
     this.setHudText('gold', `${this.hudState.gold} po`);
     this.setHudText('level', `${this.hudState.level}`);
     this.setHudText('xp', `${this.hudState.xp} / ${this.hudState.xpToNext}`);
@@ -2419,7 +2629,7 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('hp', `${this.formatValue(this.hudState.hp)} / ${this.formatValue(this.hudState.maxHp)}`);
     this.setHudText('mp', `${this.formatValue(this.hudState.mp)} / ${this.formatValue(this.hudState.maxMp)}`);
     this.setHudText('stamina', `${Math.max(0, Math.round(this.hudState.stamina))} / 8`);
-    this.setHudText('area', this.hudState.area);
+    this.setHudText('area', activeAreaLabel);
     this.setHudText('authStatus', this.authStatus);
     this.updateHeroProfileHud();
     this.updateIntroHud();
@@ -2429,6 +2639,7 @@ export class GameScene extends Phaser.Scene {
     this.updateBlacksmithHud();
     this.updateVillageMarketHud();
     this.updateFarmHud();
+    this.updateVillageMvpHud();
     this.updateFarmCraftingHud();
     this.updateLoopHud();
     this.updateTowerStoryHud();
@@ -2635,7 +2846,114 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.renderFarmPanel();
-    this.renderFarmScene();
+    if (this.frontSceneMode === 'farm') {
+      this.renderFarmScene();
+    }
+  }
+
+  private updateVillageMvpHud(): void {
+    this.ensureVillageSelectedZone();
+
+    if (this.villageObjectiveValue) {
+      this.villageObjectiveValue.textContent = this.getVillageObjectiveLabel();
+    }
+
+    this.updateVillageContextPanel();
+
+    if (this.villageContextFeedbackValue) {
+      const hasError = Boolean(this.villageNpcError);
+      this.villageContextFeedbackValue.dataset.tone = hasError ? 'error' : 'info';
+      this.villageContextFeedbackValue.textContent = this.getVillageInteractionFeedbackLabel();
+    }
+
+    if (this.frontSceneMode === 'village') {
+      this.renderVillageScene();
+    }
+  }
+
+  private syncHudSceneMode(): void {
+    if (!this.hudPanelRoot) {
+      return;
+    }
+
+    const isFarm = this.frontSceneMode === 'farm';
+    this.hudPanelRoot.classList.toggle('hud-panel-farm-mvp', isFarm);
+    this.hudPanelRoot.classList.toggle('hud-panel-village-mvp', !isFarm);
+  }
+
+  private getActiveAreaLabel(): string {
+    return this.frontSceneMode === 'farm' ? 'Ferme' : 'Village';
+  }
+
+  private getVillageObjectiveLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Connecte-toi pour activer les interactions de hub.';
+    }
+    if (this.frontSceneMode !== 'village') {
+      return 'Sortir de la ferme pour rejoindre le village.';
+    }
+    if (this.hudState.blacksmithUnlocked && this.villageMarketUnlocked) {
+      return 'Le hub est stabilise: parle aux PNJ puis vise la Tour.';
+    }
+    if (!this.hudState.blacksmithUnlocked) {
+      return 'Observe la forge et les retours du Maire apres tes progres.';
+    }
+    if (!this.villageMarketUnlocked) {
+      return 'Le marche se relance: parle a la Marchande pour suivre le rythme local.';
+    }
+    return 'Repere Maire, Marche, Forge, zone calme et sorties.';
+  }
+
+  private updateVillageContextPanel(): void {
+    const zone = this.getVillageZoneByKey(this.villageSelectedZoneKey);
+    const interactionState = zone ? this.getVillageZoneInteractionState(zone) : null;
+
+    if (this.villageContextTitleValue) {
+      this.villageContextTitleValue.textContent = zone?.title ?? 'Aucune cible';
+    }
+    if (this.villageContextRoleValue) {
+      this.villageContextRoleValue.textContent = zone?.role ?? 'Selectionne une zone du village.';
+    }
+    if (this.villageContextHintValue) {
+      if (!zone) {
+        this.villageContextHintValue.textContent = 'Utilise R ou clique une zone pour choisir une interaction.';
+      } else if (interactionState && !interactionState.enabled) {
+        this.villageContextHintValue.textContent = interactionState.reason;
+      } else {
+        this.villageContextHintValue.textContent = zone.hint;
+      }
+    }
+
+    if (this.villageContextInteractButton) {
+      if (zone) {
+        this.villageContextInteractButton.dataset.targetKey = zone.key;
+      } else {
+        delete this.villageContextInteractButton.dataset.targetKey;
+      }
+      this.villageContextInteractButton.textContent = zone ? `${zone.actionLabel} (E)` : 'Interagir';
+      this.villageContextInteractButton.disabled =
+        this.frontSceneMode !== 'village' || !zone || !interactionState || !interactionState.enabled;
+    }
+
+    if (this.villageContextCycleButton) {
+      this.villageContextCycleButton.disabled = this.frontSceneMode !== 'village' || VILLAGE_SCENE_ZONES.length < 2;
+    }
+  }
+
+  private getVillageInteractionFeedbackLabel(): string {
+    if (this.villageNpcError) {
+      return this.villageNpcError;
+    }
+    if (this.villageFeedbackMessage) {
+      return this.villageFeedbackMessage;
+    }
+    if (this.frontSceneMode !== 'village') {
+      return 'Sortie village disponible depuis la ferme.';
+    }
+    if (!this.isAuthenticated) {
+      return 'Connexion requise pour parler aux PNJ et changer de zone.';
+    }
+    return 'Approche une zone, puis E pour interagir. R pour changer de cible.';
   }
 
   private updateFarmCraftingHud(): void {
@@ -6525,6 +6843,16 @@ export class GameScene extends Phaser.Scene {
     this.farmCraftingError = null;
     this.farmCraftingRenderSignature = '';
     this.farmSceneRenderSignature = '';
+    this.villageSceneRenderSignature = '';
+    this.villageSelectedZoneKey = null;
+    this.villageFeedbackMessage = null;
+    this.frontSceneMode = 'farm';
+
+    if (this.player) {
+      this.player.setPosition(FARM_SCENE_PLAYER_SPAWN.x, FARM_SCENE_PLAYER_SPAWN.y);
+      this.drawDecor();
+      this.rebuildSceneObstacles();
+    }
   }
 
   private resetHeroProfileState(): void {
@@ -10101,6 +10429,7 @@ export class GameScene extends Phaser.Scene {
       this.farmSceneBackground = null;
     }
     this.clearFarmSceneVisuals();
+    this.clearVillageSceneVisuals();
 
     for (const label of this.farmSceneStaticLabels) {
       label.destroy();
@@ -10111,6 +10440,15 @@ export class GameScene extends Phaser.Scene {
     graphics.setDepth(1);
     this.farmSceneBackground = graphics;
 
+    if (this.frontSceneMode === 'village') {
+      this.drawVillageDecor(graphics);
+      return;
+    }
+
+    this.drawFarmDecor(graphics);
+  }
+
+  private drawFarmDecor(graphics: Phaser.GameObjects.Graphics): void {
     graphics.fillGradientStyle(0x2f6041, 0x2f6041, 0x1f462f, 0x1f462f, 1);
     graphics.fillRect(0, 0, 1600, 900);
 
@@ -10210,6 +10548,201 @@ export class GameScene extends Phaser.Scene {
     this.renderFarmScene();
   }
 
+  private drawVillageDecor(graphics: Phaser.GameObjects.Graphics): void {
+    graphics.fillGradientStyle(0x5d675f, 0x5d675f, 0x2f3331, 0x2f3331, 1);
+    graphics.fillRect(0, 0, 1600, 900);
+
+    graphics.fillStyle(0x657068, 1);
+    for (let x = 0; x < 1600; x += 58) {
+      for (let y = 0; y < 900; y += 58) {
+        if ((x + y) % 116 === 0) {
+          graphics.fillCircle(x + 18, y + 22, 2);
+        }
+      }
+    }
+
+    graphics.fillStyle(0x64543d, 1);
+    graphics.fillRoundedRect(532, 208, 536, 470, 22);
+    graphics.fillStyle(0x7b684f, 1);
+    graphics.fillRoundedRect(558, 234, 484, 418, 18);
+
+    graphics.fillStyle(0x5f4a35, 1);
+    graphics.fillRoundedRect(136, 124, 298, 206, 16);
+    graphics.fillStyle(0x7f6445, 1);
+    graphics.fillTriangle(136, 124, 284, 52, 434, 124);
+    graphics.fillStyle(0xd5c6a3, 1);
+    graphics.fillRect(258, 212, 50, 108);
+
+    graphics.fillStyle(0x6b5032, 1);
+    graphics.fillRoundedRect(1140, 128, 276, 214, 16);
+    graphics.fillStyle(0x8e6f48, 1);
+    graphics.fillTriangle(1140, 128, 1278, 58, 1416, 128);
+    graphics.fillStyle(0x513a24, 1);
+    graphics.fillRect(1224, 210, 26, 124);
+    graphics.fillRect(1290, 210, 26, 124);
+
+    graphics.fillStyle(0x7f6542, 1);
+    graphics.fillRoundedRect(882, 468, 310, 206, 16);
+    graphics.fillStyle(0xbc8d56, 1);
+    graphics.fillTriangle(900, 468, 1038, 420, 1176, 468);
+    graphics.fillStyle(0xb37a40, 1);
+    graphics.fillRect(924, 556, 248, 22);
+
+    graphics.fillStyle(0x4f5f4e, 1);
+    graphics.fillRoundedRect(188, 520, 336, 220, 18);
+    graphics.fillStyle(0x678267, 1);
+    graphics.fillCircle(230, 536, 34);
+    graphics.fillCircle(292, 704, 28);
+    graphics.fillCircle(466, 538, 30);
+    graphics.fillStyle(0x6f5e46, 1);
+    graphics.fillRoundedRect(286, 604, 118, 30, 8);
+
+    graphics.fillStyle(0x302d2b, 0.96);
+    graphics.fillRoundedRect(666, 22, 286, 132, 22);
+    graphics.fillStyle(0x4a433f, 0.92);
+    graphics.fillRoundedRect(704, 52, 212, 86, 18);
+
+    graphics.fillStyle(0x6a593f, 1);
+    graphics.fillRoundedRect(636, 742, 332, 128, 18);
+    graphics.fillStyle(0x8a704a, 1);
+    graphics.fillRect(668, 760, 268, 18);
+
+    graphics.lineStyle(5, 0xc4ac82, 0.72);
+    graphics.lineBetween(518, 438, 884, 438);
+    graphics.lineBetween(808, 152, 808, 742);
+    graphics.lineBetween(492, 604, 632, 728);
+    graphics.lineBetween(1048, 554, 980, 674);
+
+    this.farmSceneStaticLabels.push(
+      this.add
+        .text(286, 90, 'Mairie', {
+          fontFamily: 'Georgia, serif',
+          fontSize: '18px',
+          color: '#f5e4bf',
+          stroke: '#171311',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(12),
+      this.add
+        .text(1266, 94, 'Forge', {
+          fontFamily: 'Georgia, serif',
+          fontSize: '18px',
+          color: '#f8d7a4',
+          stroke: '#171311',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(12),
+      this.add
+        .text(1038, 440, 'Marche', {
+          fontFamily: 'Georgia, serif',
+          fontSize: '18px',
+          color: '#f5e0b3',
+          stroke: '#171311',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(12),
+      this.add
+        .text(356, 486, 'Coin calme', {
+          fontFamily: 'Georgia, serif',
+          fontSize: '17px',
+          color: '#d5e8cc',
+          stroke: '#171311',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(12),
+      this.add
+        .text(806, 170, 'Vers la Tour', {
+          fontFamily: 'Georgia, serif',
+          fontSize: '17px',
+          color: '#dcc6d8',
+          stroke: '#171311',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(12),
+      this.add
+        .text(808, 706, 'Vers la Ferme', {
+          fontFamily: 'Georgia, serif',
+          fontSize: '17px',
+          color: '#f0e3c3',
+          stroke: '#171311',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(12),
+    );
+
+    for (const zone of VILLAGE_SCENE_ZONES) {
+      this.createVillageActionZone(zone);
+    }
+
+    this.villageSceneActionHintLabel = this.add
+      .text(804, 862, 'E interagir • R cible suivante • clique une zone pour agir', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#e4ebf2',
+        stroke: '#131c1f',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(21);
+
+    this.ensureVillageSelectedZone();
+    this.renderVillageScene();
+  }
+
+  private createVillageActionZone(config: VillageSceneZoneConfig): void {
+    const frame = this.add.rectangle(config.x, config.y, config.width, config.height, 0x3a3f43, 0.12);
+    frame.setStrokeStyle(2, 0xd4c39a, 0.42);
+    frame.setDepth(14);
+    frame.setInteractive({ useHandCursor: true });
+    frame.on('pointerover', () => {
+      this.setVillageSelectedZone(config.key, false);
+      this.updateHud();
+    });
+    frame.on('pointerdown', () => {
+      this.setVillageSelectedZone(config.key, true);
+      void this.handleVillageInteractionIntent(config.key);
+    });
+
+    const overlay = this.add.rectangle(config.x, config.y + 20, config.width - 24, config.height - 48, 0x111418, 0.22);
+    overlay.setDepth(15);
+
+    const title = this.add
+      .text(config.x, config.y - config.height * 0.3, config.title, {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '15px',
+        color: '#f1e5cb',
+        stroke: '#161312',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(16);
+
+    const state = this.add
+      .text(config.x, config.y + config.height * 0.22, this.getVillageZoneStateLabel(config), {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '11px',
+        color: '#c8d4dc',
+        stroke: '#111315',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(16);
+
+    this.villageSceneZoneVisuals.set(config.key, {
+      config,
+      frame,
+      overlay,
+      title,
+      state,
+    });
+  }
+
   private createFarmActionZone(
     x: number,
     y: number,
@@ -10244,7 +10777,27 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private clearVillageSceneVisuals(): void {
+    for (const visual of this.villageSceneZoneVisuals.values()) {
+      visual.frame.destroy();
+      visual.overlay.destroy();
+      visual.title.destroy();
+      visual.state.destroy();
+    }
+    this.villageSceneZoneVisuals.clear();
+    this.villageSceneRenderSignature = '';
+
+    if (this.villageSceneActionHintLabel) {
+      this.villageSceneActionHintLabel.destroy();
+      this.villageSceneActionHintLabel = null;
+    }
+  }
+
   private renderFarmScene(): void {
+    if (this.frontSceneMode !== 'farm') {
+      return;
+    }
+
     const signature = `${this.computeFarmRenderSignature()}|${this.getDayPhaseKey()}`;
     if (signature === this.farmSceneRenderSignature) {
       return;
@@ -10319,6 +10872,225 @@ export class GameScene extends Phaser.Scene {
     if (this.farmSceneActionHintLabel) {
       this.farmSceneActionHintLabel.setText(this.getFarmFeedbackLabel());
     }
+  }
+
+  private renderVillageScene(): void {
+    if (this.frontSceneMode !== 'village') {
+      return;
+    }
+
+    const signature = this.getVillageRenderSignature();
+    if (signature === this.villageSceneRenderSignature) {
+      return;
+    }
+    this.villageSceneRenderSignature = signature;
+
+    for (const visual of this.villageSceneZoneVisuals.values()) {
+      const selected = visual.config.key === this.villageSelectedZoneKey;
+      const stateLabel = this.getVillageZoneStateLabel(visual.config);
+      const stateColor = this.getVillageZoneStateColor(visual.config);
+
+      visual.frame.setFillStyle(selected ? 0x4b5f72 : 0x3a3f43, selected ? 0.26 : 0.12);
+      visual.frame.setStrokeStyle(2, selected ? 0xffdd9f : 0xd4c39a, selected ? 0.95 : 0.42);
+      visual.overlay.setFillStyle(selected ? 0x1f2730 : 0x111418, selected ? 0.42 : 0.22);
+      visual.title.setColor(selected ? '#ffeac2' : '#f1e5cb');
+      visual.state.setText(stateLabel);
+      visual.state.setColor(stateColor);
+    }
+
+    if (this.villageSceneActionHintLabel) {
+      this.villageSceneActionHintLabel.setText(this.getVillageInteractionFeedbackLabel());
+    }
+  }
+
+  private getVillageRenderSignature(): string {
+    const npcSignature = (['mayor', 'blacksmith', 'merchant'] as VillageNpcKey[]).map((npcKey) => {
+      const npc = this.villageNpcState[npcKey];
+      const relation = this.villageNpcRelationships[npcKey];
+      return `${npcKey}:${npc.stateKey}:${npc.available ? '1' : '0'}:${relation.canTalkToday ? '1' : '0'}`;
+    });
+
+    return [
+      this.frontSceneMode,
+      this.villageSelectedZoneKey ?? '',
+      this.villageMarketUnlocked ? '1' : '0',
+      this.hudState.blacksmithUnlocked ? '1' : '0',
+      this.hudState.blacksmithCurseLifted ? '1' : '0',
+      this.villageFeedbackMessage ?? '',
+      this.villageNpcError ?? '',
+      this.getDayPhaseKey(),
+      ...npcSignature,
+    ].join('|');
+  }
+
+  private ensureVillageSelectedZone(): void {
+    if (this.villageSelectedZoneKey && VILLAGE_SCENE_ZONES.some((zone) => zone.key === this.villageSelectedZoneKey)) {
+      return;
+    }
+
+    const preferredZone = VILLAGE_SCENE_ZONES.find((zone) => {
+      if (!zone.npcKey) {
+        return false;
+      }
+      const npc = this.villageNpcState[zone.npcKey];
+      return npc.available;
+    });
+
+    this.villageSelectedZoneKey = preferredZone?.key ?? VILLAGE_SCENE_ZONES[0]?.key ?? null;
+  }
+
+  private setVillageSelectedZone(zoneKey: VillageSceneZoneKey, announceSelection: boolean): void {
+    if (!VILLAGE_SCENE_ZONES.some((zone) => zone.key === zoneKey)) {
+      return;
+    }
+
+    if (this.villageSelectedZoneKey === zoneKey) {
+      return;
+    }
+
+    this.villageSelectedZoneKey = zoneKey;
+    this.villageSceneRenderSignature = '';
+    if (announceSelection) {
+      const zone = this.getVillageZoneByKey(zoneKey);
+      if (zone) {
+        this.villageFeedbackMessage = `Cible active: ${zone.title}.`;
+      }
+    }
+  }
+
+  private updateVillageSelectionFromPlayerPosition(): void {
+    if (!this.player) {
+      return;
+    }
+
+    let nearestKey: VillageSceneZoneKey | null = null;
+    let nearestDistanceSq = Number.POSITIVE_INFINITY;
+
+    for (const zone of VILLAGE_SCENE_ZONES) {
+      const dx = this.player.x - zone.x;
+      const dy = this.player.y - zone.y;
+      const distanceSq = dx * dx + dy * dy;
+      if (distanceSq < nearestDistanceSq) {
+        nearestDistanceSq = distanceSq;
+        nearestKey = zone.key;
+      }
+    }
+
+    if (!nearestKey || nearestDistanceSq > 420 * 420) {
+      return;
+    }
+
+    this.setVillageSelectedZone(nearestKey, false);
+  }
+
+  private cycleVillageTarget(step: number, announceSelection: boolean): void {
+    if (this.frontSceneMode !== 'village' || VILLAGE_SCENE_ZONES.length === 0) {
+      return;
+    }
+
+    this.ensureVillageSelectedZone();
+    const currentIndex = VILLAGE_SCENE_ZONES.findIndex((zone) => zone.key === this.villageSelectedZoneKey);
+    const baseIndex = currentIndex >= 0 ? currentIndex : 0;
+    const total = VILLAGE_SCENE_ZONES.length;
+    const nextIndex = (baseIndex + step + total) % total;
+    const nextZone = VILLAGE_SCENE_ZONES[nextIndex];
+    if (!nextZone) {
+      return;
+    }
+    this.setVillageSelectedZone(nextZone.key, announceSelection);
+  }
+
+  private getVillageZoneByKey(zoneKey: VillageSceneZoneKey | null): VillageSceneZoneConfig | null {
+    if (!zoneKey) {
+      return null;
+    }
+    return VILLAGE_SCENE_ZONES.find((zone) => zone.key === zoneKey) ?? null;
+  }
+
+  private getVillageZoneStateLabel(zone: VillageSceneZoneConfig): string {
+    if (zone.key === 'market') {
+      if (!this.isAuthenticated) {
+        return 'Connexion requise';
+      }
+      if (!this.villageMarketUnlocked) {
+        return 'Marche limite';
+      }
+      return `${this.villageMarketSeedOffers.length} graines visibles`;
+    }
+
+    if (zone.key === 'forge') {
+      if (!this.isAuthenticated) {
+        return 'Connexion requise';
+      }
+      if (this.hudState.blacksmithUnlocked) {
+        return 'Forge active';
+      }
+      return this.hudState.blacksmithCurseLifted ? 'Reprise fragile' : 'Forge entravee';
+    }
+
+    if (zone.npcKey) {
+      if (!this.isAuthenticated) {
+        return 'Connexion requise';
+      }
+      const npc = this.villageNpcState[zone.npcKey];
+      const relation = this.villageNpcRelationships[zone.npcKey];
+      if (!npc.available) {
+        return this.formatVillageNpcStateLabel(npc.stateKey);
+      }
+      if (!relation.canTalkToday) {
+        return 'Deja parle aujourd hui';
+      }
+      return 'Disponible';
+    }
+
+    if (zone.key === 'calm') {
+      return this.isAuthenticated ? 'Coin vivant' : 'Connexion requise';
+    }
+
+    if (zone.key === 'farm_exit') {
+      return this.isAuthenticated ? 'Retour possible' : 'Connexion requise';
+    }
+
+    return this.isAuthenticated ? 'Menace active' : 'Connexion requise';
+  }
+
+  private getVillageZoneStateColor(zone: VillageSceneZoneConfig): string {
+    if (zone.key === 'tower_exit') {
+      return '#f0c5d6';
+    }
+    const interactionState = this.getVillageZoneInteractionState(zone);
+    if (interactionState.enabled) {
+      return '#c8f2da';
+    }
+    if (!this.isAuthenticated) {
+      return '#f2c9a7';
+    }
+    return '#f2b8b8';
+  }
+
+  private getVillageZoneInteractionState(zone: VillageSceneZoneConfig): { enabled: boolean; reason: string } {
+    if (!this.isAuthenticated) {
+      return { enabled: false, reason: 'Connexion requise pour interagir dans le village.' };
+    }
+
+    if (zone.npcKey) {
+      const npc = this.villageNpcState[zone.npcKey];
+      const relation = this.villageNpcRelationships[zone.npcKey];
+      if (!npc.available) {
+        return {
+          enabled: false,
+          reason: `${this.getVillageNpcDisplayName(zone.npcKey)} indisponible (${this.formatVillageNpcStateLabel(npc.stateKey)}).`,
+        };
+      }
+      if (!relation.canTalkToday) {
+        return {
+          enabled: false,
+          reason: `${this.getVillageNpcDisplayName(zone.npcKey)} a deja partage ses infos du jour.`,
+        };
+      }
+    }
+
+    return { enabled: true, reason: '' };
   }
 
   private getFarmSceneSlots(): FarmScenePlotSlot[] {
@@ -10607,8 +11379,126 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.farmFeedbackMessage = 'Sortie village visible. La navigation village arrive au lot 2.';
+    this.setFrontSceneMode('village', 'Tu rejoins le village. Le hub est maintenant jouable.');
+  }
+
+  private setFrontSceneMode(mode: FrontSceneMode, feedbackMessage: string): void {
+    const modeChanged = this.frontSceneMode !== mode;
+    this.frontSceneMode = mode;
+    this.hudState.area = mode === 'farm' ? 'Ferme' : 'Village';
+
+    if (mode === 'farm') {
+      this.farmFeedbackMessage = feedbackMessage;
+      this.villageFeedbackMessage = null;
+      this.player.setPosition(FARM_SCENE_PLAYER_SPAWN.x, FARM_SCENE_PLAYER_SPAWN.y);
+    } else {
+      this.villageFeedbackMessage = feedbackMessage;
+      this.farmFeedbackMessage = null;
+      this.player.setPosition(VILLAGE_SCENE_PLAYER_SPAWN.x, VILLAGE_SCENE_PLAYER_SPAWN.y);
+      this.ensureVillageSelectedZone();
+    }
+
+    this.player.body?.setVelocity(0, 0);
+
+    if (modeChanged) {
+      this.drawDecor();
+      this.rebuildSceneObstacles();
+      this.syncHudSceneMode();
+    } else if (mode === 'village') {
+      this.renderVillageScene();
+    } else {
+      this.renderFarmScene();
+    }
+
     this.updateHud();
+  }
+
+  private handleVillageHotkeys(): void {
+    if (this.frontSceneMode !== 'village' || this.isTypingInsideField()) {
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.villageHotkeys.cycleTarget)) {
+      this.cycleVillageTarget(1, true);
+      this.updateHud();
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.villageHotkeys.interact)) {
+      void this.handleVillageInteractionIntent();
+    }
+  }
+
+  private async handleVillageInteractionIntent(targetKey?: VillageSceneZoneKey): Promise<void> {
+    if (this.frontSceneMode !== 'village') {
+      return;
+    }
+
+    const zone = this.getVillageZoneByKey(targetKey ?? this.villageSelectedZoneKey);
+    if (!zone) {
+      this.villageFeedbackMessage = 'Selectionne une zone du village.';
+      this.updateHud();
+      return;
+    }
+
+    this.setVillageSelectedZone(zone.key, false);
+    const interactionState = this.getVillageZoneInteractionState(zone);
+    if (!interactionState.enabled) {
+      this.villageFeedbackMessage = interactionState.reason;
+      this.updateHud();
+      return;
+    }
+
+    if (zone.actionKey === 'talk-mayor') {
+      await this.interactVillageNpc('mayor');
+      if (!this.villageNpcError) {
+        this.villageFeedbackMessage = 'Discussion tenue avec le Maire.';
+      }
+      this.updateHud();
+      return;
+    }
+
+    if (zone.actionKey === 'talk-merchant') {
+      await this.interactVillageNpc('merchant');
+      if (!this.villageNpcError) {
+        this.villageFeedbackMessage = 'Discussion tenue avec la Marchande.';
+      }
+      this.updateHud();
+      return;
+    }
+
+    if (zone.actionKey === 'talk-blacksmith') {
+      await this.interactVillageNpc('blacksmith');
+      if (!this.villageNpcError) {
+        this.villageFeedbackMessage = 'Discussion tenue avec le Forgeron.';
+      }
+      this.updateHud();
+      return;
+    }
+
+    if (zone.actionKey === 'talk-secondary') {
+      this.villageFeedbackMessage = this.getVillageSecondaryDialogue();
+      this.updateHud();
+      return;
+    }
+
+    if (zone.actionKey === 'go-farm') {
+      this.setFrontSceneMode('farm', 'Retour a la ferme confirme. La boucle reprend.');
+      return;
+    }
+
+    this.villageFeedbackMessage = 'La route vers la Tour est lisible. L entree jouable arrive au lot 4.';
+    this.updateHud();
+  }
+
+  private getVillageSecondaryDialogue(): string {
+    if (!this.isAuthenticated) {
+      return 'Connexion requise pour discuter avec les habitants.';
+    }
+    if (this.hudState.towerHighestFloor >= 5) {
+      return 'Habitante: "Le village respire un peu mieux depuis tes retours de la Tour."';
+    }
+    return 'Habitante: "On tient encore. Merci de revenir nous parler entre deux expeditions."';
   }
 
   private handleFarmHotkeys(): void {
@@ -10654,6 +11544,42 @@ export class GameScene extends Phaser.Scene {
 
     const tagName = active.tagName.toUpperCase();
     return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
+  }
+
+  private rebuildSceneObstacles(): void {
+    for (const collider of this.sceneObstacleColliders) {
+      collider.destroy();
+    }
+    this.sceneObstacleColliders = [];
+
+    for (const obstacle of this.sceneObstacles) {
+      obstacle.destroy();
+    }
+    this.sceneObstacles = [];
+
+    const layout =
+      this.frontSceneMode === 'village'
+        ? [
+            { x: 286, y: 232, width: 248, height: 170 },
+            { x: 1262, y: 238, width: 246, height: 184 },
+            { x: 1040, y: 566, width: 272, height: 120 },
+            { x: 346, y: 614, width: 126, height: 34 },
+            { x: 808, y: 98, width: 264, height: 86 },
+            { x: 808, y: 804, width: 286, height: 72 },
+            { x: 808, y: 438, width: 232, height: 160 },
+          ]
+        : [
+            { x: 220, y: 235, width: 230, height: 150 },
+            { x: 220, y: 432, width: 62, height: 44 },
+            { x: 1325, y: 330, width: 120, height: 520 },
+            { x: 620, y: 682, width: 760, height: 58 },
+          ];
+
+    for (const entry of layout) {
+      const obstacle = this.createObstacle(entry.x, entry.y, entry.width, entry.height);
+      this.sceneObstacles.push(obstacle);
+      this.sceneObstacleColliders.push(this.physics.add.collider(this.player, obstacle));
+    }
   }
 
   private createObstacle(x: number, y: number, width: number, height: number): Phaser.GameObjects.Rectangle {

@@ -137,6 +137,148 @@ body::before {
   display: none;
 }
 
+.hud-panel.hud-panel-farm-mvp .hud-village-overview {
+  display: none;
+}
+
+.hud-panel.hud-panel-village-mvp {
+  width: min(520px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  background:
+    linear-gradient(180deg, rgba(26, 31, 34, 0.84), rgba(15, 18, 21, 0.88)),
+    rgba(15, 18, 21, 0.88);
+  border-color: rgba(180, 172, 138, 0.32);
+}
+
+.hud-panel.hud-panel-village-mvp .hud-farm-overview,
+.hud-panel.hud-panel-village-mvp .hud-grid,
+.hud-panel.hud-panel-village-mvp .hud-location,
+.hud-panel.hud-panel-village-mvp .hud-hero-profile,
+.hud-panel.hud-panel-village-mvp .hud-intro,
+.hud-panel.hud-panel-village-mvp .hud-combat,
+.hud-panel.hud-panel-village-mvp .hud-quests,
+.hud-panel.hud-panel-village-mvp .hud-village-npcs,
+.hud-panel.hud-panel-village-mvp .hud-blacksmith,
+.hud-panel.hud-panel-village-mvp .hud-village-market,
+.hud-panel.hud-panel-village-mvp .hud-farm,
+.hud-panel.hud-panel-village-mvp .hud-farm-crafting,
+.hud-panel.hud-panel-village-mvp .hud-loop,
+.hud-panel.hud-panel-village-mvp .hud-tower-story,
+.hud-panel.hud-panel-village-mvp .hud-autosave,
+.hud-panel.hud-panel-village-mvp .hud-saves,
+.hud-panel.hud-panel-village-mvp .hud-debug-qa {
+  display: none;
+}
+
+.hud-village-overview {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hud-village-objective,
+.hud-village-context {
+  border: 1px solid rgba(214, 194, 142, 0.22);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(11, 15, 20, 0.48);
+}
+
+.hud-village-objective span {
+  display: block;
+  font-size: 0.69rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b9c3d4;
+}
+
+.hud-village-objective strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.8rem;
+  line-height: 1.36;
+  color: #f2ead7;
+}
+
+.hud-village-context {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hud-village-context-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud-village-context-header span {
+  font-size: 0.69rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b9c3d4;
+}
+
+.hud-village-context-header strong {
+  font-size: 0.79rem;
+  color: #f3ebd7;
+}
+
+.hud-village-context-role,
+.hud-village-context-hint {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.36;
+}
+
+.hud-village-context-role {
+  color: #d8e3ed;
+}
+
+.hud-village-context-hint {
+  color: #b7c6d6;
+}
+
+.hud-village-context-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hud-village-action {
+  border: 1px solid rgba(214, 194, 142, 0.45);
+  background: rgba(214, 194, 142, 0.18);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 7px 10px;
+  font-size: 0.77rem;
+  cursor: pointer;
+}
+
+.hud-village-action.secondary {
+  border-color: rgba(127, 209, 199, 0.45);
+  background: rgba(127, 209, 199, 0.16);
+}
+
+.hud-village-context-feedback {
+  margin: 0;
+  font-size: 0.73rem;
+  line-height: 1.36;
+  color: #b7cbc0;
+  border: 1px solid rgba(127, 209, 199, 0.24);
+  background: rgba(127, 209, 199, 0.08);
+  border-radius: 8px;
+  padding: 7px 8px;
+}
+
+.hud-village-context-feedback[data-tone="error"] {
+  border-color: rgba(242, 111, 111, 0.34);
+  background: rgba(242, 111, 111, 0.11);
+  color: #ffd0d0;
+}
+
 .hud-farm-overview {
   margin-top: 4px;
   display: flex;
@@ -418,6 +560,7 @@ body::before {
 .hud-intro-button:focus-visible,
 .hud-shop-buy:focus-visible,
 .hud-farm-action:focus-visible,
+.hud-village-action:focus-visible,
 .hud-loop-button:focus-visible,
 .hud-village-npc-button:focus-visible,
 .hud-autosave-restore:focus-visible,
@@ -1889,6 +2032,11 @@ body::before {
   cursor: not-allowed;
 }
 
+.hud-village-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .hud-autosave-restore:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -2468,6 +2616,10 @@ body::before {
     grid-template-columns: 1fr;
   }
 
+  .hud-village-context-actions {
+    flex-direction: column;
+  }
+
   .hud-combat-meta,
   .hud-combat-grid {
     grid-template-columns: 1fr;
@@ -2534,7 +2686,8 @@ body::before {
   .hud-combat-button,
   .hud-hero-profile-button,
   .hud-intro-button,
-  .hud-farm-action {
+  .hud-farm-action,
+  .hud-village-action {
     flex: 1 1 100%;
   }
 }
