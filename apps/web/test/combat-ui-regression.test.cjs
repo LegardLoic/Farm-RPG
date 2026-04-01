@@ -207,6 +207,9 @@ test('village NPC state panel wiring exists for lot 86', () => {
   assert.equal(gameSceneSource.includes('data-hud="villageNpcMayor"'), true);
   assert.equal(gameSceneSource.includes('data-hud="villageNpcBlacksmith"'), true);
   assert.equal(gameSceneSource.includes('data-hud="villageNpcMerchant"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="villageNpcMayorDialogue"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="villageNpcBlacksmithDialogue"'), true);
+  assert.equal(gameSceneSource.includes('data-hud="villageNpcMerchantDialogue"'), true);
   assert.equal(gameSceneSource.includes('private updateVillageNpcHud(): void'), true);
   assert.equal(gameSceneSource.includes('private normalizeVillageNpcEntry(payload: unknown): VillageNpcHudEntry | null'), true);
   assert.equal(stylesSource.includes('.hud-village-npcs'), true);
@@ -224,9 +227,15 @@ test('village NPC relationship panel wiring exists for lot 94', () => {
   );
   assert.equal(gameSceneSource.includes('private updateVillageNpcTalkButton('), true);
   assert.equal(gameSceneSource.includes('private formatVillageRelationshipTierLabel(tier: VillageNpcRelationshipTier): string'), true);
+  assert.equal(gameSceneSource.includes('private getVillageNpcDialogueLabel(npcKey: VillageNpcKey): string'), true);
+  assert.equal(gameSceneSource.includes('private getMayorContextDialogue('), true);
+  assert.equal(gameSceneSource.includes('private getBlacksmithContextDialogue('), true);
+  assert.equal(gameSceneSource.includes('private getMerchantContextDialogue('), true);
   assert.equal(stylesSource.includes('.hud-village-npc-actions'), true);
   assert.equal(stylesSource.includes('.hud-village-npc-button'), true);
   assert.equal(stylesSource.includes('.hud-village-npc-error'), true);
+  assert.equal(stylesSource.includes('.hud-village-npc-copy'), true);
+  assert.equal(stylesSource.includes('.hud-village-npc-dialogue'), true);
 });
 
 test('village market panel wiring exists for lot 87', () => {

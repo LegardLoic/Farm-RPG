@@ -1,6 +1,6 @@
 ﻿# Journal de bord - Farm RPG
 
-Derniere mise a jour: 31 mars 2026
+Derniere mise a jour: 1 avril 2026
 
 ## 1) Objectif du journal
 Ce document garde une trace claire de ce qui a ete construit, valide et deploie jusqu'a present sur le prototype.
@@ -1586,6 +1586,21 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
     - verification du hook de progression quetes lors d'une interaction PNJ
   - suite API validee.
 
+### Lot 102 - Dialogues contextuels PNJ selon relation
+- Frontend Village PNJ:
+  - ajout de lignes de dialogue par PNJ (maire/forgeron/marchand) dans le panneau HUD.
+  - dialogues contextuels selon:
+    - tier de relation (`stranger/familiar/trusted/ally`)
+    - disponibilite PNJ (`stateKey` narratif)
+    - cooldown d'interaction journaliere.
+  - fallback explicite hors session (`Connecte-toi...`) pour garder un message lisible quand l'utilisateur n'est pas authentifie.
+- UI/UX:
+  - ajustement layout panneau PNJ pour supporter un texte multi-ligne sans casser les actions.
+  - responsive mobile renforce (`<=700px`) avec empilement propre et actions restees accessibles.
+- QA:
+  - regression web etendue pour verifier le wiring HUD des nouvelles lignes de dialogue et des helpers de rendu contextuel.
+  - suite web + globale validees.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1673,6 +1688,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - tuning animation centralise dans le manifest (sequences + timings par strip)
   - panneau intro scenario MVP (3 etapes narratives + progression)
   - panneau Village PNJ (etats + amitie/tier + interaction journaliere)
+  - dialogues contextuels PNJ (etat/disponibilite/cooldown/tier de relation)
   - panneau Village Market (achat graines + vente recoltes)
   - panneau Farm Plots (selection graine + actions plant/water/harvest)
   - panneau Farm Crafting (recettes recoltes -> consommables combat)
@@ -1775,13 +1791,13 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 102 - Premiere passe dialogues contextuels PNJ relies au tier de relation.
-2. Lot 103 - Hook scenario ferme: premiers evenements declenches par jour + progression recoltes.
-3. Lot 104 - Trigger scenario tour: premiers beats narratifs relies aux paliers 3/5/8/10.
-4. Lot 105 - Passe accessibilite HUD combat (contraste, focus, lisibilite mobile).
-5. Lot 106 - Telemetrie balancing: extraction KPI debuffs/reactions pour iterations tuning.
-6. Lot 107 - Economie UI: affichage explicite des gains XP de vente dans le panneau Market.
-7. Lot 108 - QA mobile touch: revue interactions combat/farm en viewport reduit.
-8. Lot 109 - Quetes village phase 2: chaines multi-jours avec conditions farm+tour combinees.
+1. Lot 103 - Hook scenario ferme: premiers evenements declenches par jour + progression recoltes.
+2. Lot 104 - Trigger scenario tour: premiers beats narratifs relies aux paliers 3/5/8/10.
+3. Lot 105 - Passe accessibilite HUD combat (contraste, focus, lisibilite mobile).
+4. Lot 106 - Telemetrie balancing: extraction KPI debuffs/reactions pour iterations tuning.
+5. Lot 107 - Economie UI: affichage explicite des gains XP de vente dans le panneau Market.
+6. Lot 108 - QA mobile touch: revue interactions combat/farm en viewport reduit.
+7. Lot 109 - Quetes village phase 2: chaines multi-jours avec conditions farm+tour combinees.
+8. Lot 110 - Iteration animation review hero/boss (timings + readability des impacts/casts).
 
 
