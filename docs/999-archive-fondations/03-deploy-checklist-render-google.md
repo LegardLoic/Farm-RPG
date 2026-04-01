@@ -1,3 +1,8 @@
+> **Statut : archive technique de déploiement**
+> Ce document a servi pendant la phase initiale de mise en place et de validation du déploiement.
+> Il est conservé comme référence historique et opérationnelle.
+> Il peut contenir des informations encore valides, mais doit être relu à la lumière de l’état actuel du projet et de l’infrastructure en place.
+
 # Deploy Checklist (Render + Google OAuth)
 
 ## 1) Google Cloud

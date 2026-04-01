@@ -1,4 +1,9 @@
-﻿# Payloads de test API (reference rapide)
+﻿> **Statut : archive technique de test**
+> Ce document regroupe des payloads et routes utilisés pendant la phase initiale de test et de validation API.
+> Il est conservé comme référence historique et pratique.
+> Certaines routes, conventions ou données peuvent avoir évolué ; vérifier l’état courant de l’API avant réutilisation.
+
+# Payloads de test API (reference rapide)
 
 Derniere mise a jour: 31 mars 2026
 

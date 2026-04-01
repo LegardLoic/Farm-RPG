@@ -1,3 +1,8 @@
+> **Statut : archive QA / E2E de fondation**
+> Ce document décrit un scénario E2E mis en place pendant la phase initiale de robustesse du projet.
+> Il est conservé comme référence historique de validation.
+> Il peut rester utile, mais doit être relu en fonction de l’état actuel des endpoints, des saves et des flows gameplay.
+
 # E2E auth -> combat -> save/load
 
 Ce test e2e valide le flux complet suivant sur une API deployee ou locale:

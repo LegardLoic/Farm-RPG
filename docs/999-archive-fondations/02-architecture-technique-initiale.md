@@ -1,4 +1,10 @@
-﻿# Architecture technique initiale
+﻿> **Statut : archive d’architecture initiale**
+> Ce document décrit la base d’architecture pensée au début du projet.
+> Il reste utile comme référence historique et technique, mais certaines décisions ont pu évoluer pendant l’implémentation.
+> Il ne constitue plus, à lui seul, la description exhaustive de l’état technique actuel.
+> Pour l’état réel du projet, se référer en priorité au journal de production, aux documents techniques actifs, et au code en place.
+
+# Architecture technique initiale
 
 ## 1. Objectif
 

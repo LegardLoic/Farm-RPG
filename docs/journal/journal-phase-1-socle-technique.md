@@ -1,4 +1,9 @@
-﻿# Journal de bord - Farm RPG
+﻿> **Statut : historique de production - phase 1**
+> Ce document couvre la phase de fondation technique du projet : backend, API, QA, outillage, robustesse et boucle verticale initiale.
+> Il est conservé comme référence historique.
+> Le suivi actif de la phase actuelle se trouve dans `docs/journal/journal-phase-2-contenu-front.md`.
+
+# Journal de bord - Farm RPG
 
 Derniere mise a jour: 1 avril 2026
 

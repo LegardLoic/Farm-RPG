@@ -1,9 +1,15 @@
+> **Statut : archive de cadrage initial**
+> Ce document conserve les réponses de cadrage et les intentions de départ du projet.
+> Il sert de trace historique des hypothèses initiales.
+> Il ne constitue plus, à lui seul, la source de vérité actuelle du MVP.
+> En cas de divergence, se référer en priorité aux documents canoniques actifs dans `docs/00-projet/`, aux documents de contenu MVP, ainsi qu’au journal de phase en cours dans `docs/journal/`.
+
 # Questionnaire de cadrage - RPG 2D tour par tour
 
 ## 1) Vision produit
 
 1. Quelle est la promesse principale du jeu en une phrase ?
-   Un jeu vidéo mélangeant gestion de ferme et RPG tour par tour 
+   Un jeu vidéo mélangeant gestion de ferme et RPG tour par tour
 2. Quelle est la cible joueur prioritaire (casual, midcore, hardcore) ?
    Casu/Midcore
 3. Quel ton narratif veux-tu (léger, sombre, épique, politique, humoristique) ?
@@ -18,7 +24,7 @@
 1. Que doit absolument contenir la v1 jouable (3 a 5 fonctionnalités non négociables) ?
    - Création de personnage personnalisé (sexe, couleur de peau, cheveux, yeux, vetements
    - Gestion équipement/inventaire
-   - systeme de combat fonctionnel 
+   - systeme de combat fonctionnel
    - systeme de farming fonctionnel (aggriculture, cycle jour/nuit)
    - sauvegarde de données manuel via slot
 2. Quelle est la limite de contenu MVP: nombre de zones, ennemis, classes, quêtes ?
@@ -53,13 +59,13 @@
 ## 4) Personnages et progression
 
 1. Combien de classes jouables au lancement ?
-   Le jeu n'aura pas la possibilité de choisir directement une classe. L'idée est de commencer avec un hero niveau 1 et des stats neutres exemple : 
+   Le jeu n'aura pas la possibilité de choisir directement une classe. L'idée est de commencer avec un hero niveau 1 et des stats neutres exemple :
      - FOR(Force): 5 (puissance CAC)
      - DEX(Dextérité): 5 (puissance armes distance / chance de touché/esquive)
      - CON(Constitution): 5 (Hp)
      - INT(Intelligence): 5 (Mp + puissance des sorts)
      - VIT(Vitesse): 5 (Ordre attaquants pour les combats)
-   Chaque lvl de plus donne la possibilité de rajouter +5 points de stats ou on veux. 
+   Chaque lvl de plus donne la possibilité de rajouter +5 points de stats ou on veux.
    Les classes et compétences seront lié a l'équipement du joueur. Exemple :
    armure lourde (armure +10, compétence : Charge (Mp: 5), requis: 15 FOR)
    Il faudra donc minimum 15 en force pour s'équiper de cette piece d'armure. La compétence sera donc utilisable tant que l'armure est équipé ou si on apprend cette technique. Chaque compétences/sorts aura un compteur CP (points de compétences). Chaque victoire contre un ennemi qui à un lvl équivalent donnera 1 à 3 points de CP aux compétences des équipements actifs. une fois la jauge CP au max, la compétence est aquise par le personnage et n'aura plus besoins de porter l'équipement pour l'utiliser.
@@ -98,7 +104,7 @@
 5. Consommables utilisables en combat uniquement ou partout ?
    Consommales utilisables partout
 6. Besoin d'un coffre global partagé entre personnages ?
-   Il faut(je pense) que l'inventaire soit pas lié a un personnage en particulier en mode solo. 
+   Il faut(je pense) que l'inventaire soit pas lié a un personnage en particulier en mode solo.
    Quand on fera le mode coop, un coffre partagé entre joueur sera necessaire
 
 ## 6) Economie et quêtes
@@ -112,7 +118,7 @@
 4. Récompenses de quêtes: XP, objets, monnaie, réputation ?
    - réputation (relation) avec la personne donneuse de quete + item ou monnaie en fonction de la situation
 5. Tu veux des factions et réputation dès le MVP ?
-   Faction non mais réputation dans le sens relation (amitié/amour) avec les PNJ 
+   Faction non mais réputation dans le sens relation (amitié/amour) avec les PNJ
 
 ## 7) Monde et narration
 
@@ -134,7 +140,7 @@
 2. Vue de jeu: top-down, isométrique, side-view ?
    Top-down
 3. Résolution cible de base (ex: 320x180 upscale, 640x360, etc.) ?
-   1920x1080 serait idéal 
+   1920x1080 serait idéal
 4. Tu veux générer les sprites par IA comme base puis retouches manuelles ?
    Oui
 5. Palette fixe (limitation couleurs) ou libre ?
@@ -163,7 +169,7 @@
    PostgreSQL
 3. Auth: email+mot de passe, OAuth, ou les deux ?
    Les deux
-   
+
 4. Système de session: JWT + refresh token, ou session serveur stateful ?
    La plus sécurisé
 5. Besoin d'un mode invité (guest) avec conversion de compte plus tard ?
@@ -235,7 +241,7 @@
 3. Quels sont les 3 risques que tu veux absolument éviter ?
    - jeu trop compliqué a prendre en main
    - scénario qui mene a rien
-   - bug rendant le jeu injouable 
+   - bug rendant le jeu injouable
 4. Quelle partie du projet t'importe le plus: combat, narration, collection, progression, technique ?
    Combat et narration en priorité
 

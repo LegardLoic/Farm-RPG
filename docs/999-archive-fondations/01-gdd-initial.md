@@ -1,3 +1,9 @@
+> **Statut : archive de GDD initial**
+> Ce document correspond au premier cadrage design du projet.
+> Il est conservé comme référence historique pour comprendre les fondations du gameplay et des intentions produit.
+> Il ne constitue plus, à lui seul, la source de vérité actuelle du MVP.
+> En cas de divergence, se référer en priorité aux documents canoniques actifs dans `docs/00-projet/`, aux documents de contenu MVP, ainsi qu’au journal de phase en cours dans `docs/journal/`.
+
 # GDD initial - RPG 2D tour par tour heroic-fantasy
 
 ## Vision

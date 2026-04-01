@@ -1,3 +1,9 @@
+> **Statut : archive de cadrage narratif initial**
+> Ce document a servi à poser les premières bases de lore, de structure narrative et de progression du projet.
+> Il est conservé comme référence historique des intentions initiales.
+> Il ne constitue plus, à lui seul, la source de vérité narrative actuelle du MVP.
+> En cas de divergence, se référer en priorité aux documents canoniques actifs dans `docs/00-projet/`, `docs/01-univers/`, ainsi qu’au journal de phase en cours dans `docs/journal/`.
+
 # Lore et cadrage narratif — Ferme RPG tour par tour
 
 ## 1. Objectif du document

@@ -1,3 +1,8 @@
+> **Statut : archive de gate MVP initial**
+> Ce document a servi de base pour la validation de la première boucle verticale du MVP.
+> Il est conservé comme référence historique de contrôle qualité.
+> La phase actuelle du projet peut introduire de nouveaux besoins de validation, notamment côté contenu et incarnation front.
+
 # Gate MVP vertical - Ferme + RPG + Intro
 
 Derniere mise a jour: 1 avril 2026

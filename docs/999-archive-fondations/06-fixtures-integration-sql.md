@@ -1,3 +1,8 @@
+> **Statut : archive technique de fixtures**
+> Ce document décrit les fixtures SQL utilisées pendant la phase initiale de structuration et de validation du projet.
+> Il est conservé comme référence historique et opérationnelle.
+> Vérifier la compatibilité avec le schéma et les flows actuels avant usage.
+
 # Fixtures SQL d'integration
 
 Les fixtures sont dans `apps/api/test/fixtures/`.

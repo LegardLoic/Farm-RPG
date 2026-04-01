@@ -1,4 +1,9 @@
-﻿# QA checklist - Combat reactif
+﻿> **Statut : archive QA de fondation**
+> Ce document a servi à la validation des premières itérations du système de combat réactif.
+> Il est conservé comme référence historique de QA.
+> Il peut rester utile, mais ne remplace pas les checklists et validations actives de la phase actuelle.
+
+# QA checklist - Combat reactif
 
 Derniere mise a jour: 30 mars 2026
 
