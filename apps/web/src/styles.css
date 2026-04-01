@@ -1082,6 +1082,20 @@ body::before {
   color: var(--accent);
 }
 
+.hud-farm-story-summary {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: #a7bfd6;
+}
+
+.hud-farm-story-narrative {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: #dbe8f8;
+}
+
 .hud-farm-crafting-header strong {
   font-size: 0.75rem;
   color: var(--accent-2);

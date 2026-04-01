@@ -12,6 +12,7 @@ export interface PlayerProgressionState {
 export interface GameplayWorldState {
   zone: string;
   day: number;
+  farmHarvestTotal: number;
 }
 
 export interface GameplayFarmCropCatalogEntry {
@@ -44,6 +45,31 @@ export interface GameplayFarmState {
   readyPlots: number;
   cropCatalog: GameplayFarmCropCatalogEntry[];
   plots: GameplayFarmPlotState[];
+}
+
+export type GameplayFarmStoryTriggerType = 'day' | 'harvest_total';
+
+export interface GameplayFarmStoryEventState {
+  key: string;
+  flagKey: string;
+  triggerType: GameplayFarmStoryTriggerType;
+  target: number;
+  progress: number;
+  unlocked: boolean;
+  title: string;
+  narrative: string;
+}
+
+export interface GameplayFarmStoryState {
+  farmUnlocked: boolean;
+  day: number;
+  harvestTotal: number;
+  unlockedEvents: number;
+  totalEvents: number;
+  activeEventKey: string | null;
+  activeEventTitle: string;
+  activeEventNarrative: string;
+  events: GameplayFarmStoryEventState[];
 }
 
 export interface GameplayFarmCraftIngredientState {

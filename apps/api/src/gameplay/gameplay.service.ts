@@ -18,6 +18,7 @@ import {
   COMBAT_PREPARATION_FLAG_ATTACK,
   COMBAT_PREPARATION_FLAG_HP,
   COMBAT_PREPARATION_FLAG_MP,
+  FARM_STORY_EVENTS,
   INTRO_FLAG_ARRIVED_VILLAGE,
   INTRO_FLAG_FARM_ASSIGNED,
   INTRO_FLAG_MET_MAYOR,
@@ -39,6 +40,7 @@ import { TOWER_PROGRESSION_TABLE } from '../tower/tower.constants';
 import type {
   GameplayCombatPreparationState,
   GameplayFarmHarvestResult,
+  GameplayFarmStoryState,
   GameplayFarmCraftingState,
   GameplayFarmCraftResult,
   GameplayFarmPlantResult,
@@ -72,6 +74,7 @@ type WorldFlagRow = {
 type WorldStateRow = {
   zone: string;
   day: number;
+  farm_harvest_total: number;
 };
 
 type FarmPlotRow = {
@@ -326,8 +329,8 @@ export class GameplayService {
   async getWorldState(userId: string): Promise<GameplayWorldState> {
     await this.databaseService.query(
       `
-        INSERT INTO ${WORLD_STATE_TABLE} (user_id, zone, day)
-        VALUES ($1, $2, $3)
+        INSERT INTO ${WORLD_STATE_TABLE} (user_id, zone, day, farm_harvest_total)
+        VALUES ($1, $2, $3, 0)
         ON CONFLICT (user_id) DO NOTHING
       `,
       [userId, BASE_WORLD_ZONE, BASE_WORLD_DAY],
@@ -335,7 +338,7 @@ export class GameplayService {
 
     const result = await this.databaseService.query<WorldStateRow>(
       `
-        SELECT zone, day
+        SELECT zone, day, farm_harvest_total
         FROM ${WORLD_STATE_TABLE}
         WHERE user_id = $1
         LIMIT 1
@@ -348,12 +351,17 @@ export class GameplayService {
       return {
         zone: BASE_WORLD_ZONE,
         day: BASE_WORLD_DAY,
+        farmHarvestTotal: 0,
       };
     }
 
     return {
       zone: row.zone?.trim() ? row.zone.trim() : BASE_WORLD_ZONE,
       day: Number.isFinite(row.day) && row.day > 0 ? Math.floor(row.day) : BASE_WORLD_DAY,
+      farmHarvestTotal:
+        Number.isFinite(row.farm_harvest_total) && row.farm_harvest_total >= 0
+          ? Math.floor(row.farm_harvest_total)
+          : 0,
     };
   }
 
@@ -376,6 +384,29 @@ export class GameplayService {
     await this.ensureFarmPlots(this.databaseService, userId);
     const worldFlags = new Set(await this.getWorldFlags(userId));
     return this.getFarmCraftingStateWithExecutor(this.databaseService, userId, worldFlags);
+  }
+
+  async getFarmStoryState(
+    userId: string,
+    currentDay?: number,
+    currentHarvestTotal?: number,
+  ): Promise<GameplayFarmStoryState> {
+    await this.ensureWorldState(this.databaseService, userId);
+    const worldFlags = new Set(await this.getWorldFlags(userId));
+    const world =
+      typeof currentDay === 'number' && Number.isFinite(currentDay) && currentDay > 0 &&
+      typeof currentHarvestTotal === 'number' && Number.isFinite(currentHarvestTotal)
+        ? null
+        : await this.getWorldState(userId);
+
+    const day = typeof currentDay === 'number' && Number.isFinite(currentDay) && currentDay > 0
+      ? Math.floor(currentDay)
+      : (world?.day ?? BASE_WORLD_DAY);
+    const harvestTotal = typeof currentHarvestTotal === 'number' && Number.isFinite(currentHarvestTotal)
+      ? Math.max(0, Math.floor(currentHarvestTotal))
+      : (world?.farmHarvestTotal ?? 0);
+
+    return this.buildFarmStoryState(worldFlags, day, harvestTotal);
   }
 
   async craftFarmRecipe(userId: string, recipeKey: string, quantity: number): Promise<{
@@ -540,6 +571,7 @@ export class GameplayService {
   async harvestFarmPlot(userId: string, plotKey: string): Promise<{
     harvest: GameplayFarmHarvestResult;
     farm: GameplayFarmState;
+    farmStory: GameplayFarmStoryState;
   }> {
     return this.databaseService.withTransaction(async (tx) => {
       await this.ensureWorldState(tx, userId);
@@ -588,7 +620,24 @@ export class GameplayService {
         });
       }
 
+      const harvestProgressUpdate = await tx.query<Pick<WorldStateRow, 'farm_harvest_total'>>(
+        `
+          UPDATE ${WORLD_STATE_TABLE}
+          SET farm_harvest_total = farm_harvest_total + 1,
+              updated_at = NOW()
+          WHERE user_id = $1
+          RETURNING farm_harvest_total
+        `,
+        [userId],
+      );
+      const harvestTotal = Number.isFinite(harvestProgressUpdate.rows[0]?.farm_harvest_total)
+        ? Math.max(0, Math.floor(harvestProgressUpdate.rows[0]!.farm_harvest_total))
+        : 0;
+
+      await this.applyFarmStoryEventFlags(tx, userId, worldFlags, world.day, harvestTotal);
+
       const farm = await this.getFarmStateWithExecutor(tx, userId, worldFlags, world.day);
+      const farmStory = this.buildFarmStoryState(worldFlags, world.day, harvestTotal);
       return {
         harvest: {
           plotKey,
@@ -598,6 +647,7 @@ export class GameplayService {
           totalHarvestItemQuantity: inventoryRow.quantity,
         },
         farm,
+        farmStory,
       };
     });
   }
@@ -607,6 +657,7 @@ export class GameplayService {
     world: GameplayWorldState;
     farm: GameplayFarmState;
     crafting: GameplayFarmCraftingState;
+    farmStory: GameplayFarmStoryState;
   }> {
     return this.databaseService.withTransaction(async (tx) => {
       await this.ensureWorldState(tx, userId);
@@ -643,9 +694,14 @@ export class GameplayService {
       const world: GameplayWorldState = {
         zone: worldBefore.zone,
         day: dayAfter,
+        farmHarvestTotal: worldBefore.farmHarvestTotal,
       };
+
+      await this.applyFarmStoryEventFlags(tx, userId, worldFlags, dayAfter, worldBefore.farmHarvestTotal);
+
       const farm = await this.getFarmStateWithExecutor(tx, userId, worldFlags, dayAfter);
       const crafting = await this.getFarmCraftingStateWithExecutor(tx, userId, worldFlags);
+      const farmStory = this.buildFarmStoryState(worldFlags, dayAfter, worldBefore.farmHarvestTotal);
 
       return {
         sleep: {
@@ -655,6 +711,7 @@ export class GameplayService {
         world,
         farm,
         crafting,
+        farmStory,
       };
     });
   }
@@ -708,8 +765,8 @@ export class GameplayService {
   private async ensureWorldState(executor: QueryExecutor, userId: string): Promise<void> {
     await executor.query(
       `
-        INSERT INTO ${WORLD_STATE_TABLE} (user_id, zone, day)
-        VALUES ($1, $2, $3)
+        INSERT INTO ${WORLD_STATE_TABLE} (user_id, zone, day, farm_harvest_total)
+        VALUES ($1, $2, $3, 0)
         ON CONFLICT (user_id) DO NOTHING
       `,
       [userId, BASE_WORLD_ZONE, BASE_WORLD_DAY],
@@ -908,6 +965,101 @@ export class GameplayService {
     };
   }
 
+  private async applyFarmStoryEventFlags(
+    executor: TransactionClient,
+    userId: string,
+    worldFlags: Set<string>,
+    day: number,
+    harvestTotal: number,
+  ): Promise<void> {
+    if (!worldFlags.has(INTRO_FLAG_FARM_ASSIGNED)) {
+      return;
+    }
+
+    for (const event of FARM_STORY_EVENTS) {
+      const progress = event.triggerType === 'day' ? day : harvestTotal;
+      if (progress < event.target || worldFlags.has(event.flagKey)) {
+        continue;
+      }
+
+      await executor.query(
+        `
+          INSERT INTO ${WORLD_FLAGS_TABLE} (user_id, flag_key, unlocked_at)
+          VALUES ($1, $2, NOW())
+          ON CONFLICT (user_id, flag_key) DO NOTHING
+        `,
+        [userId, event.flagKey],
+      );
+      worldFlags.add(event.flagKey);
+    }
+  }
+
+  private buildFarmStoryState(
+    worldFlags: Set<string>,
+    day: number,
+    harvestTotal: number,
+  ): GameplayFarmStoryState {
+    const farmUnlocked = worldFlags.has(INTRO_FLAG_FARM_ASSIGNED);
+    const events = FARM_STORY_EVENTS.map((event) => {
+      const progress = event.triggerType === 'day' ? day : harvestTotal;
+      const unlocked = farmUnlocked && progress >= event.target;
+      return {
+        key: event.key,
+        flagKey: event.flagKey,
+        triggerType: event.triggerType,
+        target: event.target,
+        progress: Math.max(0, progress),
+        unlocked,
+        title: event.title,
+        narrative: event.narrative,
+      };
+    });
+
+    const nextLockedEvent = events.find((event) => !event.unlocked) ?? null;
+    const unlockedEvents = events.filter((event) => event.unlocked).length;
+
+    if (!farmUnlocked) {
+      return {
+        farmUnlocked,
+        day: Math.max(1, day),
+        harvestTotal: Math.max(0, harvestTotal),
+        unlockedEvents: 0,
+        totalEvents: events.length,
+        activeEventKey: events[0]?.key ?? null,
+        activeEventTitle: 'Ferme verrouillee',
+        activeEventNarrative: 'Termine l intro pour declencher les evenements scenario de ferme.',
+        events,
+      };
+    }
+
+    if (nextLockedEvent) {
+      const triggerLabel = nextLockedEvent.triggerType === 'day' ? `Jour ${nextLockedEvent.target}` : `${nextLockedEvent.target} recoltes`;
+      return {
+        farmUnlocked,
+        day: Math.max(1, day),
+        harvestTotal: Math.max(0, harvestTotal),
+        unlockedEvents,
+        totalEvents: events.length,
+        activeEventKey: nextLockedEvent.key,
+        activeEventTitle: `${nextLockedEvent.title} (${triggerLabel})`,
+        activeEventNarrative: nextLockedEvent.narrative,
+        events,
+      };
+    }
+
+    return {
+      farmUnlocked,
+      day: Math.max(1, day),
+      harvestTotal: Math.max(0, harvestTotal),
+      unlockedEvents,
+      totalEvents: events.length,
+      activeEventKey: null,
+      activeEventTitle: 'Scenario ferme (lot 103) complete',
+      activeEventNarrative: 'Tous les beats jour/recolte de la premiere passe ont ete declenches.',
+      events,
+    };
+  }
+
   private resolveLoopStage(towerHighestFloor: number): Pick<GameplayLoopState, 'stageKey' | 'stageLabel'> {
     if (towerHighestFloor < 3) {
       return {
@@ -1074,7 +1226,7 @@ export class GameplayService {
   private async getWorldStateForUpdate(executor: TransactionClient, userId: string): Promise<GameplayWorldState> {
     const result = await executor.query<WorldStateRow>(
       `
-        SELECT zone, day
+        SELECT zone, day, farm_harvest_total
         FROM ${WORLD_STATE_TABLE}
         WHERE user_id = $1
         LIMIT 1
@@ -1088,12 +1240,17 @@ export class GameplayService {
       return {
         zone: BASE_WORLD_ZONE,
         day: BASE_WORLD_DAY,
+        farmHarvestTotal: 0,
       };
     }
 
     return {
       zone: row.zone?.trim() ? row.zone.trim() : BASE_WORLD_ZONE,
       day: Number.isFinite(row.day) && row.day > 0 ? Math.floor(row.day) : BASE_WORLD_DAY,
+      farmHarvestTotal:
+        Number.isFinite(row.farm_harvest_total) && row.farm_harvest_total >= 0
+          ? Math.floor(row.farm_harvest_total)
+          : 0,
     };
   }
 

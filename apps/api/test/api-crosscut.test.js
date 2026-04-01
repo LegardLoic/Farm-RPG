@@ -340,6 +340,7 @@ function createGameplayDatabaseStub(
     world: {
       zone: 'Ferme',
       day: 1,
+      farm_harvest_total: 0,
     },
     tower: {
       current_floor: Math.max(1, Math.floor(initialTower.current_floor ?? 1)),
@@ -411,6 +412,15 @@ function createGameplayDatabaseStub(
     if (text.includes('UPDATE world_state') && text.includes('SET day = $2')) {
       state.world.day = values[1];
       return { rows: [] };
+    }
+
+    if (text.includes('UPDATE world_state') && text.includes('SET farm_harvest_total = farm_harvest_total +')) {
+      const increment = Number(values[1] ?? 1);
+      const safeIncrement = Number.isFinite(increment) ? Math.max(0, Math.floor(increment)) : 1;
+      state.world.farm_harvest_total += safeIncrement;
+      return {
+        rows: [{ farm_harvest_total: state.world.farm_harvest_total }],
+      };
     }
 
     if (text.includes('INSERT INTO tower_progression')) {
@@ -1586,6 +1596,12 @@ test('gameplay farm harvest grants crop item and resets plot', async () => {
   assert.equal(harvestedPlot?.cropKey, null);
   assert.equal(harvestedPlot?.plantedDay, null);
   assert.equal(harvestedPlot?.wateredToday, false);
+  assert.equal(result.farmStory.harvestTotal, 1);
+  assert.equal(result.farmStory.unlockedEvents, 2);
+  assert.equal(result.farmStory.totalEvents, 4);
+  assert.equal(db.state.world.farm_harvest_total, 1);
+  assert.equal(db.state.worldFlags.has('story_farm_day_2_briefing'), true);
+  assert.equal(db.state.worldFlags.has('story_farm_first_harvest_report'), true);
 });
 
 test('gameplay farm harvest reports farm quest progression', async () => {
@@ -1654,6 +1670,7 @@ test('gameplay sleep advances day and resets watered farm plots', async () => {
   assert.equal(result.sleep.dayAfter, 3);
   assert.equal(result.world.day, 3);
   assert.equal(db.state.world.day, 3);
+  assert.equal(result.world.farmHarvestTotal, 0);
 
   const turnipPlot = result.farm.plots.find((plot) => plot.plotKey === 'plot_r1_c1');
   const carrotPlot = result.farm.plots.find((plot) => plot.plotKey === 'plot_r1_c2');
@@ -1663,6 +1680,28 @@ test('gameplay sleep advances day and resets watered farm plots', async () => {
   assert.equal(turnipPlot?.growthProgressDays, 2);
   assert.equal(carrotPlot?.wateredToday, false);
   assert.equal(carrotPlot?.growthProgressDays, 1);
+  assert.equal(result.farmStory.day, 3);
+  assert.equal(result.farmStory.harvestTotal, 0);
+  assert.equal(result.farmStory.unlockedEvents, 1);
+  assert.equal(db.state.worldFlags.has('story_farm_day_2_briefing'), true);
+});
+
+test('gameplay farm story state follows day and harvest milestones', async () => {
+  const db = createGameplayDatabaseStub(['intro_farm_assigned']);
+  db.state.world.day = 4;
+  db.state.world.farm_harvest_total = 6;
+
+  const service = new GameplayService(db);
+  const story = await service.getFarmStoryState('user-1');
+
+  assert.equal(story.farmUnlocked, true);
+  assert.equal(story.day, 4);
+  assert.equal(story.harvestTotal, 6);
+  assert.equal(story.unlockedEvents, 4);
+  assert.equal(story.totalEvents, 4);
+  assert.equal(story.activeEventKey, null);
+  assert.equal(story.activeEventTitle.includes('complete'), true);
+  assert.equal(story.events.every((event) => event.unlocked), true);
 });
 
 test('gameplay crafting state exposes unlocked recipes and max craftable counts', async () => {

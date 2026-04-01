@@ -28,9 +28,10 @@ export class GameplayController {
       this.gameplayService.getIntroState(req.authUser!.id),
       this.gameplayService.getLoopState(req.authUser!.id),
     ]);
-    const [farm, crafting] = await Promise.all([
+    const [farm, crafting, farmStory] = await Promise.all([
       this.gameplayService.getFarmState(req.authUser!.id, world.day),
       this.gameplayService.getFarmCraftingState(req.authUser!.id),
+      this.gameplayService.getFarmStoryState(req.authUser!.id, world.day, world.farmHarvestTotal),
     ]);
 
     return {
@@ -44,6 +45,7 @@ export class GameplayController {
       loop,
       farm,
       crafting,
+      farmStory,
     };
   }
 

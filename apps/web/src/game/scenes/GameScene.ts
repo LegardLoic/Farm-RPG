@@ -355,6 +355,31 @@ type FarmState = {
   plots: FarmPlotState[];
 };
 
+type FarmStoryTriggerType = 'day' | 'harvest_total';
+
+type FarmStoryEventState = {
+  key: string;
+  flagKey: string;
+  triggerType: FarmStoryTriggerType;
+  target: number;
+  progress: number;
+  unlocked: boolean;
+  title: string;
+  narrative: string;
+};
+
+type FarmStoryState = {
+  farmUnlocked: boolean;
+  day: number;
+  harvestTotal: number;
+  unlockedEvents: number;
+  totalEvents: number;
+  activeEventKey: string | null;
+  activeEventTitle: string;
+  activeEventNarrative: string;
+  events: FarmStoryEventState[];
+};
+
 type FarmCraftIngredientState = {
   itemKey: string;
   requiredQuantity: number;
@@ -713,6 +738,8 @@ export class GameScene extends Phaser.Scene {
   private villageMarketBuybackRoot: HTMLElement | null = null;
   private villageMarketErrorValue: HTMLElement | null = null;
   private farmSummaryValue: HTMLElement | null = null;
+  private farmStorySummaryValue: HTMLElement | null = null;
+  private farmStoryNarrativeValue: HTMLElement | null = null;
   private farmSeedSelect: HTMLSelectElement | null = null;
   private farmSleepButton: HTMLButtonElement | null = null;
   private farmPlotsRoot: HTMLElement | null = null;
@@ -801,6 +828,7 @@ export class GameScene extends Phaser.Scene {
   private villageMarketError: string | null = null;
   private villageMarketRenderSignature = '';
   private farmState: FarmState | null = null;
+  private farmStoryState: FarmStoryState | null = null;
   private farmBusy = false;
   private farmError: string | null = null;
   private farmSelectedSeedItemKey = '';
@@ -1535,6 +1563,10 @@ export class GameScene extends Phaser.Scene {
             <span>Farm Plots</span>
             <strong data-hud="farmSummary">Locked</strong>
           </div>
+          <p class="hud-farm-story-summary" data-hud="farmStorySummary">Scenario ferme: verrouille</p>
+          <p class="hud-farm-story-narrative" data-hud="farmStoryNarrative">
+            Termine l intro pour declencher les premiers beats scenario de ferme.
+          </p>
           <div class="hud-farm-controls">
             <label class="hud-farm-field">
               <span>Selected seed</span>
@@ -1779,6 +1811,8 @@ export class GameScene extends Phaser.Scene {
     this.villageMarketBuybackRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageMarketBuybackOffers"]');
     this.villageMarketErrorValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="villageMarketError"]');
     this.farmSummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmSummary"]');
+    this.farmStorySummaryValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmStorySummary"]');
+    this.farmStoryNarrativeValue = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmStoryNarrative"]');
     this.farmSeedSelect = this.hudRoot.querySelector<HTMLSelectElement>('[data-hud="farmSeedSelect"]');
     this.farmSleepButton = this.hudRoot.querySelector<HTMLButtonElement>('[data-farm-action="sleep"]');
     this.farmPlotsRoot = this.hudRoot.querySelector<HTMLElement>('[data-hud="farmPlots"]');
@@ -1997,6 +2031,8 @@ export class GameScene extends Phaser.Scene {
     this.villageMarketBuybackRoot = null;
     this.villageMarketErrorValue = null;
     this.farmSummaryValue = null;
+    this.farmStorySummaryValue = null;
+    this.farmStoryNarrativeValue = null;
     this.farmSeedSelect = null;
     this.farmSleepButton = null;
     this.farmPlotsRoot = null;
@@ -2089,6 +2125,7 @@ export class GameScene extends Phaser.Scene {
     this.villageMarketBusy = false;
     this.villageMarketError = null;
     this.farmState = null;
+    this.farmStoryState = null;
     this.farmBusy = false;
     this.farmError = null;
     this.farmSelectedSeedItemKey = '';
@@ -2315,6 +2352,14 @@ export class GameScene extends Phaser.Scene {
   private updateFarmHud(): void {
     if (this.farmSummaryValue) {
       this.farmSummaryValue.textContent = this.getFarmSummaryLabel();
+    }
+
+    if (this.farmStorySummaryValue) {
+      this.farmStorySummaryValue.textContent = this.getFarmStorySummaryLabel();
+    }
+
+    if (this.farmStoryNarrativeValue) {
+      this.farmStoryNarrativeValue.textContent = this.getFarmStoryNarrativeLabel();
     }
 
     if (this.farmErrorValue) {
@@ -3755,6 +3800,34 @@ export class GameScene extends Phaser.Scene {
     return this.farmBusy
       ? 'Refreshing...'
       : `Ready ${this.farmState.readyPlots} | Planted ${this.farmState.plantedPlots}/${this.farmState.totalPlots}`;
+  }
+
+  private getFarmStorySummaryLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Scenario ferme: connexion requise';
+    }
+
+    if (!this.farmStoryState) {
+      return this.farmBusy ? 'Scenario ferme: chargement...' : 'Scenario ferme: no data';
+    }
+
+    const story = this.farmStoryState;
+    const progressLabel = `${story.unlockedEvents}/${story.totalEvents} beats`;
+    return `Scenario ferme | ${progressLabel} | Jour ${story.day} | Recoltes ${story.harvestTotal}`;
+  }
+
+  private getFarmStoryNarrativeLabel(): string {
+    if (!this.isAuthenticated) {
+      return 'Connecte toi pour suivre les beats narratifs lies au rythme de ferme.';
+    }
+
+    if (!this.farmStoryState) {
+      return this.farmBusy
+        ? 'Synchronisation du scenario ferme en cours...'
+        : 'Aucun beat narratif ferme charge.';
+    }
+
+    return `${this.farmStoryState.activeEventTitle}: ${this.farmStoryState.activeEventNarrative}`;
   }
 
   private getFarmCraftingSummaryLabel(): string {
@@ -5979,6 +6052,11 @@ export class GameScene extends Phaser.Scene {
       } else {
         this.farmSelectedSeedItemKey = '';
       }
+    }
+
+    const farmStory = this.normalizeGameplayFarmStoryPayload(payload);
+    if (farmStory) {
+      this.farmStoryState = farmStory;
     }
 
     const crafting = this.normalizeGameplayCraftingPayload(payload);
@@ -8450,6 +8528,94 @@ export class GameScene extends Phaser.Scene {
       tier: tierRaw,
       lastInteractionDay,
       canTalkToday: Boolean(record.canTalkToday),
+    };
+  }
+
+  private normalizeGameplayFarmStoryPayload(payload: unknown): FarmStoryState | null {
+    const root = this.asRecord(payload);
+    if (!root) {
+      return null;
+    }
+
+    const storyRecord = this.asRecord(root.farmStory) ?? this.asRecord(root.farm_story) ?? null;
+    if (!storyRecord) {
+      return null;
+    }
+
+    const day = this.asNumber(storyRecord.day);
+    const harvestTotal = this.asNumber(storyRecord.harvestTotal);
+    const unlockedEvents = this.asNumber(storyRecord.unlockedEvents);
+    const totalEvents = this.asNumber(storyRecord.totalEvents);
+    const activeEventKeyRaw = this.asString(storyRecord.activeEventKey);
+    const activeEventTitle = this.asString(storyRecord.activeEventTitle);
+    const activeEventNarrative = this.asString(storyRecord.activeEventNarrative);
+    const eventsRaw = Array.isArray(storyRecord.events) ? storyRecord.events : null;
+
+    if (
+      day === null ||
+      harvestTotal === null ||
+      unlockedEvents === null ||
+      totalEvents === null ||
+      !activeEventTitle ||
+      !activeEventNarrative ||
+      !eventsRaw
+    ) {
+      return null;
+    }
+
+    const events = eventsRaw
+      .map((entry) => this.normalizeFarmStoryEventEntry(entry))
+      .filter((entry): entry is FarmStoryEventState => entry !== null);
+
+    return {
+      farmUnlocked: Boolean(storyRecord.farmUnlocked),
+      day: Math.max(1, Math.round(day)),
+      harvestTotal: Math.max(0, Math.round(harvestTotal)),
+      unlockedEvents: Math.max(0, Math.round(unlockedEvents)),
+      totalEvents: Math.max(0, Math.round(totalEvents)),
+      activeEventKey: activeEventKeyRaw ? activeEventKeyRaw : null,
+      activeEventTitle,
+      activeEventNarrative,
+      events,
+    };
+  }
+
+  private normalizeFarmStoryEventEntry(payload: unknown): FarmStoryEventState | null {
+    const record = this.asRecord(payload);
+    if (!record) {
+      return null;
+    }
+
+    const key = this.asString(record.key);
+    const flagKey = this.asString(record.flagKey);
+    const triggerTypeRaw = this.asString(record.triggerType)?.trim().toLowerCase();
+    const target = this.asNumber(record.target);
+    const progress = this.asNumber(record.progress);
+    const title = this.asString(record.title);
+    const narrative = this.asString(record.narrative);
+
+    if (
+      !key ||
+      !flagKey ||
+      !triggerTypeRaw ||
+      (triggerTypeRaw !== 'day' && triggerTypeRaw !== 'harvest_total') ||
+      target === null ||
+      progress === null ||
+      !title ||
+      !narrative
+    ) {
+      return null;
+    }
+
+    return {
+      key,
+      flagKey,
+      triggerType: triggerTypeRaw,
+      target: Math.max(1, Math.round(target)),
+      progress: Math.max(0, Math.round(progress)),
+      unlocked: Boolean(record.unlocked),
+      title,
+      narrative,
     };
   }
 

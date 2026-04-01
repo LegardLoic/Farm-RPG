@@ -1601,6 +1601,27 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - regression web etendue pour verifier le wiring HUD des nouvelles lignes de dialogue et des helpers de rendu contextuel.
   - suite web + globale validees.
 
+### Lot 103 - Hook scenario ferme (jour + progression recoltes)
+- Backend gameplay:
+  - ajout d'un etat `farmStory` expose dans `GET /gameplay/state`.
+  - premiere passe de beats ferme scenario derives de:
+    - progression jour (paliers jour 2 et jour 4)
+    - progression recoltes cumulees (paliers 1 et 6 recoltes).
+  - `world_state` etendu avec `farm_harvest_total` (migration non destructive).
+  - hooks metier branches:
+    - `POST /gameplay/farm/harvest` incremente `farm_harvest_total`
+    - `POST /gameplay/sleep` et `POST /gameplay/farm/harvest` declenchent les flags de beats scenario atteints.
+  - payloads `sleep` et `harvest` enrichis avec `farmStory` pour synchro UI immediate.
+- Frontend HUD:
+  - panneau ferme enrichi avec un bloc scenario:
+    - resume progression beats jour/recoltes
+    - narrative active (prochain beat ou completion lot 103).
+  - parsing resilient du payload `farmStory` (`farmStory` / `farm_story`) et rendu textuel dedie.
+- QA:
+  - tests API etendus (milestones jour/recoltes + propagation flags scenario ferme).
+  - regression web etendue (wiring HUD + normalizers `farmStory`).
+  - suite globale validee.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1691,6 +1712,7 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - dialogues contextuels PNJ (etat/disponibilite/cooldown/tier de relation)
   - panneau Village Market (achat graines + vente recoltes)
   - panneau Farm Plots (selection graine + actions plant/water/harvest)
+  - bloc Farm Story (beats scenario relies au jour + total recoltes)
   - panneau Farm Crafting (recettes recoltes -> consommables combat)
   - panneau Combat Loop (stage vertical + preparation combat one-shot)
   - cycle jour/nuit MVP + action `Sleep (+1 day)` sur la ferme
@@ -1791,13 +1813,13 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 103 - Hook scenario ferme: premiers evenements declenches par jour + progression recoltes.
-2. Lot 104 - Trigger scenario tour: premiers beats narratifs relies aux paliers 3/5/8/10.
-3. Lot 105 - Passe accessibilite HUD combat (contraste, focus, lisibilite mobile).
-4. Lot 106 - Telemetrie balancing: extraction KPI debuffs/reactions pour iterations tuning.
-5. Lot 107 - Economie UI: affichage explicite des gains XP de vente dans le panneau Market.
-6. Lot 108 - QA mobile touch: revue interactions combat/farm en viewport reduit.
-7. Lot 109 - Quetes village phase 2: chaines multi-jours avec conditions farm+tour combinees.
-8. Lot 110 - Iteration animation review hero/boss (timings + readability des impacts/casts).
+1. Lot 104 - Trigger scenario tour: premiers beats narratifs relies aux paliers 3/5/8/10.
+2. Lot 105 - Passe accessibilite HUD combat (contraste, focus, lisibilite mobile).
+3. Lot 106 - Telemetrie balancing: extraction KPI debuffs/reactions pour iterations tuning.
+4. Lot 107 - Economie UI: affichage explicite des gains XP de vente dans le panneau Market.
+5. Lot 108 - QA mobile touch: revue interactions combat/farm en viewport reduit.
+6. Lot 109 - Quetes village phase 2: chaines multi-jours avec conditions farm+tour combinees.
+7. Lot 110 - Iteration animation review hero/boss (timings + readability des impacts/casts).
+8. Lot 111 - Farm story phase 2: evenements conditionnes par crafting et livraisons marche.
 
 

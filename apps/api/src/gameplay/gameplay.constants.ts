@@ -32,6 +32,52 @@ export const COMBAT_PREPARATION_FLAGS = [
   COMBAT_PREPARATION_FLAG_ATTACK,
 ] as const;
 
+export type FarmStoryTriggerType = 'day' | 'harvest_total';
+
+export type FarmStoryEventDefinition = {
+  key: string;
+  flagKey: string;
+  triggerType: FarmStoryTriggerType;
+  target: number;
+  title: string;
+  narrative: string;
+};
+
+export const FARM_STORY_EVENTS: FarmStoryEventDefinition[] = [
+  {
+    key: 'farm_day_2_briefing',
+    flagKey: 'story_farm_day_2_briefing',
+    triggerType: 'day',
+    target: 2,
+    title: 'Briefing des parcelles',
+    narrative: 'Le maire demande un suivi quotidien de la ferme pour soutenir la tour.',
+  },
+  {
+    key: 'farm_first_harvest_report',
+    flagKey: 'story_farm_first_harvest_report',
+    triggerType: 'harvest_total',
+    target: 1,
+    title: 'Premier rapport de recolte',
+    narrative: 'Le village valide ta premiere recolte et ouvre une logistique reguliere.',
+  },
+  {
+    key: 'farm_day_4_supply_routine',
+    flagKey: 'story_farm_day_4_supply_routine',
+    triggerType: 'day',
+    target: 4,
+    title: 'Routine de ravitaillement',
+    narrative: 'Les gardes demandent une cadence stable pour les expeditions de la tour.',
+  },
+  {
+    key: 'farm_harvest_6_field_momentum',
+    flagKey: 'story_farm_harvest_6_field_momentum',
+    triggerType: 'harvest_total',
+    target: 6,
+    title: 'Momentum agricole',
+    narrative: 'La ferme produit assez pour soutenir les blesses et les preparatifs de combat.',
+  },
+];
+
 export const VILLAGE_NPC_KEYS = ['mayor', 'blacksmith', 'merchant'] as const;
 export type VillageNpcKey = (typeof VILLAGE_NPC_KEYS)[number];
 
