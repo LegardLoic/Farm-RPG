@@ -1642,6 +1642,24 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
   - regression web etendue (wiring HUD + normalizers tower story).
   - suite globale validee.
 
+### Lot 105 - Accessibilite HUD combat (contraste + focus + mobile)
+- Frontend combat HUD:
+  - renforcement contraste visuel des cartes/statuts/logs combat pour lisibilite immediate.
+  - focus clavier/manette renforce sur controles interactifs (`:focus-visible`) avec anneau de focus explicite.
+  - meilleure ergonomie tactile mobile:
+    - boutons combat plus hauts
+    - recap/logs/statuts ajustes pour une lecture plus nette sous 700px.
+- A11y semantique:
+  - zones HUD combat instrumentees avec attributs ARIA:
+    - `combatStatus` / `combatRecap` en `role="status"` + `aria-live`
+    - `combatError` en `role="alert"`
+    - `combatLogs` en `role="log"` + `aria-relevant`.
+- Preference utilisateur:
+  - mode `prefers-reduced-motion` branche pour reduire les animations les plus agressives du combat HUD.
+- QA:
+  - regression web etendue pour verifier wiring ARIA, focus visible et reduced-motion.
+  - suite globale validee.
+
 ## 4) Backend en place (resume)
 - Auth:
   - Google OAuth
@@ -1833,13 +1851,13 @@ Ce document garde une trace claire de ce qui a ete construit, valide et deploie 
 ## 9) Prochaines priorites recommandees
 Priorisation recommandee: finir le socle RPG critique puis enchainer sur le coeur Ferme + Village + Scenario (objectif hybride maintenu).
 
-1. Lot 105 - Passe accessibilite HUD combat (contraste, focus, focus visible clavier/manette, lisibilite mobile).
-2. Lot 106 - Telemetrie balancing: extraction KPI debuffs/reactions pour iterations tuning.
-3. Lot 107 - Economie UI: affichage explicite des gains XP de vente dans le panneau Market.
-4. Lot 108 - QA mobile touch: revue interactions combat/farm en viewport reduit.
-5. Lot 109 - Quetes village phase 2: chaines multi-jours avec conditions farm+tour combinees.
-6. Lot 110 - Iteration animation review hero/boss (timings + readability des impacts/casts).
-7. Lot 111 - Farm story phase 2: evenements conditionnes par crafting et livraisons marche.
-8. Lot 112 - Tower story phase 2: beats post-floor10 relies a la boucle farm + village.
+1. Lot 106 - Telemetrie balancing: extraction KPI debuffs/reactions pour iterations tuning.
+2. Lot 107 - Economie UI: affichage explicite des gains XP de vente dans le panneau Market.
+3. Lot 108 - QA mobile touch: revue interactions combat/farm en viewport reduit.
+4. Lot 109 - Quetes village phase 2: chaines multi-jours avec conditions farm+tour combinees.
+5. Lot 110 - Iteration animation review hero/boss (timings + readability des impacts/casts).
+6. Lot 111 - Farm story phase 2: evenements conditionnes par crafting et livraisons marche.
+7. Lot 112 - Tower story phase 2: beats post-floor10 relies a la boucle farm + village.
+8. Lot 113 - Accessibilite UI phase 2: labels/roles supplementaires et audit contrastes hors combat.
 
 
