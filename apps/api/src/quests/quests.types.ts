@@ -8,6 +8,9 @@ export interface QuestProgressState {
   harvestedCrops: Record<string, number>;
   cropsDeliveredTotal: number;
   deliveredCrops: Record<string, number>;
+  npcInteractionsTotal: number;
+  interactedNpcs: Record<string, number>;
+  npcFriendshipLevels: Record<string, number>;
   lastVictoryAt: string | null;
   completedAt: string | null;
   claimedAt: string | null;
@@ -23,10 +26,14 @@ export interface QuestObjectiveDefinition {
     | 'farm_harvest_total'
     | 'farm_harvest_crop'
     | 'village_delivery_total'
-    | 'village_delivery_crop';
+    | 'village_delivery_crop'
+    | 'village_npc_interaction_total'
+    | 'village_npc_interaction_npc'
+    | 'village_npc_friendship_npc';
   target: number;
   enemyKey?: string;
   cropKey?: string;
+  npcKey?: 'mayor' | 'blacksmith' | 'merchant';
 }
 
 export interface QuestRewardDefinition {

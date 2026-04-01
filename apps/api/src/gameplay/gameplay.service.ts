@@ -218,6 +218,13 @@ export class GameplayService {
         [userId, normalizedNpcKey, friendshipAfter, world.day],
       );
 
+      if (this.questsService) {
+        await this.questsService.recordVillageNpcInteraction(tx, userId, {
+          npcKey: normalizedNpcKey,
+          friendshipAfter,
+        });
+      }
+
       const village = await this.getVillageStateWithExecutor(tx, userId, flags, world.day);
       return {
         interaction: {

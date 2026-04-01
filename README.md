@@ -110,6 +110,7 @@ Use `.env.example` templates and repository secrets for CI.
 - Turn-based combat with server-authoritative rewards.
 - Persistent tower progression up to floor 10 for MVP.
 - Quest system with claim flow and story milestones tied to tower floors `3/5/8/10`.
+- Village narrative micro-quests: mayor/blacksmith/merchant progression tied to NPC interaction and friendship milestones.
 - Scripted mini-boss and boss encounters on floors `3/5/8/10`.
 - Automatic server-side autosave after major tower milestones and boss victory.
 - Restore latest autosave to manual slots from the in-game HUD.
