@@ -286,10 +286,7 @@ import {
   getDebugQaReplayAutoPlayIntervalMs as getDebugQaReplayAutoPlayIntervalMsFromDebugQa,
   getDebugQaReplayAutoPlaySpeedLabel as getDebugQaReplayAutoPlaySpeedLabelFromDebugQa,
   getDebugQaScriptedIntentsDisplayText as getDebugQaScriptedIntentsDisplayTextFromDebugQa,
-  isDebugQaQueryMatch as isDebugQaQueryMatchFromDebugQa,
   isQuestStatusValue as isQuestStatusValueFromDebugQa,
-  normalizeDebugQaFilterQuery as normalizeDebugQaFilterQueryFromDebugQa,
-  normalizeImportedHudState as normalizeImportedHudStateFromDebugQa,
   parseImportedDebugQaTrace as parseImportedDebugQaTraceFromDebugQa,
   readDebugQaFlagList as readDebugQaFlagListFromDebugQa,
   readDebugQaNumber as readDebugQaNumberFromDebugQa,
@@ -300,6 +297,26 @@ import {
   runDebugQaAction as runDebugQaActionFromFeature,
 } from './features/debugQa/debugQaActionHandlers';
 import { updateDebugQaHud as updateDebugQaHudFromFeature } from './features/debugQa/debugQaHudRenderer';
+import {
+  exportDebugQaMarkdownReport as exportDebugQaMarkdownReportFromFeature,
+  exportDebugQaTrace as exportDebugQaTraceFromFeature,
+  loadCombatDebugScriptedIntents as loadCombatDebugScriptedIntentsFromFeature,
+  triggerDebugQaTraceImport as triggerDebugQaTraceImportFromFeature,
+} from './features/debugQa/debugQaTraceActionHandlers';
+import {
+  advanceDebugQaStepReplay as advanceDebugQaStepReplayFromFeature,
+  handleDebugQaImportFileChange as handleDebugQaImportFileChangeFromFeature,
+  replayImportedDebugQaTrace as replayImportedDebugQaTraceFromFeature,
+  startDebugQaStepReplay as startDebugQaStepReplayFromFeature,
+  stopDebugQaStepReplay as stopDebugQaStepReplayFromFeature,
+} from './features/debugQa/debugQaReplayActionHandlers';
+import {
+  applyImportedDebugQaTrace as applyImportedDebugQaTraceFromFeature,
+  buildCombatTraceSnapshot as buildCombatTraceSnapshotFromFeature,
+  buildDebugQaTracePayload as buildDebugQaTracePayloadFromFeature,
+  captureDebugQaReplayBaseline as captureDebugQaReplayBaselineFromFeature,
+  restoreDebugQaReplayBaseline as restoreDebugQaReplayBaselineFromFeature,
+} from './features/debugQa/debugQaTraceBuilders';
 import {
   bindHudElements as bindHudElementsFromHud,
   clearHudElementBindings as clearHudElementBindingsFromHud,
@@ -5234,14 +5251,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private normalizeDebugQaFilterQuery(value: string): string {
-    return normalizeDebugQaFilterQueryFromDebugQa(value);
-  }
-
-  private isDebugQaQueryMatch(query: string, values: Array<string | null | undefined>): boolean {
-    return isDebugQaQueryMatchFromDebugQa(query, values);
-  }
-
   private doesCombatStateMatchRecapFilters(snapshot: CombatEncounterState | null): boolean {
     return doesCombatStateMatchRecapFiltersFromDebugQa(
       snapshot,
@@ -5268,77 +5277,81 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async exportDebugQaTrace(): Promise<void> {
-    if (!this.debugQaEnabled || !this.debugQaPanelRoot) {
-      return;
-    }
-
-    this.syncDebugQaFiltersFromInputs();
-    const payload = this.buildDebugQaTracePayload();
-    const filename = this.buildDebugQaTraceFilename(payload.timestamp);
-    this.downloadJsonFile(filename, payload);
-
-    this.debugQaStatus = 'success';
-    this.debugQaError = null;
-    this.debugQaMessage = `Exported local QA trace to ${filename}.`;
-    this.updateHud();
+    exportDebugQaTraceFromFeature({
+      debugQaEnabled: this.debugQaEnabled,
+      hasDebugQaPanel: Boolean(this.debugQaPanelRoot),
+      syncDebugQaFiltersFromInputs: () => this.syncDebugQaFiltersFromInputs(),
+      buildDebugQaTracePayload: () => this.buildDebugQaTracePayload(),
+      buildDebugQaTraceFilename: (timestamp) => this.buildDebugQaTraceFilename(timestamp),
+      downloadJsonFile: (filename, payload) => this.downloadJsonFile(filename, payload),
+      setDebugQaStatus: (status) => {
+        this.debugQaStatus = status;
+      },
+      setDebugQaError: (value) => {
+        this.debugQaError = value;
+      },
+      setDebugQaMessage: (value) => {
+        this.debugQaMessage = value;
+      },
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private async exportDebugQaMarkdownReport(): Promise<void> {
-    if (!this.debugQaEnabled || !this.debugQaPanelRoot) {
-      return;
-    }
-
-    this.syncDebugQaFiltersFromInputs();
-    const timestamp = new Date().toISOString();
-    const markdown = this.buildDebugQaMarkdownReport(timestamp);
-    const filename = this.buildDebugQaMarkdownFilename(timestamp);
-    this.downloadTextFile(filename, markdown, 'text/markdown;charset=utf-8');
-
-    this.debugQaStatus = 'success';
-    this.debugQaError = null;
-    this.debugQaMessage = `Exported markdown QA report to ${filename}.`;
-    this.updateHud();
+    exportDebugQaMarkdownReportFromFeature({
+      debugQaEnabled: this.debugQaEnabled,
+      hasDebugQaPanel: Boolean(this.debugQaPanelRoot),
+      syncDebugQaFiltersFromInputs: () => this.syncDebugQaFiltersFromInputs(),
+      buildDebugQaMarkdownReport: (timestamp) => this.buildDebugQaMarkdownReport(timestamp),
+      buildDebugQaMarkdownFilename: (timestamp) => this.buildDebugQaMarkdownFilename(timestamp),
+      downloadTextFile: (filename, contents, contentType) => this.downloadTextFile(filename, contents, contentType),
+      setDebugQaStatus: (status) => {
+        this.debugQaStatus = status;
+      },
+      setDebugQaError: (value) => {
+        this.debugQaError = value;
+      },
+      setDebugQaMessage: (value) => {
+        this.debugQaMessage = value;
+      },
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private async loadCombatDebugScriptedIntents(): Promise<void> {
-    if (!this.debugQaEnabled || !this.debugQaPanelRoot || this.debugQaStatus === 'loading') {
-      return;
-    }
-
-    this.debugQaStatus = 'loading';
-    this.debugQaError = null;
-    this.debugQaMessage = 'Loading combat scripted intents reference...';
-    this.debugQaScriptedIntentsReference = null;
-    this.debugQaScriptedIntentsText = 'Loading combat scripted intents reference...';
-    this.updateHud();
-
-    try {
-      const reference = await this.fetchJson<CombatDebugReference>('/combat/debug/scripted-intents');
-      this.debugQaScriptedIntentsReference = reference;
-      this.debugQaScriptedIntentsText = this.formatCombatDebugScriptedIntentsReference(reference);
-
-      this.debugQaStatus = 'success';
-      this.debugQaError = null;
-      this.debugQaMessage = `Loaded ${reference.scriptedIntents.length} scripted enemy profiles.`;
-    } catch (error) {
-      this.debugQaStatus = 'error';
-      this.debugQaError = this.getErrorMessage(error, 'Unable to load combat scripted intents reference.');
-      this.debugQaMessage = null;
-      this.debugQaScriptedIntentsReference = null;
-      this.debugQaScriptedIntentsText =
-        'Unable to load the combat scripted intents reference. Check the error message above and retry.';
-    } finally {
-      this.updateHud();
-    }
+    await loadCombatDebugScriptedIntentsFromFeature({
+      debugQaEnabled: this.debugQaEnabled,
+      hasDebugQaPanel: Boolean(this.debugQaPanelRoot),
+      debugQaStatus: this.debugQaStatus,
+      setDebugQaStatus: (status) => {
+        this.debugQaStatus = status;
+      },
+      setDebugQaError: (value) => {
+        this.debugQaError = value;
+      },
+      setDebugQaMessage: (value) => {
+        this.debugQaMessage = value;
+      },
+      setDebugQaScriptedIntentsReference: (reference) => {
+        this.debugQaScriptedIntentsReference = reference;
+      },
+      setDebugQaScriptedIntentsText: (value) => {
+        this.debugQaScriptedIntentsText = value;
+      },
+      fetchJson: (path) => this.fetchJson<CombatDebugReference>(path),
+      formatCombatDebugScriptedIntentsReference: (reference) =>
+        this.formatCombatDebugScriptedIntentsReference(reference),
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private triggerDebugQaTraceImport(): void {
-    if (!this.debugQaEnabled || !this.debugQaImportFileInput || this.debugQaStatus === 'loading') {
-      return;
-    }
-
-    this.debugQaImportFileInput.value = '';
-    this.debugQaImportFileInput.click();
+    triggerDebugQaTraceImportFromFeature({
+      debugQaEnabled: this.debugQaEnabled,
+      debugQaStatus: this.debugQaStatus,
+      importFileInput: this.debugQaImportFileInput,
+    });
   }
 
   private toggleDebugQaStepReplayAutoPlay(): void {
@@ -5495,212 +5508,180 @@ export class GameScene extends Phaser.Scene {
   }
 
   private replayImportedDebugQaTrace(): void {
-    if (!this.debugQaEnabled) {
-      return;
-    }
-
-    if (!this.debugQaImportedTrace) {
-      this.debugQaStatus = 'error';
-      this.debugQaError = 'Importe un JSON trace avant de lancer Replay.';
-      this.debugQaMessage = null;
-      this.updateHud();
-      return;
-    }
-
-    this.stopDebugQaStepReplay(false);
-    this.applyImportedDebugQaTrace(this.debugQaImportedTrace);
-    this.debugQaStatus = 'success';
-    this.debugQaError = null;
-    this.debugQaMessage = `Replay QA applique (${this.debugQaImportedTrace.sourceFile}).`;
-    this.updateHud();
+    replayImportedDebugQaTraceFromFeature({
+      debugQaEnabled: this.debugQaEnabled,
+      importedTrace: this.debugQaImportedTrace,
+      stopDebugQaStepReplay: (restoreBaseline) => this.stopDebugQaStepReplay(restoreBaseline),
+      applyImportedDebugQaTrace: (trace) => this.applyImportedDebugQaTrace(trace),
+      setDebugQaStatus: (status) => {
+        this.debugQaStatus = status;
+      },
+      setDebugQaError: (value) => {
+        this.debugQaError = value;
+      },
+      setDebugQaMessage: (value) => {
+        this.debugQaMessage = value;
+      },
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private startDebugQaStepReplay(): void {
-    if (!this.debugQaEnabled) {
-      return;
-    }
-
-    if (!this.debugQaImportedTrace) {
-      this.debugQaStatus = 'error';
-      this.debugQaError = 'Importe un JSON trace avant de lancer le replay pas a pas.';
-      this.debugQaMessage = null;
-      this.updateHud();
-      return;
-    }
-
-    const logs = this.debugQaImportedTrace.combatLogs.slice(-20);
-    if (logs.length === 0) {
-      this.debugQaStatus = 'error';
-      this.debugQaError = 'La trace importee ne contient pas de logs combat exploitables.';
-      this.debugQaMessage = null;
-      this.updateHud();
-      return;
-    }
-
-    this.stopDebugQaStepReplay(false);
-    const baseline = this.captureDebugQaReplayBaseline();
-    this.applyImportedDebugQaTrace(this.debugQaImportedTrace);
-
-    this.combatStatus = 'active';
-    this.combatLogs = [];
-    this.combatMessage = `Replay step 0/${logs.length}`;
-    this.combatError = null;
-
-    if (this.combatState) {
-      this.combatState = this.cloneCombatState(this.combatState);
-      this.combatState.status = 'active';
-      this.combatState.logs = [];
-      this.combatState.round = 1;
-      this.combatState.turn = 'player';
-    }
-
-    this.debugQaStepReplayState = {
-      logs,
-      stepIndex: 0,
-      totalSteps: logs.length,
-      finalTrace: this.debugQaImportedTrace,
-      baseline,
-    };
-
-    this.debugQaStatus = 'success';
-    this.debugQaError = null;
-    this.debugQaMessage = `Replay pas a pas demarre (${logs.length} steps).`;
-    this.updateHud();
+    startDebugQaStepReplayFromFeature({
+      debugQaEnabled: this.debugQaEnabled,
+      importedTrace: this.debugQaImportedTrace,
+      stopDebugQaStepReplay: (restoreBaseline) => this.stopDebugQaStepReplay(restoreBaseline),
+      captureDebugQaReplayBaseline: () => this.captureDebugQaReplayBaseline(),
+      applyImportedDebugQaTrace: (trace) => this.applyImportedDebugQaTrace(trace),
+      cloneCombatState: (state) => this.cloneCombatState(state),
+      combatState: this.combatState,
+      setCombatState: (state) => {
+        this.combatState = state;
+      },
+      setCombatStatus: (status) => {
+        this.combatStatus = status;
+      },
+      setCombatLogs: (logs) => {
+        this.combatLogs = logs;
+      },
+      setCombatMessage: (value) => {
+        this.combatMessage = value;
+      },
+      setCombatError: (value) => {
+        this.combatError = value;
+      },
+      setDebugQaStepReplayState: (value) => {
+        this.debugQaStepReplayState = value;
+      },
+      setDebugQaStatus: (status) => {
+        this.debugQaStatus = status;
+      },
+      setDebugQaError: (value) => {
+        this.debugQaError = value;
+      },
+      setDebugQaMessage: (value) => {
+        this.debugQaMessage = value;
+      },
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private advanceDebugQaStepReplay(): void {
-    if (!this.debugQaStepReplayState) {
-      this.stopDebugQaStepReplayAutoPlay(false);
-      this.debugQaStatus = 'error';
-      this.debugQaError = 'Demarre un replay pas a pas avant d avancer.';
-      this.debugQaMessage = null;
-      this.updateHud();
-      return;
-    }
-
-    const replay = this.debugQaStepReplayState;
-    if (replay.stepIndex >= replay.totalSteps) {
-      this.stopDebugQaStepReplayAutoPlay(false);
-      this.applyImportedDebugQaTrace(replay.finalTrace);
-      this.debugQaStepReplayState = null;
-      this.debugQaStatus = 'success';
-      this.debugQaError = null;
-      this.debugQaMessage = 'Replay pas a pas termine (etat final applique).';
-      this.updateHud();
-      return;
-    }
-
-    const nextStep = replay.stepIndex + 1;
-    replay.stepIndex = nextStep;
-
-    this.combatLogs = replay.logs.slice(0, nextStep);
-    this.combatMessage = replay.logs[nextStep - 1] ?? this.combatMessage;
-    this.combatError = null;
-    this.combatStatus = nextStep >= replay.totalSteps ? (replay.finalTrace.combatStatus ?? 'active') : 'active';
-
-    if (this.combatState) {
-      this.combatState = this.cloneCombatState(this.combatState);
-      this.combatState.logs = [...this.combatLogs];
-      this.combatState.round = Math.max(1, Math.ceil(nextStep / 2));
-      this.combatState.turn = nextStep % 2 === 0 ? 'player' : 'enemy';
-      const resolvedStatus = this.combatStatus;
-      this.combatState.status =
-        resolvedStatus === 'active' ||
-        resolvedStatus === 'won' ||
-        resolvedStatus === 'lost' ||
-        resolvedStatus === 'fled'
-          ? resolvedStatus
-          : 'active';
-    }
-
-    this.debugQaStatus = 'success';
-    this.debugQaError = null;
-    this.debugQaMessage = `Replay step ${nextStep}/${replay.totalSteps}`;
-    this.updateHud();
+    advanceDebugQaStepReplayFromFeature({
+      stepReplayState: this.debugQaStepReplayState,
+      stopDebugQaStepReplayAutoPlay: (updateHud) => this.stopDebugQaStepReplayAutoPlay(updateHud),
+      applyImportedDebugQaTrace: (trace) => this.applyImportedDebugQaTrace(trace),
+      cloneCombatState: (state) => this.cloneCombatState(state),
+      combatState: this.combatState,
+      combatMessage: this.combatMessage,
+      setCombatState: (state) => {
+        this.combatState = state;
+      },
+      setCombatStatus: (status) => {
+        this.combatStatus = status;
+      },
+      setCombatLogs: (logs) => {
+        this.combatLogs = logs;
+      },
+      setCombatMessage: (value) => {
+        this.combatMessage = value;
+      },
+      setCombatError: (value) => {
+        this.combatError = value;
+      },
+      setDebugQaStepReplayState: (value) => {
+        this.debugQaStepReplayState = value;
+      },
+      setDebugQaStatus: (status) => {
+        this.debugQaStatus = status;
+      },
+      setDebugQaError: (value) => {
+        this.debugQaError = value;
+      },
+      setDebugQaMessage: (value) => {
+        this.debugQaMessage = value;
+      },
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private stopDebugQaStepReplay(restoreBaseline: boolean): void {
-    this.stopDebugQaStepReplayAutoPlay(false);
-    const replay = this.debugQaStepReplayState;
-    this.debugQaStepReplayState = null;
-
-    if (!replay) {
-      return;
-    }
-
-    if (restoreBaseline) {
-      this.restoreDebugQaReplayBaseline(replay.baseline);
-      this.debugQaStatus = 'success';
-      this.debugQaError = null;
-      this.debugQaMessage = 'Replay pas a pas stoppe (etat precedent restaure).';
-      this.updateHud();
-    }
+    stopDebugQaStepReplayFromFeature({
+      restoreBaseline,
+      stopDebugQaStepReplayAutoPlay: (updateHud) => this.stopDebugQaStepReplayAutoPlay(updateHud),
+      stepReplayState: this.debugQaStepReplayState,
+      setDebugQaStepReplayState: (value) => {
+        this.debugQaStepReplayState = value;
+      },
+      restoreDebugQaReplayBaseline: (baseline) => this.restoreDebugQaReplayBaseline(baseline),
+      setDebugQaStatus: (status) => {
+        this.debugQaStatus = status;
+      },
+      setDebugQaError: (value) => {
+        this.debugQaError = value;
+      },
+      setDebugQaMessage: (value) => {
+        this.debugQaMessage = value;
+      },
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private captureDebugQaReplayBaseline(): DebugQaReplayBaseline {
-    return {
-      isAuthenticated: this.isAuthenticated,
-      authStatus: this.authStatus,
-      hudState: { ...this.hudState },
-      combatEncounterId: this.combatEncounterId,
-      combatStatus: this.combatStatus,
-      combatState: this.combatState ? this.cloneCombatState(this.combatState) : null,
-      combatLogs: [...this.combatLogs],
-      combatMessage: this.combatMessage,
-      combatError: this.combatError,
-    };
+    return captureDebugQaReplayBaselineFromFeature({
+      state: {
+        isAuthenticated: this.isAuthenticated,
+        authStatus: this.authStatus,
+        hudState: this.hudState,
+        combatEncounterId: this.combatEncounterId,
+        combatStatus: this.combatStatus,
+        combatState: this.combatState,
+        combatLogs: this.combatLogs,
+        combatMessage: this.combatMessage,
+        combatError: this.combatError,
+      },
+      cloneCombatState: (state) => this.cloneCombatState(state),
+    });
   }
 
   private restoreDebugQaReplayBaseline(baseline: DebugQaReplayBaseline): void {
-    this.isAuthenticated = baseline.isAuthenticated;
-    this.authStatus = baseline.authStatus;
-    this.hudState = { ...baseline.hudState };
-    this.combatEncounterId = baseline.combatEncounterId;
-    this.combatStatus = baseline.combatStatus;
-    this.combatState = baseline.combatState ? this.cloneCombatState(baseline.combatState) : null;
-    this.combatLogs = [...baseline.combatLogs];
-    this.combatMessage = baseline.combatMessage;
-    this.combatError = baseline.combatError;
+    const nextState = restoreDebugQaReplayBaselineFromFeature({
+      baseline,
+      cloneCombatState: (state) => this.cloneCombatState(state),
+    });
+    this.isAuthenticated = nextState.isAuthenticated;
+    this.authStatus = nextState.authStatus;
+    this.hudState = nextState.hudState;
+    this.combatEncounterId = nextState.combatEncounterId;
+    this.combatStatus = nextState.combatStatus;
+    this.combatState = nextState.combatState;
+    this.combatLogs = nextState.combatLogs;
+    this.combatMessage = nextState.combatMessage;
+    this.combatError = nextState.combatError;
   }
 
   private async handleDebugQaImportFileChange(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement | null;
-    const file = input?.files?.[0];
-    if (!file || !this.debugQaEnabled) {
-      return;
-    }
-
-    if (this.debugQaStepReplayState) {
-      this.stopDebugQaStepReplay(true);
-    }
-
-    this.debugQaStatus = 'loading';
-    this.debugQaError = null;
-    this.debugQaMessage = `Importing ${file.name}...`;
-    this.updateHud();
-
-    try {
-      const rawText = await file.text();
-      const rawPayload = JSON.parse(rawText) as unknown;
-      const importedTrace = this.parseImportedDebugQaTrace(rawPayload, file.name);
-      if (!importedTrace) {
-        throw new Error('Le fichier ne contient pas un JSON trace QA valide.');
-      }
-
-      this.debugQaImportedTrace = importedTrace;
-      this.debugQaStatus = 'success';
-      this.debugQaError = null;
-      this.debugQaMessage = `Trace importee: ${file.name} (${importedTrace.timestamp}).`;
-    } catch (error) {
-      this.debugQaStatus = 'error';
-      this.debugQaError = this.getErrorMessage(error, 'Impossible d importer la trace JSON.');
-      this.debugQaMessage = null;
-    } finally {
-      if (input) {
-        input.value = '';
-      }
-      this.updateHud();
-    }
+    await handleDebugQaImportFileChangeFromFeature({
+      event,
+      debugQaEnabled: this.debugQaEnabled,
+      stepReplayState: this.debugQaStepReplayState,
+      stopDebugQaStepReplay: (restoreBaseline) => this.stopDebugQaStepReplay(restoreBaseline),
+      parseImportedDebugQaTrace: (rawPayload, sourceFile) => this.parseImportedDebugQaTrace(rawPayload, sourceFile),
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      setDebugQaImportedTrace: (trace) => {
+        this.debugQaImportedTrace = trace;
+      },
+      setDebugQaStatus: (status) => {
+        this.debugQaStatus = status;
+      },
+      setDebugQaError: (value) => {
+        this.debugQaError = value;
+      },
+      setDebugQaMessage: (value) => {
+        this.debugQaMessage = value;
+      },
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private parseImportedDebugQaTrace(rawPayload: unknown, sourceFile: string): ImportedDebugQaTrace | null {
@@ -5716,52 +5697,37 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private normalizeImportedHudState(rawState: Record<string, unknown> | null): Partial<HudState> {
-    return normalizeImportedHudStateFromDebugQa(rawState, {
-      asNumber: (value) => this.asNumber(value),
-      asString: (value) => this.asString(value),
-    });
-  }
-
   private applyImportedDebugQaTrace(trace: ImportedDebugQaTrace): void {
-    if (trace.authAuthenticated !== null) {
-      this.isAuthenticated = trace.authAuthenticated;
-    }
-    if (trace.authStatus) {
-      this.authStatus = trace.authStatus;
-    }
+    const nextState = applyImportedDebugQaTraceFromFeature({
+      trace,
+      currentState: {
+        isAuthenticated: this.isAuthenticated,
+        authStatus: this.authStatus,
+        hudState: this.hudState,
+        combatEncounterId: this.combatEncounterId,
+        combatStatus: this.combatStatus,
+        combatState: this.combatState,
+        combatLogs: this.combatLogs,
+        combatMessage: this.combatMessage,
+        combatError: this.combatError,
+      },
+      cloneCombatState: (state) => this.cloneCombatState(state),
+    });
 
-    this.hudState = {
-      ...this.hudState,
-      ...trace.hudState,
-    };
-
-    if (trace.combatState) {
-      this.combatState = this.cloneCombatState(trace.combatState);
-      this.combatEncounterId = trace.combatState.id;
-      this.combatStatus = trace.combatState.status;
-      this.combatLogs = [...trace.combatState.logs].slice(-20);
-    } else {
-      this.combatEncounterId = trace.combatEncounterId;
-      this.combatStatus = trace.combatStatus ?? 'idle';
-      this.combatLogs = [...trace.combatLogs].slice(-20);
-      if (!trace.combatEncounterId) {
-        this.combatState = null;
-      }
-    }
-
-    if (trace.combatMessage) {
-      this.combatMessage = trace.combatMessage;
-    } else if (!trace.combatState && !trace.combatEncounterId) {
-      this.combatMessage = 'Aucun combat actif.';
-    }
-
-    this.combatError = trace.combatError;
+    this.isAuthenticated = nextState.isAuthenticated;
+    this.authStatus = nextState.authStatus;
+    this.hudState = nextState.hudState;
+    this.combatEncounterId = nextState.combatEncounterId;
+    this.combatStatus = nextState.combatStatus;
+    this.combatState = nextState.combatState;
+    this.combatLogs = nextState.combatLogs;
+    this.combatMessage = nextState.combatMessage;
+    this.combatError = nextState.combatError;
   }
 
   private buildDebugQaTracePayload(): DebugQaTracePayload {
     const timestamp = new Date().toISOString();
-    return {
+    return buildDebugQaTracePayloadFromFeature({
       timestamp,
       frontend: {
         mode: import.meta.env.MODE,
@@ -5779,15 +5745,13 @@ export class GameScene extends Phaser.Scene {
         authenticated: this.isAuthenticated,
         status: this.authStatus,
       },
-      hud: {
-        state: { ...this.hudState },
-        summaries: {
-          combat: this.getCombatStatusLabel(),
-          quests: this.getQuestSummaryLabel(),
-          blacksmith: this.getBlacksmithShopSummaryLabel(),
-          autosave: this.getAutoSaveSummaryLabel(),
-          saveSlots: this.getSaveSlotsSummaryLabel(),
-        },
+      hudState: this.hudState,
+      hudSummaries: {
+        combat: this.getCombatStatusLabel(),
+        quests: this.getQuestSummaryLabel(),
+        blacksmith: this.getBlacksmithShopSummaryLabel(),
+        autosave: this.getAutoSaveSummaryLabel(),
+        saveSlots: this.getSaveSlotsSummaryLabel(),
       },
       combat: this.buildCombatTraceSnapshot(),
       debugQa: {
@@ -5813,44 +5777,20 @@ export class GameScene extends Phaser.Scene {
         },
         stripCalibrationPreset: this.stripCalibrationPreset,
       },
-    };
+    });
   }
 
   private buildCombatTraceSnapshot(): DebugQaTracePayload['combat'] {
-    if (!this.combatState) {
-      return {
-        encounterId: this.combatEncounterId,
-        status: this.combatStatus,
-        message: this.combatMessage,
-        error: this.combatError,
-        telemetry: this.getCombatTelemetryLabel(),
-        logs: [...this.combatLogs],
-        state: null,
-      };
-    }
-
-    return {
-      encounterId: this.combatEncounterId,
-      status: this.combatStatus,
-      message: this.combatMessage,
-      error: this.combatError,
-      telemetry: this.getCombatTelemetryLabel(),
-      logs: [...this.combatLogs],
-      state: (() => {
-        const state: CombatEncounterState = {
-          ...this.combatState,
-          logs: [...this.combatState.logs],
-          player: { ...this.combatState.player },
-          enemy: { ...this.combatState.enemy },
-        };
-
-        if (this.combatState.scriptState) {
-          state.scriptState = { ...this.combatState.scriptState };
-        }
-
-        return state;
-      })(),
-    };
+    return buildCombatTraceSnapshotFromFeature({
+      combatEncounterId: this.combatEncounterId,
+      combatStatus: this.combatStatus,
+      combatMessage: this.combatMessage,
+      combatError: this.combatError,
+      combatLogs: this.combatLogs,
+      combatState: this.combatState,
+      getCombatTelemetryLabel: () => this.getCombatTelemetryLabel(),
+      cloneCombatState: (state) => this.cloneCombatState(state),
+    });
   }
 
   private buildDebugQaMarkdownReport(timestamp: string): string {
