@@ -97,6 +97,13 @@ import {
 import { createFarmActionZone as createFarmActionZoneFromFeature } from './features/farm/farmSceneZones';
 import { buildFarmContextViewModel as buildFarmContextViewModelFromFeature } from './features/farm/farmContextLogic';
 import {
+  runCraftFarmRecipeAction as runCraftFarmRecipeActionFromFeature,
+  runHarvestFarmPlotAction as runHarvestFarmPlotActionFromFeature,
+  runPlantFarmPlotAction as runPlantFarmPlotActionFromFeature,
+  runSleepAtFarmAction as runSleepAtFarmActionFromFeature,
+  runWaterFarmPlotAction as runWaterFarmPlotActionFromFeature,
+} from './features/farm/farmActionHandlers';
+import {
   computeCombatActionAvailability as computeCombatActionAvailabilityFromFeature,
   getPlayerCombatActionAnimation as getPlayerCombatActionAnimationFromFeature,
   validateCombatActionRequest as validateCombatActionRequestFromFeature,
@@ -5675,202 +5682,120 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async sleepAtFarm(): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.farmError = 'Login required to sleep at farm.';
-      this.updateHud();
-      return;
-    }
-
-    if (!this.farmState?.unlocked) {
-      this.farmError = 'Farm is locked.';
-      this.updateHud();
-      return;
-    }
-
-    this.farmBusy = true;
-    this.farmError = null;
-    this.updateHud();
-
-    try {
-      const payload = await this.fetchJson<unknown>('/gameplay/sleep', {
-        method: 'POST',
-      });
-      this.applyGameplaySnapshot(payload);
-      this.farmFeedbackMessage = `Nuit passee. Jour ${this.hudState.day}.`;
-    } catch (error) {
-      this.farmError = this.getErrorMessage(error, 'Unable to sleep right now.');
-    } finally {
-      this.farmBusy = false;
-      this.updateHud();
-    }
+    await runSleepAtFarmActionFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      farmUnlocked: Boolean(this.farmState?.unlocked),
+      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
+      applyGameplaySnapshot: (payload) => this.applyGameplaySnapshot(payload),
+      setFarmBusy: (busy) => {
+        this.farmBusy = busy;
+      },
+      setFarmError: (error) => {
+        this.farmError = error;
+      },
+      setFarmFeedbackMessage: (message) => {
+        this.farmFeedbackMessage = message;
+      },
+      getCurrentDay: () => this.hudState.day,
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private async craftFarmRecipe(recipeKey: string): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.farmCraftingError = 'Login required to craft farm consumables.';
-      this.updateHud();
-      return;
-    }
-
-    const crafting = this.farmCraftingState;
-    if (!crafting?.unlocked) {
-      this.farmCraftingError = 'Farm crafting is locked.';
-      this.updateHud();
-      return;
-    }
-
-    const recipe = crafting.recipes.find((entry) => entry.recipeKey === recipeKey);
-    if (!recipe || !recipe.unlocked) {
-      this.farmCraftingError = 'Recipe is locked.';
-      this.updateHud();
-      return;
-    }
-
-    if (recipe.maxCraftable < 1) {
-      this.farmCraftingError = 'Not enough farm ingredients for this recipe.';
-      this.updateHud();
-      return;
-    }
-
-    this.farmCraftingBusy = true;
-    this.farmCraftingError = null;
-    this.updateHud();
-
-    try {
-      await this.fetchJson('/gameplay/crafting/craft', {
-        method: 'POST',
-        body: JSON.stringify({
-          recipeKey,
-          quantity: 1,
-        }),
-      });
-      await this.refreshGameplayState();
-      await this.refreshVillageMarketState();
-      this.farmFeedbackMessage = `Craft termine: ${this.formatFarmLabel(recipe.outputItemKey)} +${recipe.outputQuantity}.`;
-      this.farmCraftingPanelOpen = true;
-    } catch (error) {
-      this.farmCraftingError = this.getErrorMessage(error, 'Unable to craft this recipe.');
-    } finally {
-      this.farmCraftingBusy = false;
-      this.updateHud();
-    }
+    await runCraftFarmRecipeActionFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      craftingState: this.farmCraftingState,
+      recipeKey,
+      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
+      refreshGameplayState: () => this.refreshGameplayState(),
+      refreshVillageMarketState: () => this.refreshVillageMarketState(),
+      formatFarmLabel: (raw) => this.formatFarmLabel(raw),
+      setFarmFeedbackMessage: (message) => {
+        this.farmFeedbackMessage = message;
+      },
+      setFarmCraftingPanelOpen: (open) => {
+        this.farmCraftingPanelOpen = open;
+      },
+      setFarmCraftingBusy: (busy) => {
+        this.farmCraftingBusy = busy;
+      },
+      setFarmCraftingError: (error) => {
+        this.farmCraftingError = error;
+      },
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private async plantFarmPlot(plotKey: string): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.farmError = 'Login required to plant crops.';
-      this.updateHud();
-      return;
-    }
-
-    if (!this.farmState?.unlocked) {
-      this.farmError = 'Farm is locked.';
-      this.updateHud();
-      return;
-    }
-
-    const seedItemKey = this.farmSelectedSeedItemKey.trim();
-    if (!seedItemKey) {
-      this.farmError = 'Select a seed before planting.';
-      this.updateHud();
-      return;
-    }
-
-    this.farmBusy = true;
-    this.farmError = null;
-    this.updateHud();
-
-    try {
-      await this.fetchJson('/gameplay/farm/plant', {
-        method: 'POST',
-        body: JSON.stringify({
-          plotKey,
-          seedItemKey,
-        }),
-      });
-      await this.refreshGameplayState();
-      await this.refreshVillageMarketState();
-      this.farmFeedbackMessage = `Parcelle semee: ${this.formatFarmLabel(seedItemKey)}.`;
-    } catch (error) {
-      this.farmError = this.getErrorMessage(error, 'Unable to plant this plot.');
-    } finally {
-      this.farmBusy = false;
-      this.updateHud();
-    }
+    await runPlantFarmPlotActionFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      farmUnlocked: Boolean(this.farmState?.unlocked),
+      plotKey,
+      seedItemKey: this.farmSelectedSeedItemKey,
+      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
+      refreshGameplayState: () => this.refreshGameplayState(),
+      refreshVillageMarketState: () => this.refreshVillageMarketState(),
+      formatFarmLabel: (raw) => this.formatFarmLabel(raw),
+      setFarmBusy: (busy) => {
+        this.farmBusy = busy;
+      },
+      setFarmError: (error) => {
+        this.farmError = error;
+      },
+      setFarmFeedbackMessage: (message) => {
+        this.farmFeedbackMessage = message;
+      },
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private async waterFarmPlot(plotKey: string): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.farmError = 'Login required to water crops.';
-      this.updateHud();
-      return;
-    }
-
-    if (!this.farmState?.unlocked) {
-      this.farmError = 'Farm is locked.';
-      this.updateHud();
-      return;
-    }
-
-    this.farmBusy = true;
-    this.farmError = null;
-    this.updateHud();
-
-    try {
-      await this.fetchJson('/gameplay/farm/water', {
-        method: 'POST',
-        body: JSON.stringify({
-          plotKey,
-        }),
-      });
-      await this.refreshGameplayState();
-      this.farmFeedbackMessage = 'Parcelle arrosee.';
-    } catch (error) {
-      this.farmError = this.getErrorMessage(error, 'Unable to water this plot.');
-    } finally {
-      this.farmBusy = false;
-      this.updateHud();
-    }
+    await runWaterFarmPlotActionFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      farmUnlocked: Boolean(this.farmState?.unlocked),
+      plotKey,
+      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
+      refreshGameplayState: () => this.refreshGameplayState(),
+      setFarmBusy: (busy) => {
+        this.farmBusy = busy;
+      },
+      setFarmError: (error) => {
+        this.farmError = error;
+      },
+      setFarmFeedbackMessage: (message) => {
+        this.farmFeedbackMessage = message;
+      },
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private async harvestFarmPlot(plotKey: string): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.farmError = 'Login required to harvest crops.';
-      this.updateHud();
-      return;
-    }
-
-    if (!this.farmState?.unlocked) {
-      this.farmError = 'Farm is locked.';
-      this.updateHud();
-      return;
-    }
-
     const harvestedCropKey = this.getFarmPlotByKey(plotKey)?.cropKey ?? null;
     const harvestedCropLabel = harvestedCropKey ? this.formatFarmLabel(harvestedCropKey) : null;
-
-    this.farmBusy = true;
-    this.farmError = null;
-    this.updateHud();
-
-    try {
-      await this.fetchJson('/gameplay/farm/harvest', {
-        method: 'POST',
-        body: JSON.stringify({
-          plotKey,
-        }),
-      });
-      await this.refreshGameplayState();
-      await this.refreshVillageMarketState();
-      this.farmFeedbackMessage = harvestedCropLabel
-        ? `Recolte terminee: ${harvestedCropLabel}.`
-        : 'Recolte terminee.';
-    } catch (error) {
-      this.farmError = this.getErrorMessage(error, 'Unable to harvest this plot.');
-    } finally {
-      this.farmBusy = false;
-      this.updateHud();
-    }
+    await runHarvestFarmPlotActionFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      farmUnlocked: Boolean(this.farmState?.unlocked),
+      plotKey,
+      harvestedCropLabel,
+      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
+      refreshGameplayState: () => this.refreshGameplayState(),
+      refreshVillageMarketState: () => this.refreshVillageMarketState(),
+      setFarmBusy: (busy) => {
+        this.farmBusy = busy;
+      },
+      setFarmError: (error) => {
+        this.farmError = error;
+      },
+      setFarmFeedbackMessage: (message) => {
+        this.farmFeedbackMessage = message;
+      },
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private async restoreAutoSaveToSlot(slot: number): Promise<void> {

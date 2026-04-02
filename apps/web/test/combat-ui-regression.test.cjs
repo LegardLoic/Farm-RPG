@@ -6,10 +6,21 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 
 const gameScenePath = join(__dirname, '..', 'src', 'game', 'scenes', 'game', 'GameScene.ts');
+const farmActionHandlersPath = join(
+  __dirname,
+  '..',
+  'src',
+  'game',
+  'scenes',
+  'game',
+  'features',
+  'farm',
+  'farmActionHandlers.ts',
+);
 const bootScenePath = join(__dirname, '..', 'src', 'game', 'scenes', 'BootScene.ts');
 const stylesPath = join(__dirname, '..', 'src', 'styles.css');
 
-const gameSceneSource = readFileSync(gameScenePath, 'utf8');
+const gameSceneSource = [readFileSync(gameScenePath, 'utf8'), readFileSync(farmActionHandlersPath, 'utf8')].join('\n');
 const bootSceneSource = readFileSync(bootScenePath, 'utf8');
 const stylesSource = readFileSync(stylesPath, 'utf8');
 
@@ -288,7 +299,11 @@ test('day-night cycle and sleep action wiring exists for lot 91', () => {
   assert.equal(gameSceneSource.includes('private getDayPhaseLabel(): string'), true);
   assert.equal(gameSceneSource.includes('private updateDayPhaseVisual(): void'), true);
   assert.equal(gameSceneSource.includes('private async sleepAtFarm(): Promise<void>'), true);
-  assert.equal(gameSceneSource.includes("await this.fetchJson<unknown>('/gameplay/sleep'"), true);
+  assert.equal(
+    gameSceneSource.includes("await this.fetchJson<unknown>('/gameplay/sleep'") ||
+      gameSceneSource.includes("await input.fetchJson('/gameplay/sleep'"),
+    true,
+  );
   assert.equal(stylesSource.includes('#game-shell[data-day-phase="night"] #game-root'), true);
   assert.equal(stylesSource.includes('.hud-farm-actions'), true);
   assert.equal(stylesSource.includes('.hud-farm-action.sleep'), true);
@@ -304,7 +319,11 @@ test('farm crafting panel wiring exists for lot 92', () => {
   assert.equal(gameSceneSource.includes('private getFarmCraftingSummaryLabel(): string'), true);
   assert.equal(gameSceneSource.includes('private normalizeGameplayCraftingPayload(payload: unknown): FarmCraftingState | null'), true);
   assert.equal(gameSceneSource.includes('private async craftFarmRecipe(recipeKey: string): Promise<void>'), true);
-  assert.equal(gameSceneSource.includes("await this.fetchJson('/gameplay/crafting/craft'"), true);
+  assert.equal(
+    gameSceneSource.includes("await this.fetchJson('/gameplay/crafting/craft'") ||
+      gameSceneSource.includes("await input.fetchJson('/gameplay/crafting/craft'"),
+    true,
+  );
   assert.equal(stylesSource.includes('.hud-farm-crafting'), true);
   assert.equal(stylesSource.includes('.hud-farm-crafting-list'), true);
   assert.equal(stylesSource.includes('.farm-crafting-ingredients'), true);
