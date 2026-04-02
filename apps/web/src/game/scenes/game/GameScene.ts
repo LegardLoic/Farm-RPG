@@ -95,6 +95,7 @@ import {
 } from './features/common/gamepadHudLogic';
 import { updateGamepadInputFrame as updateGamepadInputFrameFromFeature } from './features/common/gamepadInputController';
 import { getSceneObstacleLayout as getSceneObstacleLayoutFromCommon } from './features/common/sceneObstacleLayout';
+import { setFrontSceneModeForScene as setFrontSceneModeForSceneFromCommon } from './features/common/frontSceneModeController';
 import {
   renderFarmCraftingRecipes as renderFarmCraftingRecipesFromFeature,
   renderFarmPanel as renderFarmPanelFromFeature,
@@ -127,6 +128,7 @@ import {
   getLoopSuppliesLabel as getLoopSuppliesLabelFromFeature,
 } from './features/combat/combatLoopHudLogic';
 import { updateLoopHud as updateLoopHudFromFeature } from './features/combat/combatLoopHudRenderer';
+import { runPrepareCombatLoopActionForScene as runPrepareCombatLoopActionForSceneFromFeature } from './features/combat/combatLoopActionHandlers';
 import {
   getCombatLogsFallback as getCombatLogsFallbackFromFeature,
   renderCombatEffectChips as renderCombatEffectChipsFromFeature,
@@ -214,7 +216,6 @@ import {
   getMayorContextDialogue as getMayorContextDialogueFromLogic,
   getMerchantContextDialogue as getMerchantContextDialogueFromLogic,
   getVillageNpcDialogueLabel as getVillageNpcDialogueLabelFromLogic,
-  getVillageNpcDisplayName as getVillageNpcDisplayNameFromLogic,
   getVillageZoneInteractionState as getVillageZoneInteractionStateFromLogic,
   getVillageZoneStateColor as getVillageZoneStateColorFromLogic,
   getVillageZoneStateLabel as getVillageZoneStateLabelFromLogic,
@@ -240,9 +241,11 @@ import { createVillageActionZone as createVillageActionZoneFromFeature } from '.
 import { updateVillageContextPanel as updateVillageContextPanelFromFeature } from './features/village/villageContextHudRenderer';
 import { updateVillageMvpHudForScene as updateVillageMvpHudForSceneFromFeature } from './features/village/villageMvpHudUpdater';
 import {
-  buildVillageInteractionPlanFromState as buildVillageInteractionPlanFromStateFromFeature,
-} from './features/village/villageInteractionController';
-import { runVillageInteractionPlan as runVillageInteractionPlanFromFeature } from './features/village/villageInteractionActionRunner';
+  runVillageInteractionIntentForScene as runVillageInteractionIntentForSceneFromFeature,
+} from './features/village/villageInteractionActionRunner';
+import {
+  runInteractVillageNpcActionForScene as runInteractVillageNpcActionForSceneFromFeature,
+} from './features/village/villageNpcActionHandlers';
 import { updateVillageNpcHud as updateVillageNpcHudFromFeature } from './features/village/villageNpcHudRenderer';
 import {
   getDayPhaseKey as getDayPhaseKeyFromVillageHud,
@@ -291,24 +294,24 @@ import {
 import {
   buildDebugQaRequest as buildDebugQaRequestFromFeature,
   getDebugQaSuccessMessage as getDebugQaSuccessMessageFromFeature,
-  runDebugQaAction as runDebugQaActionFromFeature,
+  runDebugQaActionForScene as runDebugQaActionForSceneFromFeature,
 } from './features/debugQa/debugQaActionHandlers';
 import { updateDebugQaHudForScene as updateDebugQaHudForSceneFromFeature } from './features/debugQa/debugQaHudUpdater';
 import {
-  exportDebugQaMarkdownReport as exportDebugQaMarkdownReportFromFeature,
-  exportDebugQaTrace as exportDebugQaTraceFromFeature,
-  loadCombatDebugScriptedIntents as loadCombatDebugScriptedIntentsFromFeature,
-  triggerDebugQaTraceImport as triggerDebugQaTraceImportFromFeature,
+  exportDebugQaMarkdownReportForScene as exportDebugQaMarkdownReportForSceneFromFeature,
+  exportDebugQaTraceForScene as exportDebugQaTraceForSceneFromFeature,
+  loadCombatDebugScriptedIntentsForScene as loadCombatDebugScriptedIntentsForSceneFromFeature,
+  triggerDebugQaTraceImportForScene as triggerDebugQaTraceImportForSceneFromFeature,
 } from './features/debugQa/debugQaTraceActionHandlers';
 import {
-  advanceDebugQaStepReplay as advanceDebugQaStepReplayFromFeature,
-  handleDebugQaImportFileChange as handleDebugQaImportFileChangeFromFeature,
-  replayImportedDebugQaTrace as replayImportedDebugQaTraceFromFeature,
-  startDebugQaStepReplay as startDebugQaStepReplayFromFeature,
-  stopDebugQaStepReplay as stopDebugQaStepReplayFromFeature,
+  advanceDebugQaStepReplayForScene as advanceDebugQaStepReplayForSceneFromFeature,
+  handleDebugQaImportFileChangeForScene as handleDebugQaImportFileChangeForSceneFromFeature,
+  replayImportedDebugQaTraceForScene as replayImportedDebugQaTraceForSceneFromFeature,
+  startDebugQaStepReplayForScene as startDebugQaStepReplayForSceneFromFeature,
+  stopDebugQaStepReplayForScene as stopDebugQaStepReplayForSceneFromFeature,
 } from './features/debugQa/debugQaReplayActionHandlers';
 import {
-  applyStripCalibrationPreset as applyStripCalibrationPresetFromFeature,
+  applyStripCalibrationPresetForScene as applyStripCalibrationPresetForSceneFromFeature,
   getDebugQaReplayAutoPlayIntervalMs as getDebugQaReplayAutoPlayIntervalMsFromFeature,
   getDebugQaReplayAutoPlaySpeedLabel as getDebugQaReplayAutoPlaySpeedLabelFromFeature,
   persistDebugQaReplayAutoPlaySpeed as persistDebugQaReplayAutoPlaySpeedFromFeature,
@@ -318,8 +321,8 @@ import {
   readStoredDebugQaReplayAutoPlaySpeed as readStoredDebugQaReplayAutoPlaySpeedFromFeature,
   readStoredStripCalibrationPreset as readStoredStripCalibrationPresetFromFeature,
   readStripCalibrationPresetFromUi as readStripCalibrationPresetFromUiFromFeature,
-  stopDebugQaStepReplayAutoPlay as stopDebugQaStepReplayAutoPlayFromFeature,
-  toggleDebugQaStepReplayAutoPlay as toggleDebugQaStepReplayAutoPlayFromFeature,
+  stopDebugQaStepReplayAutoPlayForScene as stopDebugQaStepReplayAutoPlayForSceneFromFeature,
+  toggleDebugQaStepReplayAutoPlayForScene as toggleDebugQaStepReplayAutoPlayForSceneFromFeature,
   writeStorageValue as writeStorageValueFromFeature,
 } from './features/debugQa/debugQaPlaybackCalibrationHandlers';
 import {
@@ -2872,76 +2875,31 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async interactVillageNpc(npcKey: VillageNpcKey): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.villageNpcError = 'Login required to interact with village NPCs.';
-      this.updateHud();
-      return;
-    }
+    await runInteractVillageNpcActionForSceneFromFeature(
+      this as unknown as Parameters<typeof runInteractVillageNpcActionForSceneFromFeature>[0],
+      npcKey,
+    );
+  }
 
-    const npc = this.villageNpcState[npcKey];
-    const relationship = this.villageNpcRelationships[npcKey];
-    if (!npc.available) {
-      this.villageNpcError = `${getVillageNpcDisplayNameFromLogic(npcKey)} is unavailable right now.`;
-      this.updateHud();
-      return;
-    }
-    if (!relationship.canTalkToday) {
-      this.villageNpcError = `${getVillageNpcDisplayNameFromLogic(npcKey)} already talked today.`;
-      this.updateHud();
-      return;
-    }
-
-    this.villageNpcBusy = true;
-    this.villageNpcError = null;
-    this.updateHud();
-
-    try {
-      await this.fetchJson('/gameplay/village/npc/interact', {
-        method: 'POST',
-        body: JSON.stringify({
-          npcKey,
-        }),
-      });
-      await this.refreshGameplayState();
-    } catch (error) {
-      this.villageNpcError = this.getErrorMessage(error, 'Unable to interact with this NPC.');
-    } finally {
-      this.villageNpcBusy = false;
-      this.updateHud();
-    }
+  private async postVillageNpcInteraction(npcKey: VillageNpcKey): Promise<void> {
+    await this.fetchJson('/gameplay/village/npc/interact', {
+      method: 'POST',
+      body: JSON.stringify({
+        npcKey,
+      }),
+    });
   }
 
   private async prepareCombatLoop(): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.loopError = 'Login required to prepare combat.';
-      this.updateHud();
-      return;
-    }
+    await runPrepareCombatLoopActionForSceneFromFeature(
+      this as unknown as Parameters<typeof runPrepareCombatLoopActionForSceneFromFeature>[0],
+    );
+  }
 
-    if (!this.loopState?.preparation.ready) {
-      this.loopError = this.loopState?.preparation.nextStep ?? 'Preparation unavailable.';
-      this.updateHud();
-      return;
-    }
-
-    this.loopBusy = true;
-    this.loopError = null;
-    this.updateHud();
-
-    try {
-      await this.fetchJson('/gameplay/combat/prepare', {
-        method: 'POST',
-      });
-      await this.refreshGameplayState();
-      await this.refreshVillageMarketState();
-      await this.refreshBlacksmithState();
-      await this.refreshQuestState();
-    } catch (error) {
-      this.loopError = this.getErrorMessage(error, 'Unable to prepare combat.');
-    } finally {
-      this.loopBusy = false;
-      this.updateHud();
-    }
+  private async postPrepareCombatLoop(): Promise<void> {
+    await this.fetchJson('/gameplay/combat/prepare', {
+      method: 'POST',
+    });
   }
 
   private async sleepAtFarm(): Promise<void> {
@@ -3485,123 +3443,41 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async exportDebugQaTrace(): Promise<void> {
-    exportDebugQaTraceFromFeature({
-      debugQaEnabled: this.debugQaEnabled,
-      hasDebugQaPanel: Boolean(this.debugQaPanelRoot),
-      syncDebugQaFiltersFromInputs: () => this.syncDebugQaFiltersFromInputs(),
-      buildDebugQaTracePayload: () => this.buildDebugQaTracePayload(),
-      buildDebugQaTraceFilename: (timestamp) => this.buildDebugQaTraceFilename(timestamp),
-      downloadJsonFile: (filename, payload) => this.downloadJsonFile(filename, payload),
-      setDebugQaStatus: (status) => {
-        this.debugQaStatus = status;
-      },
-      setDebugQaError: (value) => {
-        this.debugQaError = value;
-      },
-      setDebugQaMessage: (value) => {
-        this.debugQaMessage = value;
-      },
-      updateHud: () => this.updateHud(),
-    });
+    exportDebugQaTraceForSceneFromFeature(
+      this as unknown as Parameters<typeof exportDebugQaTraceForSceneFromFeature>[0],
+    );
   }
 
   private async exportDebugQaMarkdownReport(): Promise<void> {
-    exportDebugQaMarkdownReportFromFeature({
-      debugQaEnabled: this.debugQaEnabled,
-      hasDebugQaPanel: Boolean(this.debugQaPanelRoot),
-      syncDebugQaFiltersFromInputs: () => this.syncDebugQaFiltersFromInputs(),
-      buildDebugQaMarkdownReport: (timestamp) => this.buildDebugQaMarkdownReport(timestamp),
-      buildDebugQaMarkdownFilename: (timestamp) => this.buildDebugQaMarkdownFilename(timestamp),
-      downloadTextFile: (filename, contents, contentType) => this.downloadTextFile(filename, contents, contentType),
-      setDebugQaStatus: (status) => {
-        this.debugQaStatus = status;
-      },
-      setDebugQaError: (value) => {
-        this.debugQaError = value;
-      },
-      setDebugQaMessage: (value) => {
-        this.debugQaMessage = value;
-      },
-      updateHud: () => this.updateHud(),
-    });
+    exportDebugQaMarkdownReportForSceneFromFeature(
+      this as unknown as Parameters<typeof exportDebugQaMarkdownReportForSceneFromFeature>[0],
+    );
   }
 
   private async loadCombatDebugScriptedIntents(): Promise<void> {
-    await loadCombatDebugScriptedIntentsFromFeature({
-      debugQaEnabled: this.debugQaEnabled,
-      hasDebugQaPanel: Boolean(this.debugQaPanelRoot),
-      debugQaStatus: this.debugQaStatus,
-      setDebugQaStatus: (status) => {
-        this.debugQaStatus = status;
-      },
-      setDebugQaError: (value) => {
-        this.debugQaError = value;
-      },
-      setDebugQaMessage: (value) => {
-        this.debugQaMessage = value;
-      },
-      setDebugQaScriptedIntentsReference: (reference) => {
-        this.debugQaScriptedIntentsReference = reference;
-      },
-      setDebugQaScriptedIntentsText: (value) => {
-        this.debugQaScriptedIntentsText = value;
-      },
-      fetchJson: (path) => this.fetchJson<CombatDebugReference>(path),
-      formatCombatDebugScriptedIntentsReference: (reference) =>
-        this.formatCombatDebugScriptedIntentsReference(reference),
-      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
-      updateHud: () => this.updateHud(),
-    });
+    await loadCombatDebugScriptedIntentsForSceneFromFeature(
+      this as unknown as Parameters<typeof loadCombatDebugScriptedIntentsForSceneFromFeature>[0],
+    );
   }
 
   private triggerDebugQaTraceImport(): void {
-    triggerDebugQaTraceImportFromFeature({
-      debugQaEnabled: this.debugQaEnabled,
-      debugQaStatus: this.debugQaStatus,
-      importFileInput: this.debugQaImportFileInput,
-    });
+    triggerDebugQaTraceImportForSceneFromFeature(
+      this as unknown as Parameters<typeof triggerDebugQaTraceImportForSceneFromFeature>[0],
+    );
   }
 
   private toggleDebugQaStepReplayAutoPlay(): void {
-    toggleDebugQaStepReplayAutoPlayFromFeature({
-      stepReplayState: this.debugQaStepReplayState,
-      replayAutoPlayIntervalId: this.debugQaReplayAutoPlayIntervalId,
-      replayAutoPlaySpeedSelectValue:
-        this.debugQaReplayAutoPlaySpeedSelect?.value ?? this.debugQaReplayAutoPlaySpeed,
-      replayAutoPlaySpeed: this.debugQaReplayAutoPlaySpeed,
-      replayAutoPlaySpeedOptions: DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS,
-      setReplayAutoPlaySpeed: (value) => {
-        this.debugQaReplayAutoPlaySpeed = value;
-      },
-      setReplayAutoPlayIntervalId: (value) => {
-        this.debugQaReplayAutoPlayIntervalId = value;
-      },
-      persistDebugQaReplayAutoPlaySpeed: (value) => this.persistDebugQaReplayAutoPlaySpeed(value),
-      stopDebugQaStepReplayAutoPlay: (updateHud) => this.stopDebugQaStepReplayAutoPlay(updateHud),
-      advanceDebugQaStepReplay: () => this.advanceDebugQaStepReplay(),
-      hasStepReplayState: () => this.debugQaStepReplayState !== null,
-      setDebugQaStatus: (value) => {
-        this.debugQaStatus = value;
-      },
-      setDebugQaError: (value) => {
-        this.debugQaError = value;
-      },
-      setDebugQaMessage: (value) => {
-        this.debugQaMessage = value;
-      },
-      updateHud: () => this.updateHud(),
-    });
+    toggleDebugQaStepReplayAutoPlayForSceneFromFeature(
+      this as unknown as Parameters<typeof toggleDebugQaStepReplayAutoPlayForSceneFromFeature>[0],
+      DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS,
+    );
   }
 
   private stopDebugQaStepReplayAutoPlay(updateHud: boolean): void {
-    stopDebugQaStepReplayAutoPlayFromFeature({
-      replayAutoPlayIntervalId: this.debugQaReplayAutoPlayIntervalId,
-      setReplayAutoPlayIntervalId: (value) => {
-        this.debugQaReplayAutoPlayIntervalId = value;
-      },
-      updateHudOnStop: updateHud,
-      updateHud: () => this.updateHud(),
-    });
+    stopDebugQaStepReplayAutoPlayForSceneFromFeature(
+      this as unknown as Parameters<typeof stopDebugQaStepReplayAutoPlayForSceneFromFeature>[0],
+      updateHud,
+    );
   }
 
   private readDebugQaReplayAutoPlaySpeed(): DebugQaReplayAutoPlaySpeedKey {
@@ -3634,28 +3510,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyStripCalibrationPreset(): void {
-    applyStripCalibrationPresetFromFeature({
-      stripCalibrationEnabled: this.stripCalibrationEnabled,
-      stripCalibrationPresetSelectValue:
-        this.debugQaStripCalibrationSelect?.value ?? this.stripCalibrationPreset,
-      stripCalibrationPreset: this.stripCalibrationPreset,
-      persistStripCalibrationPreset: (value) => this.persistStripCalibrationPreset(value),
-      setStripCalibrationPreset: (value) => {
-        this.stripCalibrationPreset = value;
-      },
-      refreshStripCalibrationRuntime: () => this.refreshStripCalibrationRuntime(),
-      getActiveStripCalibrationPreset: () => this.getActiveStripCalibrationPreset(),
-      setDebugQaStatus: (value) => {
-        this.debugQaStatus = value;
-      },
-      setDebugQaError: (value) => {
-        this.debugQaError = value;
-      },
-      setDebugQaMessage: (value) => {
-        this.debugQaMessage = value;
-      },
-      updateHud: () => this.updateHud(),
-    });
+    applyStripCalibrationPresetForSceneFromFeature(
+      this as unknown as Parameters<typeof applyStripCalibrationPresetForSceneFromFeature>[0],
+    );
   }
 
   private readStripCalibrationPresetFromUi(): StripCalibrationPresetKey {
@@ -3719,123 +3576,28 @@ export class GameScene extends Phaser.Scene {
   }
 
   private replayImportedDebugQaTrace(): void {
-    replayImportedDebugQaTraceFromFeature({
-      debugQaEnabled: this.debugQaEnabled,
-      importedTrace: this.debugQaImportedTrace,
-      stopDebugQaStepReplay: (restoreBaseline) => this.stopDebugQaStepReplay(restoreBaseline),
-      applyImportedDebugQaTrace: (trace) => this.applyImportedDebugQaTrace(trace),
-      setDebugQaStatus: (status) => {
-        this.debugQaStatus = status;
-      },
-      setDebugQaError: (value) => {
-        this.debugQaError = value;
-      },
-      setDebugQaMessage: (value) => {
-        this.debugQaMessage = value;
-      },
-      updateHud: () => this.updateHud(),
-    });
+    replayImportedDebugQaTraceForSceneFromFeature(
+      this as unknown as Parameters<typeof replayImportedDebugQaTraceForSceneFromFeature>[0],
+    );
   }
 
   private startDebugQaStepReplay(): void {
-    startDebugQaStepReplayFromFeature({
-      debugQaEnabled: this.debugQaEnabled,
-      importedTrace: this.debugQaImportedTrace,
-      stopDebugQaStepReplay: (restoreBaseline) => this.stopDebugQaStepReplay(restoreBaseline),
-      captureDebugQaReplayBaseline: () => this.captureDebugQaReplayBaseline(),
-      applyImportedDebugQaTrace: (trace) => this.applyImportedDebugQaTrace(trace),
-      cloneCombatState: (state) => this.cloneCombatState(state),
-      combatState: this.combatState,
-      setCombatState: (state) => {
-        this.combatState = state;
-      },
-      setCombatStatus: (status) => {
-        this.combatStatus = status;
-      },
-      setCombatLogs: (logs) => {
-        this.combatLogs = logs;
-      },
-      setCombatMessage: (value) => {
-        this.combatMessage = value;
-      },
-      setCombatError: (value) => {
-        this.combatError = value;
-      },
-      setDebugQaStepReplayState: (value) => {
-        this.debugQaStepReplayState = value;
-      },
-      setDebugQaStatus: (status) => {
-        this.debugQaStatus = status;
-      },
-      setDebugQaError: (value) => {
-        this.debugQaError = value;
-      },
-      setDebugQaMessage: (value) => {
-        this.debugQaMessage = value;
-      },
-      updateHud: () => this.updateHud(),
-    });
+    startDebugQaStepReplayForSceneFromFeature(
+      this as unknown as Parameters<typeof startDebugQaStepReplayForSceneFromFeature>[0],
+    );
   }
 
   private advanceDebugQaStepReplay(): void {
-    advanceDebugQaStepReplayFromFeature({
-      stepReplayState: this.debugQaStepReplayState,
-      stopDebugQaStepReplayAutoPlay: (updateHud) => this.stopDebugQaStepReplayAutoPlay(updateHud),
-      applyImportedDebugQaTrace: (trace) => this.applyImportedDebugQaTrace(trace),
-      cloneCombatState: (state) => this.cloneCombatState(state),
-      combatState: this.combatState,
-      combatMessage: this.combatMessage,
-      setCombatState: (state) => {
-        this.combatState = state;
-      },
-      setCombatStatus: (status) => {
-        this.combatStatus = status;
-      },
-      setCombatLogs: (logs) => {
-        this.combatLogs = logs;
-      },
-      setCombatMessage: (value) => {
-        this.combatMessage = value;
-      },
-      setCombatError: (value) => {
-        this.combatError = value;
-      },
-      setDebugQaStepReplayState: (value) => {
-        this.debugQaStepReplayState = value;
-      },
-      setDebugQaStatus: (status) => {
-        this.debugQaStatus = status;
-      },
-      setDebugQaError: (value) => {
-        this.debugQaError = value;
-      },
-      setDebugQaMessage: (value) => {
-        this.debugQaMessage = value;
-      },
-      updateHud: () => this.updateHud(),
-    });
+    advanceDebugQaStepReplayForSceneFromFeature(
+      this as unknown as Parameters<typeof advanceDebugQaStepReplayForSceneFromFeature>[0],
+    );
   }
 
   private stopDebugQaStepReplay(restoreBaseline: boolean): void {
-    stopDebugQaStepReplayFromFeature({
+    stopDebugQaStepReplayForSceneFromFeature(
+      this as unknown as Parameters<typeof stopDebugQaStepReplayForSceneFromFeature>[0],
       restoreBaseline,
-      stopDebugQaStepReplayAutoPlay: (updateHud) => this.stopDebugQaStepReplayAutoPlay(updateHud),
-      stepReplayState: this.debugQaStepReplayState,
-      setDebugQaStepReplayState: (value) => {
-        this.debugQaStepReplayState = value;
-      },
-      restoreDebugQaReplayBaseline: (baseline) => this.restoreDebugQaReplayBaseline(baseline),
-      setDebugQaStatus: (status) => {
-        this.debugQaStatus = status;
-      },
-      setDebugQaError: (value) => {
-        this.debugQaError = value;
-      },
-      setDebugQaMessage: (value) => {
-        this.debugQaMessage = value;
-      },
-      updateHud: () => this.updateHud(),
-    });
+    );
   }
 
   private captureDebugQaReplayBaseline(): DebugQaReplayBaseline {
@@ -3872,27 +3634,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async handleDebugQaImportFileChange(event: Event): Promise<void> {
-    await handleDebugQaImportFileChangeFromFeature({
+    await handleDebugQaImportFileChangeForSceneFromFeature(
+      this as unknown as Parameters<typeof handleDebugQaImportFileChangeForSceneFromFeature>[0],
       event,
-      debugQaEnabled: this.debugQaEnabled,
-      stepReplayState: this.debugQaStepReplayState,
-      stopDebugQaStepReplay: (restoreBaseline) => this.stopDebugQaStepReplay(restoreBaseline),
-      parseImportedDebugQaTrace: (rawPayload, sourceFile) => this.parseImportedDebugQaTrace(rawPayload, sourceFile),
-      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
-      setDebugQaImportedTrace: (trace) => {
-        this.debugQaImportedTrace = trace;
-      },
-      setDebugQaStatus: (status) => {
-        this.debugQaStatus = status;
-      },
-      setDebugQaError: (value) => {
-        this.debugQaError = value;
-      },
-      setDebugQaMessage: (value) => {
-        this.debugQaMessage = value;
-      },
-      updateHud: () => this.updateHud(),
-    });
+    );
   }
 
   private parseImportedDebugQaTrace(rawPayload: unknown, sourceFile: string): ImportedDebugQaTrace | null {
@@ -3985,29 +3730,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async handleDebugQaAction(action: DebugQaActionName): Promise<void> {
-    await runDebugQaActionFromFeature({
+    await runDebugQaActionForSceneFromFeature(
+      this as unknown as Parameters<typeof runDebugQaActionForSceneFromFeature>[0],
       action,
-      debugQaEnabled: this.debugQaEnabled,
-      isAuthenticated: this.isAuthenticated,
-      request: this.buildDebugQaRequest(action),
-      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
-      setDebugQaBusyAction: (value) => {
-        this.debugQaBusyAction = value;
-      },
-      setDebugQaStatus: (value) => {
-        this.debugQaStatus = value;
-      },
-      setDebugQaError: (value) => {
-        this.debugQaError = value;
-      },
-      setDebugQaMessage: (value) => {
-        this.debugQaMessage = value;
-      },
-      getDebugQaSuccessMessage: (payload, fallback) => this.getDebugQaSuccessMessage(action, payload, fallback),
-      bootstrapSessionState: () => this.bootstrapSessionState(),
-      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
-      updateHud: () => this.updateHud(),
-    });
+    );
   }
 
   private buildDebugQaRequest(
@@ -4469,38 +4195,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setFrontSceneMode(mode: FrontSceneMode, feedbackMessage: string): void {
-    const modeChanged = this.frontSceneMode !== mode;
-    this.frontSceneMode = mode;
-    this.hudState.area = mode === 'farm' ? 'Ferme' : 'Village';
-
-    if (mode === 'farm') {
-      this.farmFeedbackMessage = feedbackMessage;
-      this.villageFeedbackMessage = null;
-      this.villageShopControllerState = closeVillageShopControllerPanelFromFeature(this.villageShopControllerState);
-      this.player.setPosition(FARM_SCENE_PLAYER_SPAWN.x, FARM_SCENE_PLAYER_SPAWN.y);
-    } else {
-      this.villageFeedbackMessage = feedbackMessage;
-      this.farmFeedbackMessage = null;
-      if (modeChanged) {
-        this.villageShopControllerState = closeVillageShopControllerPanelFromFeature(this.villageShopControllerState);
-      }
-      this.player.setPosition(VILLAGE_SCENE_PLAYER_SPAWN.x, VILLAGE_SCENE_PLAYER_SPAWN.y);
-      this.ensureVillageSelectedZone();
-    }
-
-    this.player.body?.setVelocity(0, 0);
-
-    if (modeChanged) {
-      this.drawDecor();
-      this.rebuildSceneObstacles();
-      this.syncHudSceneMode();
-    } else if (mode === 'village') {
-      this.renderVillageScene();
-    } else {
-      this.renderFarmScene();
-    }
-
-    this.updateHud();
+    setFrontSceneModeForSceneFromCommon(
+      this as unknown as Parameters<typeof setFrontSceneModeForSceneFromCommon>[0],
+      {
+        mode,
+        feedbackMessage,
+        farmSpawn: FARM_SCENE_PLAYER_SPAWN,
+        villageSpawn: VILLAGE_SCENE_PLAYER_SPAWN,
+      },
+    );
   }
 
   private handleVillageHotkeys(): void {
@@ -4520,40 +4223,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async handleVillageInteractionIntent(targetKey?: VillageSceneZoneKey): Promise<void> {
-    if (this.frontSceneMode !== 'village') {
-      return;
-    }
-
-    const interactionPlan = buildVillageInteractionPlanFromStateFromFeature({
+    await runVillageInteractionIntentForSceneFromFeature(
+      this as unknown as Parameters<typeof runVillageInteractionIntentForSceneFromFeature>[0],
+      VILLAGE_SCENE_ZONES,
       targetKey,
-      selectedZoneKey: this.villageSelectedZoneKey,
-      zones: VILLAGE_SCENE_ZONES,
-      isAuthenticated: this.isAuthenticated,
-      villageMarketUnlocked: this.villageMarketUnlocked,
-      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
-      blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
-      villageNpcState: this.villageNpcState,
-      villageNpcRelationships: this.villageNpcRelationships,
-      villageShopPanelOpen: this.villageShopControllerState.isOpen,
-      towerHighestFloor: this.hudState.towerHighestFloor,
-    });
-    await runVillageInteractionPlanFromFeature({
-      steps: interactionPlan.steps,
-      setSelectedZone: (zoneKey, announceSelection) => this.setVillageSelectedZone(zoneKey, announceSelection),
-      closeShopPanel: () => {
-        this.villageShopControllerState = closeVillageShopControllerPanelFromFeature(this.villageShopControllerState);
-      },
-      openShopPanel: (shopType, feedbackMessage) => this.openVillageShopPanel(shopType, feedbackMessage),
-      interactVillageNpc: async (npcKey) => {
-        await this.interactVillageNpc(npcKey);
-        return !this.villageNpcError;
-      },
-      setFrontSceneMode: (mode, feedbackMessage) => this.setFrontSceneMode(mode, feedbackMessage),
-      setVillageFeedbackMessage: (message) => {
-        this.villageFeedbackMessage = message;
-      },
-      updateHud: () => this.updateHud(),
-    });
+    );
+  }
+
+  private closeVillageShopPanelForInteractionIntent(): void {
+    this.villageShopControllerState = closeVillageShopControllerPanelFromFeature(this.villageShopControllerState);
   }
 
   private handleFarmHotkeys(): void {

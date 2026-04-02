@@ -182,3 +182,103 @@ export function writeStorageValue(key: string, value: string): void {
     // Ignore storage quota / privacy mode failures.
   }
 }
+
+export type DebugQaReplayAutoPlaySceneLike = {
+  debugQaStepReplayState: DebugQaStepReplayState | null;
+  debugQaReplayAutoPlayIntervalId: number | null;
+  debugQaReplayAutoPlaySpeedSelect: HTMLSelectElement | null;
+  debugQaReplayAutoPlaySpeed: DebugQaReplayAutoPlaySpeedKey;
+  debugQaStatus: DebugQaStatus;
+  debugQaError: string | null;
+  debugQaMessage: string | null;
+  stopDebugQaStepReplayAutoPlay(updateHud: boolean): void;
+  advanceDebugQaStepReplay(): void;
+  persistDebugQaReplayAutoPlaySpeed(speed: DebugQaReplayAutoPlaySpeedKey): void;
+  updateHud(): void;
+};
+
+export type StripCalibrationSceneLike = {
+  stripCalibrationEnabled: boolean;
+  debugQaStripCalibrationSelect: HTMLSelectElement | null;
+  stripCalibrationPreset: StripCalibrationPresetKey;
+  debugQaStatus: DebugQaStatus;
+  debugQaError: string | null;
+  debugQaMessage: string | null;
+  persistStripCalibrationPreset(preset: StripCalibrationPresetKey): void;
+  refreshStripCalibrationRuntime(): void;
+  getActiveStripCalibrationPreset(): StripCalibrationPreset | null;
+  updateHud(): void;
+};
+
+export function toggleDebugQaStepReplayAutoPlayForScene(
+  scene: DebugQaReplayAutoPlaySceneLike,
+  replayAutoPlaySpeedOptions: DebugQaReplayAutoPlaySpeedOption[],
+): void {
+  toggleDebugQaStepReplayAutoPlay({
+    stepReplayState: scene.debugQaStepReplayState,
+    replayAutoPlayIntervalId: scene.debugQaReplayAutoPlayIntervalId,
+    replayAutoPlaySpeedSelectValue:
+      scene.debugQaReplayAutoPlaySpeedSelect?.value ?? scene.debugQaReplayAutoPlaySpeed,
+    replayAutoPlaySpeed: scene.debugQaReplayAutoPlaySpeed,
+    replayAutoPlaySpeedOptions,
+    setReplayAutoPlaySpeed: (value) => {
+      scene.debugQaReplayAutoPlaySpeed = value;
+    },
+    setReplayAutoPlayIntervalId: (value) => {
+      scene.debugQaReplayAutoPlayIntervalId = value;
+    },
+    persistDebugQaReplayAutoPlaySpeed: (value) => scene.persistDebugQaReplayAutoPlaySpeed(value),
+    stopDebugQaStepReplayAutoPlay: (updateHud) => scene.stopDebugQaStepReplayAutoPlay(updateHud),
+    advanceDebugQaStepReplay: () => scene.advanceDebugQaStepReplay(),
+    hasStepReplayState: () => scene.debugQaStepReplayState !== null,
+    setDebugQaStatus: (value) => {
+      scene.debugQaStatus = value;
+    },
+    setDebugQaError: (value) => {
+      scene.debugQaError = value;
+    },
+    setDebugQaMessage: (value) => {
+      scene.debugQaMessage = value;
+    },
+    updateHud: () => scene.updateHud(),
+  });
+}
+
+export function stopDebugQaStepReplayAutoPlayForScene(
+  scene: DebugQaReplayAutoPlaySceneLike,
+  updateHudOnStop: boolean,
+): void {
+  stopDebugQaStepReplayAutoPlay({
+    replayAutoPlayIntervalId: scene.debugQaReplayAutoPlayIntervalId,
+    setReplayAutoPlayIntervalId: (value) => {
+      scene.debugQaReplayAutoPlayIntervalId = value;
+    },
+    updateHudOnStop,
+    updateHud: () => scene.updateHud(),
+  });
+}
+
+export function applyStripCalibrationPresetForScene(scene: StripCalibrationSceneLike): void {
+  applyStripCalibrationPreset({
+    stripCalibrationEnabled: scene.stripCalibrationEnabled,
+    stripCalibrationPresetSelectValue:
+      scene.debugQaStripCalibrationSelect?.value ?? scene.stripCalibrationPreset,
+    stripCalibrationPreset: scene.stripCalibrationPreset,
+    persistStripCalibrationPreset: (value) => scene.persistStripCalibrationPreset(value),
+    setStripCalibrationPreset: (value) => {
+      scene.stripCalibrationPreset = value;
+    },
+    refreshStripCalibrationRuntime: () => scene.refreshStripCalibrationRuntime(),
+    getActiveStripCalibrationPreset: () => scene.getActiveStripCalibrationPreset(),
+    setDebugQaStatus: (value) => {
+      scene.debugQaStatus = value;
+    },
+    setDebugQaError: (value) => {
+      scene.debugQaError = value;
+    },
+    setDebugQaMessage: (value) => {
+      scene.debugQaMessage = value;
+    },
+    updateHud: () => scene.updateHud(),
+  });
+}

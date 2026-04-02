@@ -5,6 +5,28 @@ import type {
 } from '../../gameScene.stateTypes';
 import { applyDebugQaFeedback } from './debugQaStateAdapters';
 
+export type DebugQaTraceSceneLike = {
+  debugQaEnabled: boolean;
+  debugQaPanelRoot: HTMLElement | null;
+  debugQaStatus: DebugQaStatus;
+  debugQaImportFileInput: HTMLInputElement | null;
+  debugQaScriptedIntentsReference: CombatDebugReference | null;
+  debugQaScriptedIntentsText: string;
+  debugQaError: string | null;
+  debugQaMessage: string | null;
+  syncDebugQaFiltersFromInputs(): void;
+  buildDebugQaTracePayload(): DebugQaTracePayload;
+  buildDebugQaTraceFilename(timestamp: string): string;
+  buildDebugQaMarkdownReport(timestamp: string): string;
+  buildDebugQaMarkdownFilename(timestamp: string): string;
+  downloadJsonFile(filename: string, payload: unknown): void;
+  downloadTextFile(filename: string, contents: string, contentType?: string): void;
+  fetchJson<T>(path: string): Promise<T>;
+  formatCombatDebugScriptedIntentsReference(reference: CombatDebugReference): string;
+  getErrorMessage(error: unknown, fallback: string): string;
+  updateHud(): void;
+};
+
 export function exportDebugQaTrace(input: {
   debugQaEnabled: boolean;
   hasDebugQaPanel: boolean;
@@ -122,4 +144,81 @@ export function triggerDebugQaTraceImport(input: {
 
   input.importFileInput.value = '';
   input.importFileInput.click();
+}
+
+export function exportDebugQaTraceForScene(scene: DebugQaTraceSceneLike): void {
+  exportDebugQaTrace({
+    debugQaEnabled: scene.debugQaEnabled,
+    hasDebugQaPanel: Boolean(scene.debugQaPanelRoot),
+    syncDebugQaFiltersFromInputs: () => scene.syncDebugQaFiltersFromInputs(),
+    buildDebugQaTracePayload: () => scene.buildDebugQaTracePayload(),
+    buildDebugQaTraceFilename: (timestamp) => scene.buildDebugQaTraceFilename(timestamp),
+    downloadJsonFile: (filename, payload) => scene.downloadJsonFile(filename, payload),
+    setDebugQaStatus: (status) => {
+      scene.debugQaStatus = status;
+    },
+    setDebugQaError: (value) => {
+      scene.debugQaError = value;
+    },
+    setDebugQaMessage: (value) => {
+      scene.debugQaMessage = value;
+    },
+    updateHud: () => scene.updateHud(),
+  });
+}
+
+export function exportDebugQaMarkdownReportForScene(scene: DebugQaTraceSceneLike): void {
+  exportDebugQaMarkdownReport({
+    debugQaEnabled: scene.debugQaEnabled,
+    hasDebugQaPanel: Boolean(scene.debugQaPanelRoot),
+    syncDebugQaFiltersFromInputs: () => scene.syncDebugQaFiltersFromInputs(),
+    buildDebugQaMarkdownReport: (timestamp) => scene.buildDebugQaMarkdownReport(timestamp),
+    buildDebugQaMarkdownFilename: (timestamp) => scene.buildDebugQaMarkdownFilename(timestamp),
+    downloadTextFile: (filename, contents, contentType) => scene.downloadTextFile(filename, contents, contentType),
+    setDebugQaStatus: (status) => {
+      scene.debugQaStatus = status;
+    },
+    setDebugQaError: (value) => {
+      scene.debugQaError = value;
+    },
+    setDebugQaMessage: (value) => {
+      scene.debugQaMessage = value;
+    },
+    updateHud: () => scene.updateHud(),
+  });
+}
+
+export async function loadCombatDebugScriptedIntentsForScene(scene: DebugQaTraceSceneLike): Promise<void> {
+  await loadCombatDebugScriptedIntents({
+    debugQaEnabled: scene.debugQaEnabled,
+    hasDebugQaPanel: Boolean(scene.debugQaPanelRoot),
+    debugQaStatus: scene.debugQaStatus,
+    setDebugQaStatus: (status) => {
+      scene.debugQaStatus = status;
+    },
+    setDebugQaError: (value) => {
+      scene.debugQaError = value;
+    },
+    setDebugQaMessage: (value) => {
+      scene.debugQaMessage = value;
+    },
+    setDebugQaScriptedIntentsReference: (reference) => {
+      scene.debugQaScriptedIntentsReference = reference;
+    },
+    setDebugQaScriptedIntentsText: (value) => {
+      scene.debugQaScriptedIntentsText = value;
+    },
+    fetchJson: (path) => scene.fetchJson<CombatDebugReference>(path),
+    formatCombatDebugScriptedIntentsReference: (reference) => scene.formatCombatDebugScriptedIntentsReference(reference),
+    getErrorMessage: (error, fallback) => scene.getErrorMessage(error, fallback),
+    updateHud: () => scene.updateHud(),
+  });
+}
+
+export function triggerDebugQaTraceImportForScene(scene: DebugQaTraceSceneLike): void {
+  triggerDebugQaTraceImport({
+    debugQaEnabled: scene.debugQaEnabled,
+    debugQaStatus: scene.debugQaStatus,
+    importFileInput: scene.debugQaImportFileInput,
+  });
 }

@@ -8,6 +8,29 @@ import type {
 } from '../../gameScene.stateTypes';
 import { applyDebugQaFeedback } from './debugQaStateAdapters';
 
+export type DebugQaReplaySceneLike = {
+  debugQaEnabled: boolean;
+  debugQaImportedTrace: ImportedDebugQaTrace | null;
+  debugQaStepReplayState: DebugQaStepReplayState | null;
+  debugQaStatus: DebugQaStatus;
+  debugQaError: string | null;
+  debugQaMessage: string | null;
+  combatState: CombatEncounterState | null;
+  combatStatus: CombatUiStatus;
+  combatLogs: string[];
+  combatMessage: string;
+  combatError: string | null;
+  stopDebugQaStepReplay(restoreBaseline: boolean): void;
+  stopDebugQaStepReplayAutoPlay(updateHud: boolean): void;
+  captureDebugQaReplayBaseline(): DebugQaReplayBaseline;
+  applyImportedDebugQaTrace(trace: ImportedDebugQaTrace): void;
+  cloneCombatState(state: CombatEncounterState): CombatEncounterState;
+  restoreDebugQaReplayBaseline(baseline: DebugQaReplayBaseline): void;
+  parseImportedDebugQaTrace(rawPayload: unknown, sourceFile: string): ImportedDebugQaTrace | null;
+  getErrorMessage(error: unknown, fallback: string): string;
+  updateHud(): void;
+};
+
 export function replayImportedDebugQaTrace(input: {
   debugQaEnabled: boolean;
   importedTrace: ImportedDebugQaTrace | null;
@@ -270,4 +293,151 @@ export async function handleDebugQaImportFileChange(input: {
       sourceInput.value = '';
     }
   }
+}
+
+export function replayImportedDebugQaTraceForScene(scene: DebugQaReplaySceneLike): void {
+  replayImportedDebugQaTrace({
+    debugQaEnabled: scene.debugQaEnabled,
+    importedTrace: scene.debugQaImportedTrace,
+    stopDebugQaStepReplay: (restoreBaseline) => scene.stopDebugQaStepReplay(restoreBaseline),
+    applyImportedDebugQaTrace: (trace) => scene.applyImportedDebugQaTrace(trace),
+    setDebugQaStatus: (status) => {
+      scene.debugQaStatus = status;
+    },
+    setDebugQaError: (value) => {
+      scene.debugQaError = value;
+    },
+    setDebugQaMessage: (value) => {
+      scene.debugQaMessage = value;
+    },
+    updateHud: () => scene.updateHud(),
+  });
+}
+
+export function startDebugQaStepReplayForScene(scene: DebugQaReplaySceneLike): void {
+  startDebugQaStepReplay({
+    debugQaEnabled: scene.debugQaEnabled,
+    importedTrace: scene.debugQaImportedTrace,
+    stopDebugQaStepReplay: (restoreBaseline) => scene.stopDebugQaStepReplay(restoreBaseline),
+    captureDebugQaReplayBaseline: () => scene.captureDebugQaReplayBaseline(),
+    applyImportedDebugQaTrace: (trace) => scene.applyImportedDebugQaTrace(trace),
+    cloneCombatState: (state) => scene.cloneCombatState(state),
+    combatState: scene.combatState,
+    setCombatState: (state) => {
+      scene.combatState = state;
+    },
+    setCombatStatus: (status) => {
+      scene.combatStatus = status;
+    },
+    setCombatLogs: (logs) => {
+      scene.combatLogs = logs;
+    },
+    setCombatMessage: (value) => {
+      scene.combatMessage = value;
+    },
+    setCombatError: (value) => {
+      scene.combatError = value;
+    },
+    setDebugQaStepReplayState: (value) => {
+      scene.debugQaStepReplayState = value;
+    },
+    setDebugQaStatus: (status) => {
+      scene.debugQaStatus = status;
+    },
+    setDebugQaError: (value) => {
+      scene.debugQaError = value;
+    },
+    setDebugQaMessage: (value) => {
+      scene.debugQaMessage = value;
+    },
+    updateHud: () => scene.updateHud(),
+  });
+}
+
+export function advanceDebugQaStepReplayForScene(scene: DebugQaReplaySceneLike): void {
+  advanceDebugQaStepReplay({
+    stepReplayState: scene.debugQaStepReplayState,
+    stopDebugQaStepReplayAutoPlay: (updateHud) => scene.stopDebugQaStepReplayAutoPlay(updateHud),
+    applyImportedDebugQaTrace: (trace) => scene.applyImportedDebugQaTrace(trace),
+    cloneCombatState: (state) => scene.cloneCombatState(state),
+    combatState: scene.combatState,
+    combatMessage: scene.combatMessage,
+    setCombatState: (state) => {
+      scene.combatState = state;
+    },
+    setCombatStatus: (status) => {
+      scene.combatStatus = status;
+    },
+    setCombatLogs: (logs) => {
+      scene.combatLogs = logs;
+    },
+    setCombatMessage: (value) => {
+      scene.combatMessage = value;
+    },
+    setCombatError: (value) => {
+      scene.combatError = value;
+    },
+    setDebugQaStepReplayState: (value) => {
+      scene.debugQaStepReplayState = value;
+    },
+    setDebugQaStatus: (status) => {
+      scene.debugQaStatus = status;
+    },
+    setDebugQaError: (value) => {
+      scene.debugQaError = value;
+    },
+    setDebugQaMessage: (value) => {
+      scene.debugQaMessage = value;
+    },
+    updateHud: () => scene.updateHud(),
+  });
+}
+
+export function stopDebugQaStepReplayForScene(scene: DebugQaReplaySceneLike, restoreBaseline: boolean): void {
+  stopDebugQaStepReplay({
+    restoreBaseline,
+    stopDebugQaStepReplayAutoPlay: (updateHud) => scene.stopDebugQaStepReplayAutoPlay(updateHud),
+    stepReplayState: scene.debugQaStepReplayState,
+    setDebugQaStepReplayState: (value) => {
+      scene.debugQaStepReplayState = value;
+    },
+    restoreDebugQaReplayBaseline: (baseline) => scene.restoreDebugQaReplayBaseline(baseline),
+    setDebugQaStatus: (status) => {
+      scene.debugQaStatus = status;
+    },
+    setDebugQaError: (value) => {
+      scene.debugQaError = value;
+    },
+    setDebugQaMessage: (value) => {
+      scene.debugQaMessage = value;
+    },
+    updateHud: () => scene.updateHud(),
+  });
+}
+
+export async function handleDebugQaImportFileChangeForScene(
+  scene: DebugQaReplaySceneLike,
+  event: Event,
+): Promise<void> {
+  await handleDebugQaImportFileChange({
+    event,
+    debugQaEnabled: scene.debugQaEnabled,
+    stepReplayState: scene.debugQaStepReplayState,
+    stopDebugQaStepReplay: (restoreBaseline) => scene.stopDebugQaStepReplay(restoreBaseline),
+    parseImportedDebugQaTrace: (rawPayload, sourceFile) => scene.parseImportedDebugQaTrace(rawPayload, sourceFile),
+    getErrorMessage: (error, fallback) => scene.getErrorMessage(error, fallback),
+    setDebugQaImportedTrace: (trace) => {
+      scene.debugQaImportedTrace = trace;
+    },
+    setDebugQaStatus: (status) => {
+      scene.debugQaStatus = status;
+    },
+    setDebugQaError: (value) => {
+      scene.debugQaError = value;
+    },
+    setDebugQaMessage: (value) => {
+      scene.debugQaMessage = value;
+    },
+    updateHud: () => scene.updateHud(),
+  });
 }

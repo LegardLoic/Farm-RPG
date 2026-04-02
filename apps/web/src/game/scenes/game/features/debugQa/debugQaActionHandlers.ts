@@ -197,3 +197,47 @@ export async function runDebugQaAction(input: {
     input.updateHud();
   }
 }
+
+export type DebugQaActionSceneLike = {
+  debugQaEnabled: boolean;
+  isAuthenticated: boolean;
+  debugQaBusyAction: DebugQaActionName | null;
+  debugQaStatus: 'idle' | 'loading' | 'success' | 'error';
+  debugQaError: string | null;
+  debugQaMessage: string | null;
+  buildDebugQaRequest(action: DebugQaActionName): DebugQaRequest | null;
+  fetchJson<T>(path: string, init?: RequestInit): Promise<T>;
+  getDebugQaSuccessMessage(action: DebugQaActionName, payload: unknown, fallback: string): string;
+  bootstrapSessionState(): Promise<void>;
+  getErrorMessage(error: unknown, fallback: string): string;
+  updateHud(): void;
+};
+
+export async function runDebugQaActionForScene(
+  scene: DebugQaActionSceneLike,
+  action: DebugQaActionName,
+): Promise<void> {
+  await runDebugQaAction({
+    action,
+    debugQaEnabled: scene.debugQaEnabled,
+    isAuthenticated: scene.isAuthenticated,
+    request: scene.buildDebugQaRequest(action),
+    fetchJson: (path, init) => scene.fetchJson<unknown>(path, init),
+    setDebugQaBusyAction: (value) => {
+      scene.debugQaBusyAction = value;
+    },
+    setDebugQaStatus: (value) => {
+      scene.debugQaStatus = value;
+    },
+    setDebugQaError: (value) => {
+      scene.debugQaError = value;
+    },
+    setDebugQaMessage: (value) => {
+      scene.debugQaMessage = value;
+    },
+    getDebugQaSuccessMessage: (payload, fallback) => scene.getDebugQaSuccessMessage(action, payload, fallback),
+    bootstrapSessionState: () => scene.bootstrapSessionState(),
+    getErrorMessage: (error, fallback) => scene.getErrorMessage(error, fallback),
+    updateHud: () => scene.updateHud(),
+  });
+}
