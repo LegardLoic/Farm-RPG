@@ -138,6 +138,11 @@ import {
   renderVillageMarketOffers as renderVillageMarketOffersFromFeature,
 } from './features/shops/shopHudRenderer';
 import {
+  renderVillageShopEntries as renderVillageShopEntriesFromFeature,
+  renderVillageShopTabs as renderVillageShopTabsFromFeature,
+  updateVillageShopDetails as updateVillageShopDetailsFromFeature,
+} from './features/shops/villageShopHudRenderer';
+import {
   runBuyBlacksmithOfferAction as runBuyBlacksmithOfferActionFromFeature,
   runBuyVillageSeedOfferAction as runBuyVillageSeedOfferActionFromFeature,
   runSellVillageCropAction as runSellVillageCropActionFromFeature,
@@ -1779,63 +1784,23 @@ export class GameScene extends Phaser.Scene {
     if (!this.villageShopTabsRoot) {
       return;
     }
-
-    this.villageShopTabsRoot.replaceChildren();
-    for (const tab of tabs) {
-      const button = document.createElement('button');
-      button.classList.add('hud-village-shop-tab');
-      if (tab.key === this.villageShopTab) {
-        button.classList.add('active');
-      }
-      button.dataset.villageShopAction = 'tab';
-      button.dataset.shopTab = tab.key;
-      button.textContent = tab.label;
-      this.villageShopTabsRoot.appendChild(button);
-    }
+    renderVillageShopTabsFromFeature({
+      root: this.villageShopTabsRoot,
+      tabs,
+      activeTab: this.villageShopTab,
+    });
   }
 
   private renderVillageShopEntries(entries: VillageShopPanelEntry[]): void {
     if (!this.villageShopEntriesRoot) {
       return;
     }
-
-    this.villageShopEntriesRoot.replaceChildren();
-    if (entries.length === 0) {
-      const empty = document.createElement('li');
-      empty.classList.add('hud-village-shop-entry-empty');
-      empty.textContent = this.villageShopType === 'market'
-        ? 'Aucune offre visible pour cet onglet.'
-        : 'Catalogue de forge vide pour cette categorie.';
-      this.villageShopEntriesRoot.appendChild(empty);
-      return;
-    }
-
-    for (const entry of entries) {
-      const row = document.createElement('li');
-      row.classList.add('hud-village-shop-entry-row');
-
-      const button = document.createElement('button');
-      button.classList.add('hud-village-shop-entry');
-      button.dataset.villageShopAction = 'select';
-      button.dataset.shopEntryKey = entry.entryKey;
-      button.dataset.selected = entry.entryKey === this.villageShopSelectedEntryKey ? '1' : '0';
-
-      const header = document.createElement('div');
-      header.classList.add('hud-village-shop-entry-header');
-      const name = document.createElement('strong');
-      name.textContent = entry.name;
-      const price = document.createElement('span');
-      price.textContent = entry.priceLabel;
-      header.append(name, price);
-
-      const meta = document.createElement('p');
-      meta.classList.add('hud-village-shop-entry-meta');
-      meta.textContent = entry.badgeLabel;
-
-      button.append(header, meta);
-      row.appendChild(button);
-      this.villageShopEntriesRoot.appendChild(row);
-    }
+    renderVillageShopEntriesFromFeature({
+      root: this.villageShopEntriesRoot,
+      entries,
+      villageShopType: this.villageShopType,
+      selectedEntryKey: this.villageShopSelectedEntryKey,
+    });
   }
 
   private updateVillageShopPanel(): void {
@@ -1876,56 +1841,34 @@ export class GameScene extends Phaser.Scene {
 
     this.renderVillageShopTabs(tabs);
     this.renderVillageShopEntries(entries);
-
-    if (this.villageShopDetailNameValue) {
-      this.villageShopDetailNameValue.textContent = selectedEntry?.name ?? 'Selectionne un objet';
-    }
-    if (this.villageShopDetailMetaValue) {
-      this.villageShopDetailMetaValue.textContent = selectedEntry?.detailMeta ?? '-';
-    }
-    if (this.villageShopDetailDescriptionValue) {
-      this.villageShopDetailDescriptionValue.textContent =
-        selectedEntry ? `${selectedEntry.description} ${selectedEntry.usageLabel}` : 'Le detail apparait ici.';
-    }
-    if (this.villageShopDetailComparisonValue) {
-      this.villageShopDetailComparisonValue.textContent = selectedEntry?.comparisonLabel ?? '-';
-    }
-
     const activeError = this.getVillageShopActiveError();
-    if (this.villageShopErrorValue) {
-      this.villageShopErrorValue.hidden = !activeError;
-      this.villageShopErrorValue.textContent = activeError ?? '';
-    }
+    const npcKey: VillageNpcKey = this.villageShopType === 'market' ? 'merchant' : 'blacksmith';
+    const npc = this.villageNpcState[npcKey];
+    const relation = this.villageNpcRelationships[npcKey];
+    const canTalk = this.isAuthenticated && npc.available && relation.canTalkToday && !this.villageNpcBusy;
+    const talkButtonLabel = this.getVillageShopTalkButtonLabel(npcKey);
+    const selectedEntryBusy = selectedEntry
+      ? selectedEntry.source === 'forge'
+        ? this.blacksmithBusy
+        : this.villageMarketBusy
+      : false;
 
-    if (this.villageShopTransactionValue) {
-      if (selectedEntry) {
-        const stockPart = selectedEntry.ownedQuantity === null ? '' : ` | Stock ${selectedEntry.ownedQuantity}`;
-        this.villageShopTransactionValue.textContent =
-          `Action: ${selectedEntry.actionLabel}${stockPart} | Or ${this.hudState.gold} po`;
-      } else {
-        this.villageShopTransactionValue.textContent = `Or actuel: ${this.hudState.gold} po`;
-      }
-    }
-
-    if (this.villageShopConfirmButton) {
-      if (!selectedEntry) {
-        this.villageShopConfirmButton.textContent = 'Selectionner un objet';
-        this.villageShopConfirmButton.disabled = true;
-      } else {
-        const busy = selectedEntry.source === 'forge' ? this.blacksmithBusy : this.villageMarketBusy;
-        this.villageShopConfirmButton.textContent = busy ? 'Transaction...' : selectedEntry.actionLabel;
-        this.villageShopConfirmButton.disabled = !selectedEntry.canTransact;
-      }
-    }
-
-    if (this.villageShopTalkButton) {
-      const npcKey: VillageNpcKey = this.villageShopType === 'market' ? 'merchant' : 'blacksmith';
-      const npc = this.villageNpcState[npcKey];
-      const relation = this.villageNpcRelationships[npcKey];
-      const canTalk = this.isAuthenticated && npc.available && relation.canTalkToday && !this.villageNpcBusy;
-      this.villageShopTalkButton.disabled = !canTalk;
-      this.villageShopTalkButton.textContent = this.getVillageShopTalkButtonLabel(npcKey);
-    }
+    updateVillageShopDetailsFromFeature({
+      selectedEntry,
+      activeError,
+      gold: this.hudState.gold,
+      selectedEntryBusy,
+      talkButtonLabel,
+      canTalk,
+      detailNameValue: this.villageShopDetailNameValue,
+      detailMetaValue: this.villageShopDetailMetaValue,
+      detailDescriptionValue: this.villageShopDetailDescriptionValue,
+      detailComparisonValue: this.villageShopDetailComparisonValue,
+      errorValue: this.villageShopErrorValue,
+      transactionValue: this.villageShopTransactionValue,
+      confirmButton: this.villageShopConfirmButton,
+      talkButton: this.villageShopTalkButton,
+    });
   }
 
   private getVillageShopSummaryLabel(): string {
