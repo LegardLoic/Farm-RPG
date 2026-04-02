@@ -89,6 +89,10 @@ import {
   resolveSelectedFarmPlotKey as resolveSelectedFarmPlotKeyFromLogic,
 } from './features/farm/farmLogic';
 import { drawFarmSceneBackdrop } from './features/farm/farmSceneDecor';
+import {
+  clearFarmScenePlotVisuals as clearFarmScenePlotVisualsFromFeature,
+  renderFarmScenePlotVisuals as renderFarmScenePlotVisualsFromFeature,
+} from './features/farm/farmSceneRenderer';
 import { createFarmActionZone as createFarmActionZoneFromFeature } from './features/farm/farmSceneZones';
 import {
   buildVillageShopEntries as buildVillageShopEntriesFromLogic,
@@ -124,6 +128,17 @@ import {
   getVillageZoneStateLabel as getVillageZoneStateLabelFromLogic,
 } from './features/village/villageLogic';
 import { drawVillageSceneBackdrop } from './features/village/villageSceneDecor';
+import {
+  clearVillageSceneZoneVisuals as clearVillageSceneZoneVisualsFromFeature,
+  renderVillageSceneZoneVisuals as renderVillageSceneZoneVisualsFromFeature,
+} from './features/village/villageSceneRenderer';
+import {
+  buildVillageRenderSignature as buildVillageRenderSignatureFromFeature,
+  ensureVillageSelectedZoneKey as ensureVillageSelectedZoneKeyFromFeature,
+  getCycledVillageZoneKey as getCycledVillageZoneKeyFromFeature,
+  getNearestVillageZoneKey as getNearestVillageZoneKeyFromFeature,
+  getVillageZoneByKey as getVillageZoneByKeyFromFeature,
+} from './features/village/villageSceneSelection';
 import { createVillageActionZone as createVillageActionZoneFromFeature } from './features/village/villageSceneZones';
 import {
   getBlacksmithStatusLabel as getBlacksmithStatusLabelFromVillageHud,
@@ -8854,14 +8869,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private clearFarmSceneVisuals(): void {
-    for (const visual of this.farmScenePlotVisuals.values()) {
-      visual.frame.destroy();
-      visual.bed.destroy();
-      visual.crop.destroy();
-      visual.badge.destroy();
-      visual.label.destroy();
-    }
-    this.farmScenePlotVisuals.clear();
+    clearFarmScenePlotVisualsFromFeature(this.farmScenePlotVisuals);
     this.farmSceneRenderSignature = '';
 
     if (this.farmSceneActionHintLabel) {
@@ -8871,13 +8879,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private clearVillageSceneVisuals(): void {
-    for (const visual of this.villageSceneZoneVisuals.values()) {
-      visual.frame.destroy();
-      visual.overlay.destroy();
-      visual.title.destroy();
-      visual.state.destroy();
-    }
-    this.villageSceneZoneVisuals.clear();
+    clearVillageSceneZoneVisualsFromFeature(this.villageSceneZoneVisuals);
     this.villageSceneRenderSignature = '';
 
     if (this.villageSceneActionHintLabel) {
@@ -8897,70 +8899,22 @@ export class GameScene extends Phaser.Scene {
     }
     this.farmSceneRenderSignature = signature;
 
-    for (const visual of this.farmScenePlotVisuals.values()) {
-      visual.frame.destroy();
-      visual.bed.destroy();
-      visual.crop.destroy();
-      visual.badge.destroy();
-      visual.label.destroy();
-    }
-    this.farmScenePlotVisuals.clear();
-
     this.ensureSelectedFarmPlot();
     const slots = this.getFarmSceneSlots();
-
-    for (const slot of slots) {
-      const position = this.getFarmScenePlotPosition(slot);
-      const phase = this.getFarmPlotPhase(slot.plot);
-      const selected = slot.plotKey === this.farmSelectedPlotKey;
-      const palette = this.getFarmScenePlotPalette(phase, selected);
-
-      const frame = this.add.rectangle(position.x, position.y, 108, 68, palette.frame, 0.9);
-      frame.setStrokeStyle(2, selected ? 0xf6d88f : 0x29311e, selected ? 1 : 0.6);
-      frame.setDepth(14);
-      frame.setInteractive({ useHandCursor: true });
-      frame.on('pointerdown', () => {
-        this.setSelectedFarmPlot(slot.plotKey, true);
+    renderFarmScenePlotVisualsFromFeature({
+      scene: this,
+      plotVisuals: this.farmScenePlotVisuals,
+      slots,
+      selectedPlotKey: this.farmSelectedPlotKey,
+      getPlotPosition: (slot) => this.getFarmScenePlotPosition(slot),
+      getPlotPhase: (plot) => this.getFarmPlotPhase(plot),
+      getPlotPalette: (phase, selected) => this.getFarmScenePlotPalette(phase, selected),
+      getPlotPhaseLabel: (plot) => this.getFarmPlotPhaseLabel(plot),
+      onSelectPlot: (plotKey) => {
+        this.setSelectedFarmPlot(plotKey, true);
         this.updateHud();
-      });
-
-      const bed = this.add.rectangle(position.x, position.y + 2, 92, 50, palette.bed, 1);
-      bed.setDepth(15);
-
-      const crop = this.add.rectangle(position.x, position.y - 2, 54, 26, palette.crop, phase === 'empty' ? 0.44 : 1);
-      crop.setDepth(16);
-
-      const badge = this.add
-        .text(position.x, position.y - 34, this.getFarmPlotPhaseLabel(slot.plot), {
-          fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '11px',
-          color: palette.badge,
-          stroke: '#161f12',
-          strokeThickness: 3,
-        })
-        .setOrigin(0.5)
-        .setDepth(17);
-
-      const label = this.add
-        .text(position.x, position.y + 31, `${slot.row}-${slot.col}`, {
-          fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '10px',
-          color: '#e8efdc',
-          stroke: '#18210f',
-          strokeThickness: 3,
-        })
-        .setOrigin(0.5)
-        .setDepth(17);
-
-      this.farmScenePlotVisuals.set(slot.plotKey, {
-        slot,
-        frame,
-        bed,
-        crop,
-        badge,
-        label,
-      });
-    }
+      },
+    });
 
     if (this.farmSceneActionHintLabel) {
       this.farmSceneActionHintLabel.setText(this.getFarmFeedbackLabel());
@@ -8978,18 +8932,12 @@ export class GameScene extends Phaser.Scene {
     }
     this.villageSceneRenderSignature = signature;
 
-    for (const visual of this.villageSceneZoneVisuals.values()) {
-      const selected = visual.config.key === this.villageSelectedZoneKey;
-      const stateLabel = this.getVillageZoneStateLabel(visual.config);
-      const stateColor = this.getVillageZoneStateColor(visual.config);
-
-      visual.frame.setFillStyle(selected ? 0x4b5f72 : 0x3a3f43, selected ? 0.26 : 0.12);
-      visual.frame.setStrokeStyle(2, selected ? 0xffdd9f : 0xd4c39a, selected ? 0.95 : 0.42);
-      visual.overlay.setFillStyle(selected ? 0x1f2730 : 0x111418, selected ? 0.42 : 0.22);
-      visual.title.setColor(selected ? '#ffeac2' : '#f1e5cb');
-      visual.state.setText(stateLabel);
-      visual.state.setColor(stateColor);
-    }
+    renderVillageSceneZoneVisualsFromFeature({
+      zoneVisuals: this.villageSceneZoneVisuals,
+      selectedZoneKey: this.villageSelectedZoneKey,
+      getZoneStateLabel: (zone) => this.getVillageZoneStateLabel(zone),
+      getZoneStateColor: (zone) => this.getVillageZoneStateColor(zone),
+    });
 
     if (this.villageSceneActionHintLabel) {
       this.villageSceneActionHintLabel.setText(this.getVillageInteractionFeedbackLabel());
@@ -8997,39 +8945,26 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getVillageRenderSignature(): string {
-    const npcSignature = (['mayor', 'blacksmith', 'merchant'] as VillageNpcKey[]).map((npcKey) => {
-      const npc = this.villageNpcState[npcKey];
-      const relation = this.villageNpcRelationships[npcKey];
-      return `${npcKey}:${npc.stateKey}:${npc.available ? '1' : '0'}:${relation.canTalkToday ? '1' : '0'}`;
+    return buildVillageRenderSignatureFromFeature({
+      frontSceneMode: this.frontSceneMode,
+      selectedZoneKey: this.villageSelectedZoneKey,
+      villageMarketUnlocked: this.villageMarketUnlocked,
+      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+      blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+      villageFeedbackMessage: this.villageFeedbackMessage,
+      villageNpcError: this.villageNpcError,
+      dayPhaseKey: this.getDayPhaseKey(),
+      villageNpcState: this.villageNpcState,
+      villageNpcRelationships: this.villageNpcRelationships,
     });
-
-    return [
-      this.frontSceneMode,
-      this.villageSelectedZoneKey ?? '',
-      this.villageMarketUnlocked ? '1' : '0',
-      this.hudState.blacksmithUnlocked ? '1' : '0',
-      this.hudState.blacksmithCurseLifted ? '1' : '0',
-      this.villageFeedbackMessage ?? '',
-      this.villageNpcError ?? '',
-      this.getDayPhaseKey(),
-      ...npcSignature,
-    ].join('|');
   }
 
   private ensureVillageSelectedZone(): void {
-    if (this.villageSelectedZoneKey && VILLAGE_SCENE_ZONES.some((zone) => zone.key === this.villageSelectedZoneKey)) {
-      return;
-    }
-
-    const preferredZone = VILLAGE_SCENE_ZONES.find((zone) => {
-      if (!zone.npcKey) {
-        return false;
-      }
-      const npc = this.villageNpcState[zone.npcKey];
-      return npc.available;
+    this.villageSelectedZoneKey = ensureVillageSelectedZoneKeyFromFeature({
+      zones: VILLAGE_SCENE_ZONES,
+      selectedZoneKey: this.villageSelectedZoneKey,
+      villageNpcState: this.villageNpcState,
     });
-
-    this.villageSelectedZoneKey = preferredZone?.key ?? VILLAGE_SCENE_ZONES[0]?.key ?? null;
   }
 
   private setVillageSelectedZone(zoneKey: VillageSceneZoneKey, announceSelection: boolean): void {
@@ -9056,20 +8991,13 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    let nearestKey: VillageSceneZoneKey | null = null;
-    let nearestDistanceSq = Number.POSITIVE_INFINITY;
-
-    for (const zone of VILLAGE_SCENE_ZONES) {
-      const dx = this.player.x - zone.x;
-      const dy = this.player.y - zone.y;
-      const distanceSq = dx * dx + dy * dy;
-      if (distanceSq < nearestDistanceSq) {
-        nearestDistanceSq = distanceSq;
-        nearestKey = zone.key;
-      }
-    }
-
-    if (!nearestKey || nearestDistanceSq > 420 * 420) {
+    const nearestKey = getNearestVillageZoneKeyFromFeature({
+      zones: VILLAGE_SCENE_ZONES,
+      playerX: this.player.x,
+      playerY: this.player.y,
+      maxDistanceSq: 420 * 420,
+    });
+    if (!nearestKey) {
       return;
     }
 
@@ -9082,22 +9010,19 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.ensureVillageSelectedZone();
-    const currentIndex = VILLAGE_SCENE_ZONES.findIndex((zone) => zone.key === this.villageSelectedZoneKey);
-    const baseIndex = currentIndex >= 0 ? currentIndex : 0;
-    const total = VILLAGE_SCENE_ZONES.length;
-    const nextIndex = (baseIndex + step + total) % total;
-    const nextZone = VILLAGE_SCENE_ZONES[nextIndex];
-    if (!nextZone) {
+    const nextZoneKey = getCycledVillageZoneKeyFromFeature({
+      zones: VILLAGE_SCENE_ZONES,
+      currentSelectedZoneKey: this.villageSelectedZoneKey,
+      step,
+    });
+    if (!nextZoneKey) {
       return;
     }
-    this.setVillageSelectedZone(nextZone.key, announceSelection);
+    this.setVillageSelectedZone(nextZoneKey, announceSelection);
   }
 
   private getVillageZoneByKey(zoneKey: VillageSceneZoneKey | null): VillageSceneZoneConfig | null {
-    if (!zoneKey) {
-      return null;
-    }
-    return VILLAGE_SCENE_ZONES.find((zone) => zone.key === zoneKey) ?? null;
+    return getVillageZoneByKeyFromFeature(VILLAGE_SCENE_ZONES, zoneKey);
   }
 
   private getVillageZoneStateLabel(zone: VillageSceneZoneConfig): string {
