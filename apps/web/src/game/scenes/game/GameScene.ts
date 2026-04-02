@@ -75,6 +75,7 @@ import {
   runSleepAtFarmAction as runSleepAtFarmActionFromFeature,
   runWaterFarmPlotAction as runWaterFarmPlotActionFromFeature,
 } from './features/farm/farmActionHandlers';
+import { resolveFarmHotkeyCommand as resolveFarmHotkeyCommandFromFeature } from './features/farm/farmHotkeyController';
 import { isTypingInsideField as isTypingInsideFieldFromCommon } from './features/common/inputGuards';
 import { getSceneObstacleLayout as getSceneObstacleLayoutFromCommon } from './features/common/sceneObstacleLayout';
 import {
@@ -109,6 +110,26 @@ import {
   renderCombatEnemySprite as renderCombatEnemySpriteFromFeature,
   renderCombatLogs as renderCombatLogsFromFeature,
 } from './features/combat/combatHudRenderer';
+import {
+  getCombatBossSpecialTelemetryParts as getCombatBossSpecialTelemetryPartsFromLogic,
+  getCombatEnemyEffectChips as getCombatEnemyEffectChipsFromLogic,
+  getCombatEnemyValue as getCombatEnemyValueFromLogic,
+  getCombatName as getCombatNameFromLogic,
+  getCombatPlayerEffectChips as getCombatPlayerEffectChipsFromLogic,
+  getCombatRecapLabel as getCombatRecapLabelFromLogic,
+  getCombatRecapOutcomeLabel as getCombatRecapOutcomeLabelFromLogic,
+  getCombatScriptFlag as getCombatScriptFlagFromLogic,
+  getCombatScriptTurns as getCombatScriptTurnsFromLogic,
+  getCombatStatusLabel as getCombatStatusLabelFromLogic,
+  getCombatStatusTurns as getCombatStatusTurnsFromLogic,
+  getCombatTelemetryLabel as getCombatTelemetryLabelFromLogic,
+  getCombatTurnLabel as getCombatTurnLabelFromLogic,
+  getCombatUnitValue as getCombatUnitValueFromLogic,
+  hasCleanseableDebuffs as hasCleanseableDebuffsFromLogic,
+  hasInterruptibleEnemyIntent as hasInterruptibleEnemyIntentFromLogic,
+  isInterruptibleEnemyIntent as isInterruptibleEnemyIntentFromLogic,
+  resolveCombatMessage as resolveCombatMessageFromLogic,
+} from './features/combat/combatHudLogic';
 import {
   getCombatEnemySpritePath as getCombatEnemySpritePathFromFeature,
   resolvePortraitEntryPath as resolvePortraitEntryPathFromFeature,
@@ -210,6 +231,7 @@ import {
 } from './features/village/villageSceneSelection';
 import { createVillageActionZone as createVillageActionZoneFromFeature } from './features/village/villageSceneZones';
 import { updateVillageContextPanel as updateVillageContextPanelFromFeature } from './features/village/villageContextHudRenderer';
+import { buildVillageInteractionPlan as buildVillageInteractionPlanFromFeature } from './features/village/villageInteractionController';
 import {
   getBlacksmithStatusLabel as getBlacksmithStatusLabelFromVillageHud,
   getDayPhaseKey as getDayPhaseKeyFromVillageHud,
@@ -4708,238 +4730,51 @@ export class GameScene extends Phaser.Scene {
   }
 
   private resolveCombatMessage(snapshot: CombatEncounterState): string {
-    const latestLog = snapshot.logs[snapshot.logs.length - 1];
-    if (latestLog) {
-      return latestLog;
-    }
-
-    if (snapshot.status === 'active') {
-      return snapshot.turn === 'player' ? 'A toi de jouer.' : 'Tour ennemi.';
-    }
-
-    if (snapshot.status === 'won') {
-      return 'Victoire. Combat termine.';
-    }
-
-    if (snapshot.status === 'lost') {
-      return 'Defaite. Reviens plus fort.';
-    }
-
-    if (snapshot.status === 'fled') {
-      return 'Tu as fui le combat.';
-    }
-
-    return 'Combat termine.';
+    return resolveCombatMessageFromLogic(snapshot);
   }
 
   private getCombatRecapLabel(): string {
-    if (!this.combatState || this.combatState.status === 'active') {
-      return 'Recap: -';
-    }
-
-    const recap = this.combatState.recap;
-    if (!recap) {
-      return 'Recap: pending';
-    }
-
-    const summaryLine = [
-      `Recap ${this.getCombatRecapOutcomeLabel(recap.outcome)}`,
-      `R${recap.rounds}`,
-      `DMG +${recap.damageDealt}/-${recap.damageTaken}`,
-      `Heal +${recap.healingDone}`,
-      `MP -${recap.mpSpent}/+${recap.mpRecovered}`,
-    ].join(' | ');
-
-    const statusLine = [
-      `Status P${recap.poisonApplied}/C${recap.ceciteApplied}/O${recap.obscuriteApplied}`,
-      `Cleanse ${recap.debuffsCleansed}`,
-      `Blind miss ${recap.blindMisses}`,
-    ].join(' | ');
-
-    const rewardsLine = [
-      `Rewards XP +${recap.rewards.experience}`,
-      `Gold +${recap.rewards.gold}`,
-      `Loot x${recap.rewards.lootItems}`,
-    ].join(' | ');
-
-    const penaltyLine =
-      recap.penalties.goldLost > 0 || recap.penalties.itemsLost > 0
-        ? `Penalties Gold -${recap.penalties.goldLost} | Items -${recap.penalties.itemsLost}`
-        : '';
-
-    return [summaryLine, statusLine, rewardsLine, penaltyLine].filter((line) => line.length > 0).join('\n');
+    return getCombatRecapLabelFromLogic(this.combatState);
   }
 
   private getCombatRecapOutcomeLabel(status: CombatStatus): string {
-    if (status === 'won') {
-      return 'Victory';
-    }
-    if (status === 'lost') {
-      return 'Defeat';
-    }
-    if (status === 'fled') {
-      return 'Flee';
-    }
-    return 'Active';
+    return getCombatRecapOutcomeLabelFromLogic(status);
   }
 
   private getCombatName(): string {
-    if (!this.combatState) {
-      return this.isAuthenticated ? 'Aucun combat actif' : 'Connecte toi pour combattre';
-    }
-
-    return this.combatState.enemy.name;
+    return getCombatNameFromLogic(this.combatState, this.isAuthenticated);
   }
 
   private getCombatStatusLabel(): string {
-    switch (this.combatStatus) {
-      case 'loading':
-        return 'Chargement';
-      case 'idle':
-        return 'Inactif';
-      case 'error':
-        return 'Erreur';
-      case 'active':
-        return 'En cours';
-      case 'won':
-        return 'Victoire';
-      case 'lost':
-        return 'Defaite';
-      case 'fled':
-        return 'Fuite';
-      default:
-        return 'Inactif';
-    }
+    return getCombatStatusLabelFromLogic(this.combatStatus);
   }
 
   private getCombatTurnLabel(): string {
-    if (!this.combatState) {
-      return '-';
-    }
-
-    return this.combatState.turn === 'player' ? 'Joueur' : 'Ennemi';
+    return getCombatTurnLabelFromLogic(this.combatState);
   }
 
   private getCombatUnitValue(current: number, max: number): string {
-    return `${this.formatValue(current)} / ${this.formatValue(max)}`;
+    return getCombatUnitValueFromLogic(current, max);
   }
 
   private getCombatEnemyValue(stat: 'hp' | 'mp'): string {
-    if (!this.combatState) {
-      return '-';
-    }
-
-    if (stat === 'hp') {
-      return this.getCombatUnitValue(this.combatState.enemy.currentHp, this.combatState.enemy.hp);
-    }
-
-    return this.getCombatUnitValue(this.combatState.enemy.currentMp, this.combatState.enemy.mp);
+    return getCombatEnemyValueFromLogic(this.combatState, stat);
   }
 
   private getCombatPlayerEffectChips(): CombatEffectChip[] {
-    if (!this.combatState) {
-      return [];
-    }
-
-    const effects: CombatEffectChip[] = [];
-
-    const rallyTurns = this.getCombatScriptTurns('playerRallyTurns');
-    if (rallyTurns > 0) {
-      effects.push({ label: `Rally ${rallyTurns}t`, tone: 'calm' });
-    }
-
-    const poisonedTurns = this.getCombatStatusTurns('playerPoisonedTurns');
-    if (poisonedTurns > 0) {
-      effects.push({ label: `Poison ${poisonedTurns}t`, tone: 'danger' });
-    }
-
-    const blindedTurns = this.getCombatStatusTurns('playerBlindedTurns');
-    if (blindedTurns > 0) {
-      effects.push({ label: `Cecite ${blindedTurns}t`, tone: 'warning' });
-    }
-
-    const darkenedTurns = this.getCombatStatusTurns('playerDarkenedTurns');
-    if (darkenedTurns > 0) {
-      effects.push({ label: `Obscurite ${darkenedTurns}t`, tone: 'warning' });
-    }
-
-    const cleanseWindowTurns = this.getCombatScriptTurns('playerCleanseReactionWindowTurns');
-    if (cleanseWindowTurns > 0) {
-      effects.push({ label: `Cleanse window ${cleanseWindowTurns}t`, tone: 'utility' });
-    }
-
-    const interruptWindowTurns = this.getCombatScriptTurns('playerInterruptReactionWindowTurns');
-    if (interruptWindowTurns > 0) {
-      effects.push({ label: `Interrupt window ${interruptWindowTurns}t`, tone: 'warning' });
-    }
-
-    return effects;
+    return getCombatPlayerEffectChipsFromLogic(this.combatState);
   }
 
   private getCombatEnemyEffectChips(): CombatEffectChip[] {
-    if (!this.combatState) {
-      return [];
-    }
-
-    const effects: CombatEffectChip[] = [];
-    const shatterTurns = this.getCombatScriptTurns('enemyShatterTurns');
-    if (shatterTurns > 0) {
-      effects.push({ label: `Exposed ${shatterTurns}t`, tone: 'utility' });
-    }
-
-    if (this.getCombatScriptFlag('avatarEnraged')) {
-      effects.push({ label: 'Enraged', tone: 'danger' });
-    }
-
-    return effects;
+    return getCombatEnemyEffectChipsFromLogic(this.combatState);
   }
 
   private getCombatTelemetryLabel(): string {
-    if (!this.combatState) {
-      return '-';
-    }
-
-    const cleanseUses = this.getCombatScriptTurns('telemetryCleanseUses');
-    const interruptUses = this.getCombatScriptTurns('telemetryInterruptUses');
-    const bossSpecialCasts = this.getCombatScriptTurns('telemetryBossSpecialCasts');
-    const specials = this.getCombatBossSpecialTelemetryParts();
-
-    const hasTelemetry =
-      cleanseUses > 0 || interruptUses > 0 || bossSpecialCasts > 0 || specials.length > 0;
-    if (!hasTelemetry) {
-      return 'No data';
-    }
-
-    const base = [`C:${cleanseUses}`, `I:${interruptUses}`, `B:${bossSpecialCasts}`];
-    if (specials.length === 0) {
-      return base.join(' | ');
-    }
-
-    return `${base.join(' | ')} | ${specials.join(', ')}`;
+    return getCombatTelemetryLabelFromLogic(this.combatState);
   }
 
   private getCombatBossSpecialTelemetryParts(): string[] {
-    if (!this.combatState?.scriptState) {
-      return [];
-    }
-
-    const prefix = 'telemetryBossSpecialCast_';
-    const parts: string[] = [];
-    for (const [key, value] of Object.entries(this.combatState.scriptState)) {
-      if (!key.startsWith(prefix) || typeof value !== 'number' || !Number.isFinite(value)) {
-        continue;
-      }
-
-      const count = Math.max(0, Math.floor(value));
-      if (count <= 0) {
-        continue;
-      }
-
-      const intent = key.slice(prefix.length).toUpperCase();
-      parts.push(`${intent}:${count}`);
-    }
-
-    return parts.sort();
+    return getCombatBossSpecialTelemetryPartsFromLogic(this.combatState);
   }
 
   private renderCombatEnemyTelegraphs(): void {
@@ -5140,67 +4975,29 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getCombatScriptTurns(key: string): number {
-    const raw = this.combatState?.scriptState?.[key];
-    if (typeof raw !== 'number' || !Number.isFinite(raw)) {
-      return 0;
-    }
-
-    return Math.max(0, Math.floor(raw));
+    return getCombatScriptTurnsFromLogic(this.combatState, key);
   }
 
   private getCombatStatusTurns(
     key: 'playerPoisonedTurns' | 'playerBlindedTurns' | 'playerDarkenedTurns',
   ): number {
-    const scriptState = this.combatState?.scriptState;
-    if (scriptState && Object.prototype.hasOwnProperty.call(scriptState, key)) {
-      return this.getCombatScriptTurns(key);
-    }
-
-    if (key === 'playerPoisonedTurns') {
-      return this.getCombatScriptTurns('playerBurningTurns');
-    }
-
-    if (key === 'playerDarkenedTurns') {
-      return this.getCombatScriptTurns('playerSilencedTurns');
-    }
-
-    return 0;
+    return getCombatStatusTurnsFromLogic(this.combatState, key);
   }
 
   private getCombatScriptFlag(key: string): boolean {
-    return this.combatState?.scriptState?.[key] === true;
+    return getCombatScriptFlagFromLogic(this.combatState, key);
   }
 
   private hasCleanseableDebuffs(): boolean {
-    return (
-      this.getCombatStatusTurns('playerPoisonedTurns') > 0 ||
-      this.getCombatStatusTurns('playerBlindedTurns') > 0 ||
-      this.getCombatStatusTurns('playerDarkenedTurns') > 0
-    );
+    return hasCleanseableDebuffsFromLogic(this.combatState);
   }
 
   private hasInterruptibleEnemyIntent(): boolean {
-    if (!this.combatState || this.combatState.status !== 'active' || this.combatState.turn !== 'player') {
-      return false;
-    }
-
-    const raw = this.combatState.scriptState?.enemyTelegraphIntent;
-    if (typeof raw !== 'string' || raw.length === 0) {
-      return false;
-    }
-
-    return this.isInterruptibleEnemyIntent(raw);
+    return hasInterruptibleEnemyIntentFromLogic(this.combatState);
   }
 
   private isInterruptibleEnemyIntent(intent: string): boolean {
-    return (
-      intent === 'cinder_burst' ||
-      intent === 'molten_shell' ||
-      intent === 'iron_recenter' ||
-      intent === 'null_sigil' ||
-      intent === 'cataclysm_ray' ||
-      intent === 'root_smash'
-    );
+    return isInterruptibleEnemyIntentFromLogic(intent);
   }
 
   private clearCombatError(): void {
@@ -6628,76 +6425,51 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const zone = this.getVillageZoneByKey(targetKey ?? this.villageSelectedZoneKey);
-    if (!zone) {
-      this.villageFeedbackMessage = 'Selectionne une zone du village.';
-      this.updateHud();
-      return;
-    }
+    const selectedZone = this.getVillageZoneByKey(targetKey ?? this.villageSelectedZoneKey);
+    const interactionState = selectedZone ? this.getVillageZoneInteractionState(selectedZone) : null;
+    const interactionPlan = buildVillageInteractionPlanFromFeature({
+      targetKey,
+      selectedZoneKey: this.villageSelectedZoneKey,
+      zones: VILLAGE_SCENE_ZONES,
+      interactionState,
+      villageShopPanelOpen: this.villageShopPanelOpen,
+      secondaryDialogueMessage: this.getVillageSecondaryDialogue(),
+    });
 
-    this.setVillageSelectedZone(zone.key, false);
-    const interactionState = this.getVillageZoneInteractionState(zone);
-    if (!interactionState.enabled) {
-      this.villageFeedbackMessage = interactionState.reason;
-      this.updateHud();
-      return;
-    }
-
-    const shopInteraction = zone.actionKey === 'open-market' || zone.actionKey === 'open-forge';
-    if (!shopInteraction && this.villageShopPanelOpen) {
-      this.villageShopPanelOpen = false;
-      this.villageShopRenderSignature = '';
-    }
-
-    if (zone.actionKey === 'open-market') {
-      this.openVillageShopPanel('market', 'Marche du village ouvert: mode achat/vente actif.');
-      return;
-    }
-
-    if (zone.actionKey === 'open-forge') {
-      this.openVillageShopPanel('forge', 'Forge ouverte: compare les categories avant achat.');
-      return;
-    }
-
-    if (zone.actionKey === 'talk-mayor') {
-      await this.interactVillageNpc('mayor');
-      if (!this.villageNpcError) {
-        this.villageFeedbackMessage = 'Discussion tenue avec le Maire.';
+    for (const step of interactionPlan.steps) {
+      if (step.kind === 'select-zone') {
+        this.setVillageSelectedZone(step.zoneKey, step.announceSelection);
+        continue;
       }
-      this.updateHud();
-      return;
-    }
 
-    if (zone.actionKey === 'talk-merchant') {
-      await this.interactVillageNpc('merchant');
-      if (!this.villageNpcError) {
-        this.villageFeedbackMessage = 'Discussion tenue avec la Marchande.';
+      if (step.kind === 'close-shop-panel') {
+        this.villageShopPanelOpen = false;
+        this.villageShopRenderSignature = '';
+        continue;
       }
-      this.updateHud();
-      return;
-    }
 
-    if (zone.actionKey === 'talk-blacksmith') {
-      await this.interactVillageNpc('blacksmith');
-      if (!this.villageNpcError) {
-        this.villageFeedbackMessage = 'Discussion tenue avec le Forgeron.';
+      if (step.kind === 'open-shop-panel') {
+        this.openVillageShopPanel(step.shopType, step.feedbackMessage);
+        return;
       }
-      this.updateHud();
-      return;
+
+      if (step.kind === 'talk-npc') {
+        await this.interactVillageNpc(step.npcKey);
+        if (!this.villageNpcError) {
+          this.villageFeedbackMessage = step.successMessage;
+        }
+        this.updateHud();
+        return;
+      }
+
+      if (step.kind === 'switch-front-scene') {
+        this.setFrontSceneMode(step.sceneMode, step.feedbackMessage);
+        return;
+      }
+
+      this.villageFeedbackMessage = step.message;
     }
 
-    if (zone.actionKey === 'talk-secondary') {
-      this.villageFeedbackMessage = this.getVillageSecondaryDialogue();
-      this.updateHud();
-      return;
-    }
-
-    if (zone.actionKey === 'go-farm') {
-      this.setFrontSceneMode('farm', 'Retour a la ferme confirme. La boucle reprend.');
-      return;
-    }
-
-    this.villageFeedbackMessage = 'La route vers la Tour est lisible. L entree jouable arrive au lot 4.';
     this.updateHud();
   }
 
@@ -6709,37 +6481,42 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleFarmHotkeys(): void {
-    if (this.isTypingInsideField()) {
-      return;
-    }
+    const hotkeyResolution = resolveFarmHotkeyCommandFromFeature({
+      isTypingInsideField: this.isTypingInsideField(),
+      hotkeys: {
+        craft: Phaser.Input.Keyboard.JustDown(this.farmHotkeys.craft),
+        sleep: Phaser.Input.Keyboard.JustDown(this.farmHotkeys.sleep),
+        plant: Phaser.Input.Keyboard.JustDown(this.farmHotkeys.plant),
+        water: Phaser.Input.Keyboard.JustDown(this.farmHotkeys.water),
+        harvest: Phaser.Input.Keyboard.JustDown(this.farmHotkeys.harvest),
+      },
+      selectedPlotKey: this.farmSelectedPlotKey,
+    });
 
-    if (Phaser.Input.Keyboard.JustDown(this.farmHotkeys.craft)) {
+    if (hotkeyResolution.kind === 'toggle-crafting-panel') {
       this.toggleFarmCraftingPanel();
       return;
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.farmHotkeys.sleep)) {
+    if (hotkeyResolution.kind === 'sleep-at-farm') {
       void this.sleepAtFarm();
       return;
     }
 
-    const plotKey = this.farmSelectedPlotKey;
-    if (!plotKey) {
-      return;
-    }
+    if (hotkeyResolution.kind === 'plot-action') {
+      if (hotkeyResolution.farmAction === 'plant') {
+        void this.plantFarmPlot(hotkeyResolution.plotKey);
+        return;
+      }
 
-    if (Phaser.Input.Keyboard.JustDown(this.farmHotkeys.plant)) {
-      void this.plantFarmPlot(plotKey);
-      return;
-    }
+      if (hotkeyResolution.farmAction === 'water') {
+        void this.waterFarmPlot(hotkeyResolution.plotKey);
+        return;
+      }
 
-    if (Phaser.Input.Keyboard.JustDown(this.farmHotkeys.water)) {
-      void this.waterFarmPlot(plotKey);
-      return;
-    }
-
-    if (Phaser.Input.Keyboard.JustDown(this.farmHotkeys.harvest)) {
-      void this.harvestFarmPlot(plotKey);
+      if (hotkeyResolution.farmAction === 'harvest') {
+        void this.harvestFarmPlot(hotkeyResolution.plotKey);
+      }
     }
   }
 

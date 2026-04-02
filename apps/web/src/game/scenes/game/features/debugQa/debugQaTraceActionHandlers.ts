@@ -3,6 +3,7 @@ import type {
   DebugQaStatus,
   DebugQaTracePayload,
 } from '../../gameScene.stateTypes';
+import { applyDebugQaFeedback } from './debugQaStateAdapters';
 
 export function exportDebugQaTrace(input: {
   debugQaEnabled: boolean;
@@ -25,10 +26,11 @@ export function exportDebugQaTrace(input: {
   const filename = input.buildDebugQaTraceFilename(payload.timestamp);
   input.downloadJsonFile(filename, payload);
 
-  input.setDebugQaStatus('success');
-  input.setDebugQaError(null);
-  input.setDebugQaMessage(`Exported local QA trace to ${filename}.`);
-  input.updateHud();
+  applyDebugQaFeedback(input, {
+    status: 'success',
+    error: null,
+    message: `Exported local QA trace to ${filename}.`,
+  });
 }
 
 export function exportDebugQaMarkdownReport(input: {
@@ -53,10 +55,11 @@ export function exportDebugQaMarkdownReport(input: {
   const filename = input.buildDebugQaMarkdownFilename(timestamp);
   input.downloadTextFile(filename, markdown, 'text/markdown;charset=utf-8');
 
-  input.setDebugQaStatus('success');
-  input.setDebugQaError(null);
-  input.setDebugQaMessage(`Exported markdown QA report to ${filename}.`);
-  input.updateHud();
+  applyDebugQaFeedback(input, {
+    status: 'success',
+    error: null,
+    message: `Exported markdown QA report to ${filename}.`,
+  });
 }
 
 export async function loadCombatDebugScriptedIntents(input: {
@@ -77,31 +80,34 @@ export async function loadCombatDebugScriptedIntents(input: {
     return;
   }
 
-  input.setDebugQaStatus('loading');
-  input.setDebugQaError(null);
-  input.setDebugQaMessage('Loading combat scripted intents reference...');
+  applyDebugQaFeedback(input, {
+    status: 'loading',
+    error: null,
+    message: 'Loading combat scripted intents reference...',
+  });
   input.setDebugQaScriptedIntentsReference(null);
   input.setDebugQaScriptedIntentsText('Loading combat scripted intents reference...');
-  input.updateHud();
 
   try {
     const reference = await input.fetchJson('/combat/debug/scripted-intents');
     input.setDebugQaScriptedIntentsReference(reference);
     input.setDebugQaScriptedIntentsText(input.formatCombatDebugScriptedIntentsReference(reference));
 
-    input.setDebugQaStatus('success');
-    input.setDebugQaError(null);
-    input.setDebugQaMessage(`Loaded ${reference.scriptedIntents.length} scripted enemy profiles.`);
+    applyDebugQaFeedback(input, {
+      status: 'success',
+      error: null,
+      message: `Loaded ${reference.scriptedIntents.length} scripted enemy profiles.`,
+    });
   } catch (error) {
-    input.setDebugQaStatus('error');
-    input.setDebugQaError(input.getErrorMessage(error, 'Unable to load combat scripted intents reference.'));
-    input.setDebugQaMessage(null);
+    applyDebugQaFeedback(input, {
+      status: 'error',
+      error: input.getErrorMessage(error, 'Unable to load combat scripted intents reference.'),
+      message: null,
+    });
     input.setDebugQaScriptedIntentsReference(null);
     input.setDebugQaScriptedIntentsText(
       'Unable to load the combat scripted intents reference. Check the error message above and retry.',
     );
-  } finally {
-    input.updateHud();
   }
 }
 

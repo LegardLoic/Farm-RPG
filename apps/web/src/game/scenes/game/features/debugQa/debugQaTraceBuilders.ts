@@ -6,52 +6,29 @@ import type {
   HudState,
   ImportedDebugQaTrace,
 } from '../../gameScene.stateTypes';
+import {
+  applyImportedDebugQaTraceState,
+  buildCombatTraceSnapshotState,
+  buildDebugQaTracePayloadState,
+  captureDebugQaReplayBaselineState,
+  restoreDebugQaReplayBaselineState,
+  type DebugQaReplayRuntimeState,
+} from './debugQaStateAdapters';
 
-export type DebugQaReplayRuntimeState = {
-  isAuthenticated: boolean;
-  authStatus: string;
-  hudState: HudState;
-  combatEncounterId: string | null;
-  combatStatus: CombatUiStatus;
-  combatState: CombatEncounterState | null;
-  combatLogs: string[];
-  combatMessage: string;
-  combatError: string | null;
-};
+export type { DebugQaReplayRuntimeState } from './debugQaStateAdapters';
 
 export function captureDebugQaReplayBaseline(input: {
   state: DebugQaReplayRuntimeState;
   cloneCombatState: (state: CombatEncounterState) => CombatEncounterState;
 }): DebugQaReplayBaseline {
-  return {
-    isAuthenticated: input.state.isAuthenticated,
-    authStatus: input.state.authStatus,
-    hudState: { ...input.state.hudState },
-    combatEncounterId: input.state.combatEncounterId,
-    combatStatus: input.state.combatStatus,
-    combatState: input.state.combatState ? input.cloneCombatState(input.state.combatState) : null,
-    combatLogs: [...input.state.combatLogs],
-    combatMessage: input.state.combatMessage,
-    combatError: input.state.combatError,
-  };
+  return captureDebugQaReplayBaselineState(input);
 }
 
 export function restoreDebugQaReplayBaseline(input: {
   baseline: DebugQaReplayBaseline;
   cloneCombatState: (state: CombatEncounterState) => CombatEncounterState;
 }): DebugQaReplayRuntimeState {
-  const { baseline, cloneCombatState } = input;
-  return {
-    isAuthenticated: baseline.isAuthenticated,
-    authStatus: baseline.authStatus,
-    hudState: { ...baseline.hudState },
-    combatEncounterId: baseline.combatEncounterId,
-    combatStatus: baseline.combatStatus,
-    combatState: baseline.combatState ? cloneCombatState(baseline.combatState) : null,
-    combatLogs: [...baseline.combatLogs],
-    combatMessage: baseline.combatMessage,
-    combatError: baseline.combatError,
-  };
+  return restoreDebugQaReplayBaselineState(input);
 }
 
 export function applyImportedDebugQaTrace(input: {
@@ -59,45 +36,7 @@ export function applyImportedDebugQaTrace(input: {
   currentState: DebugQaReplayRuntimeState;
   cloneCombatState: (state: CombatEncounterState) => CombatEncounterState;
 }): DebugQaReplayRuntimeState {
-  const { trace, currentState, cloneCombatState } = input;
-
-  const nextState: DebugQaReplayRuntimeState = {
-    ...currentState,
-    hudState: {
-      ...currentState.hudState,
-      ...trace.hudState,
-    },
-  };
-
-  if (trace.authAuthenticated !== null) {
-    nextState.isAuthenticated = trace.authAuthenticated;
-  }
-  if (trace.authStatus) {
-    nextState.authStatus = trace.authStatus;
-  }
-
-  if (trace.combatState) {
-    nextState.combatState = cloneCombatState(trace.combatState);
-    nextState.combatEncounterId = trace.combatState.id;
-    nextState.combatStatus = trace.combatState.status;
-    nextState.combatLogs = [...trace.combatState.logs].slice(-20);
-  } else {
-    nextState.combatEncounterId = trace.combatEncounterId;
-    nextState.combatStatus = trace.combatStatus ?? 'idle';
-    nextState.combatLogs = [...trace.combatLogs].slice(-20);
-    if (!trace.combatEncounterId) {
-      nextState.combatState = null;
-    }
-  }
-
-  if (trace.combatMessage) {
-    nextState.combatMessage = trace.combatMessage;
-  } else if (!trace.combatState && !trace.combatEncounterId) {
-    nextState.combatMessage = 'Aucun combat actif.';
-  }
-
-  nextState.combatError = trace.combatError;
-  return nextState;
+  return applyImportedDebugQaTraceState(input);
 }
 
 export function buildCombatTraceSnapshot(input: {
@@ -110,27 +49,7 @@ export function buildCombatTraceSnapshot(input: {
   getCombatTelemetryLabel: () => string;
   cloneCombatState: (state: CombatEncounterState) => CombatEncounterState;
 }): DebugQaTracePayload['combat'] {
-  if (!input.combatState) {
-    return {
-      encounterId: input.combatEncounterId,
-      status: input.combatStatus,
-      message: input.combatMessage,
-      error: input.combatError,
-      telemetry: input.getCombatTelemetryLabel(),
-      logs: [...input.combatLogs],
-      state: null,
-    };
-  }
-
-  return {
-    encounterId: input.combatEncounterId,
-    status: input.combatStatus,
-    message: input.combatMessage,
-    error: input.combatError,
-    telemetry: input.getCombatTelemetryLabel(),
-    logs: [...input.combatLogs],
-    state: input.cloneCombatState(input.combatState),
-  };
+  return buildCombatTraceSnapshotState(input);
 }
 
 export function buildDebugQaTracePayload(input: {
@@ -142,15 +61,5 @@ export function buildDebugQaTracePayload(input: {
   combat: DebugQaTracePayload['combat'];
   debugQa: DebugQaTracePayload['debugQa'];
 }): DebugQaTracePayload {
-  return {
-    timestamp: input.timestamp,
-    frontend: input.frontend,
-    auth: input.auth,
-    hud: {
-      state: { ...input.hudState },
-      summaries: input.hudSummaries,
-    },
-    combat: input.combat,
-    debugQa: input.debugQa,
-  };
+  return buildDebugQaTracePayloadState(input);
 }

@@ -6,6 +6,7 @@ import type {
   DebugQaStepReplayState,
   ImportedDebugQaTrace,
 } from '../../gameScene.stateTypes';
+import { applyDebugQaFeedback } from './debugQaStateAdapters';
 
 export function replayImportedDebugQaTrace(input: {
   debugQaEnabled: boolean;
@@ -22,19 +23,21 @@ export function replayImportedDebugQaTrace(input: {
   }
 
   if (!input.importedTrace) {
-    input.setDebugQaStatus('error');
-    input.setDebugQaError('Importe un JSON trace avant de lancer Replay.');
-    input.setDebugQaMessage(null);
-    input.updateHud();
+    applyDebugQaFeedback(input, {
+      status: 'error',
+      error: 'Importe un JSON trace avant de lancer Replay.',
+      message: null,
+    });
     return;
   }
 
   input.stopDebugQaStepReplay(false);
   input.applyImportedDebugQaTrace(input.importedTrace);
-  input.setDebugQaStatus('success');
-  input.setDebugQaError(null);
-  input.setDebugQaMessage(`Replay QA applique (${input.importedTrace.sourceFile}).`);
-  input.updateHud();
+  applyDebugQaFeedback(input, {
+    status: 'success',
+    error: null,
+    message: `Replay QA applique (${input.importedTrace.sourceFile}).`,
+  });
 }
 
 export function startDebugQaStepReplay(input: {
@@ -61,19 +64,21 @@ export function startDebugQaStepReplay(input: {
   }
 
   if (!input.importedTrace) {
-    input.setDebugQaStatus('error');
-    input.setDebugQaError('Importe un JSON trace avant de lancer le replay pas a pas.');
-    input.setDebugQaMessage(null);
-    input.updateHud();
+    applyDebugQaFeedback(input, {
+      status: 'error',
+      error: 'Importe un JSON trace avant de lancer le replay pas a pas.',
+      message: null,
+    });
     return;
   }
 
   const logs = input.importedTrace.combatLogs.slice(-20);
   if (logs.length === 0) {
-    input.setDebugQaStatus('error');
-    input.setDebugQaError('La trace importee ne contient pas de logs combat exploitables.');
-    input.setDebugQaMessage(null);
-    input.updateHud();
+    applyDebugQaFeedback(input, {
+      status: 'error',
+      error: 'La trace importee ne contient pas de logs combat exploitables.',
+      message: null,
+    });
     return;
   }
 
@@ -103,10 +108,11 @@ export function startDebugQaStepReplay(input: {
     baseline,
   });
 
-  input.setDebugQaStatus('success');
-  input.setDebugQaError(null);
-  input.setDebugQaMessage(`Replay pas a pas demarre (${logs.length} steps).`);
-  input.updateHud();
+  applyDebugQaFeedback(input, {
+    status: 'success',
+    error: null,
+    message: `Replay pas a pas demarre (${logs.length} steps).`,
+  });
 }
 
 export function advanceDebugQaStepReplay(input: {
@@ -129,10 +135,11 @@ export function advanceDebugQaStepReplay(input: {
 }): void {
   if (!input.stepReplayState) {
     input.stopDebugQaStepReplayAutoPlay(false);
-    input.setDebugQaStatus('error');
-    input.setDebugQaError('Demarre un replay pas a pas avant d avancer.');
-    input.setDebugQaMessage(null);
-    input.updateHud();
+    applyDebugQaFeedback(input, {
+      status: 'error',
+      error: 'Demarre un replay pas a pas avant d avancer.',
+      message: null,
+    });
     return;
   }
 
@@ -141,10 +148,11 @@ export function advanceDebugQaStepReplay(input: {
     input.stopDebugQaStepReplayAutoPlay(false);
     input.applyImportedDebugQaTrace(replay.finalTrace);
     input.setDebugQaStepReplayState(null);
-    input.setDebugQaStatus('success');
-    input.setDebugQaError(null);
-    input.setDebugQaMessage('Replay pas a pas termine (etat final applique).');
-    input.updateHud();
+    applyDebugQaFeedback(input, {
+      status: 'success',
+      error: null,
+      message: 'Replay pas a pas termine (etat final applique).',
+    });
     return;
   }
 
@@ -172,10 +180,11 @@ export function advanceDebugQaStepReplay(input: {
     input.setCombatState(nextCombatState);
   }
 
-  input.setDebugQaStatus('success');
-  input.setDebugQaError(null);
-  input.setDebugQaMessage(`Replay step ${nextStep}/${replay.totalSteps}`);
-  input.updateHud();
+  applyDebugQaFeedback(input, {
+    status: 'success',
+    error: null,
+    message: `Replay step ${nextStep}/${replay.totalSteps}`,
+  });
 }
 
 export function stopDebugQaStepReplay(input: {
@@ -199,10 +208,11 @@ export function stopDebugQaStepReplay(input: {
 
   if (input.restoreBaseline) {
     input.restoreDebugQaReplayBaseline(replay.baseline);
-    input.setDebugQaStatus('success');
-    input.setDebugQaError(null);
-    input.setDebugQaMessage('Replay pas a pas stoppe (etat precedent restaure).');
-    input.updateHud();
+    applyDebugQaFeedback(input, {
+      status: 'success',
+      error: null,
+      message: 'Replay pas a pas stoppe (etat precedent restaure).',
+    });
   }
 }
 
@@ -229,10 +239,11 @@ export async function handleDebugQaImportFileChange(input: {
     input.stopDebugQaStepReplay(true);
   }
 
-  input.setDebugQaStatus('loading');
-  input.setDebugQaError(null);
-  input.setDebugQaMessage(`Importing ${file.name}...`);
-  input.updateHud();
+  applyDebugQaFeedback(input, {
+    status: 'loading',
+    error: null,
+    message: `Importing ${file.name}...`,
+  });
 
   try {
     const rawText = await file.text();
@@ -243,17 +254,20 @@ export async function handleDebugQaImportFileChange(input: {
     }
 
     input.setDebugQaImportedTrace(importedTrace);
-    input.setDebugQaStatus('success');
-    input.setDebugQaError(null);
-    input.setDebugQaMessage(`Trace importee: ${file.name} (${importedTrace.timestamp}).`);
+    applyDebugQaFeedback(input, {
+      status: 'success',
+      error: null,
+      message: `Trace importee: ${file.name} (${importedTrace.timestamp}).`,
+    });
   } catch (error) {
-    input.setDebugQaStatus('error');
-    input.setDebugQaError(input.getErrorMessage(error, 'Impossible d importer la trace JSON.'));
-    input.setDebugQaMessage(null);
+    applyDebugQaFeedback(input, {
+      status: 'error',
+      error: input.getErrorMessage(error, 'Impossible d importer la trace JSON.'),
+      message: null,
+    });
   } finally {
     if (sourceInput) {
       sourceInput.value = '';
     }
-    input.updateHud();
   }
 }
