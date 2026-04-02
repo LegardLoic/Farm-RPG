@@ -106,6 +106,42 @@ import {
   getVillageZoneStateColor as getVillageZoneStateColorFromLogic,
   getVillageZoneStateLabel as getVillageZoneStateLabelFromLogic,
 } from './features/village/villageLogic';
+import {
+  getBlacksmithStatusLabel as getBlacksmithStatusLabelFromVillageHud,
+  getDayPhaseKey as getDayPhaseKeyFromVillageHud,
+  getDayPhaseLabel as getDayPhaseLabelFromVillageHud,
+  normalizeVillageNpcEntry as normalizeVillageNpcEntryFromVillageHud,
+  normalizeVillageNpcRelationshipEntry as normalizeVillageNpcRelationshipEntryFromVillageHud,
+} from './features/village/villageHudParsers';
+import {
+  getHeroAppearanceLabel as getHeroAppearanceLabelFromIntro,
+  getHeroProfileSummaryLabel as getHeroProfileSummaryLabelFromIntro,
+  getIntroAdvanceButtonLabel as getIntroAdvanceButtonLabelFromIntro,
+  getIntroHintLabel as getIntroHintLabelFromIntro,
+  getIntroNarrativeLabel as getIntroNarrativeLabelFromIntro,
+  getIntroProgressLabel as getIntroProgressLabelFromIntro,
+  getIntroSummaryLabel as getIntroSummaryLabelFromIntro,
+  normalizeGameplayIntroPayload as normalizeGameplayIntroPayloadFromIntro,
+} from './features/intro/introLogic';
+import {
+  doesCombatStateMatchRecapFilters as doesCombatStateMatchRecapFiltersFromDebugQa,
+  filterCombatDebugReference as filterCombatDebugReferenceFromDebugQa,
+  formatApplyStatePresetSuccess as formatApplyStatePresetSuccessFromDebugQa,
+  formatCombatDebugScriptedIntentsReference as formatCombatDebugScriptedIntentsReferenceFromDebugQa,
+  formatDebugQaFlagPreview as formatDebugQaFlagPreviewFromDebugQa,
+  formatSetQuestStatusSuccess as formatSetQuestStatusSuccessFromDebugQa,
+  formatSetWorldFlagsSuccess as formatSetWorldFlagsSuccessFromDebugQa,
+  getDebugQaReplayAutoPlayIntervalMs as getDebugQaReplayAutoPlayIntervalMsFromDebugQa,
+  getDebugQaReplayAutoPlaySpeedLabel as getDebugQaReplayAutoPlaySpeedLabelFromDebugQa,
+  getDebugQaScriptedIntentsDisplayText as getDebugQaScriptedIntentsDisplayTextFromDebugQa,
+  isDebugQaQueryMatch as isDebugQaQueryMatchFromDebugQa,
+  isQuestStatusValue as isQuestStatusValueFromDebugQa,
+  normalizeDebugQaFilterQuery as normalizeDebugQaFilterQueryFromDebugQa,
+  normalizeImportedHudState as normalizeImportedHudStateFromDebugQa,
+  parseImportedDebugQaTrace as parseImportedDebugQaTraceFromDebugQa,
+  readDebugQaFlagList as readDebugQaFlagListFromDebugQa,
+  readDebugQaNumber as readDebugQaNumberFromDebugQa,
+} from './features/debugQa/debugQaHelpers';
 import type {
   AutoSaveState,
   CombatActionName,
@@ -7299,79 +7335,36 @@ export class GameScene extends Phaser.Scene {
   }
 
   private normalizeDebugQaFilterQuery(value: string): string {
-    return value.trim().toLowerCase();
+    return normalizeDebugQaFilterQueryFromDebugQa(value);
   }
 
   private isDebugQaQueryMatch(query: string, values: Array<string | null | undefined>): boolean {
-    if (!query) {
-      return true;
-    }
-
-    return values.some((value) => (value ?? '').toLowerCase().includes(query));
+    return isDebugQaQueryMatchFromDebugQa(query, values);
   }
 
   private doesCombatStateMatchRecapFilters(snapshot: CombatEncounterState | null): boolean {
-    if (!snapshot) {
-      return false;
-    }
-
-    if (this.debugQaRecapOutcomeFilter !== 'all' && snapshot.status !== this.debugQaRecapOutcomeFilter) {
-      return false;
-    }
-
-    const enemyQuery = this.normalizeDebugQaFilterQuery(this.debugQaRecapEnemyFilter);
-    if (!enemyQuery) {
-      return true;
-    }
-
-    return this.isDebugQaQueryMatch(enemyQuery, [snapshot.enemy.key, snapshot.enemy.name]);
+    return doesCombatStateMatchRecapFiltersFromDebugQa(
+      snapshot,
+      this.debugQaRecapOutcomeFilter,
+      this.debugQaRecapEnemyFilter,
+    );
   }
 
   private filterCombatDebugReference(reference: CombatDebugReference): CombatDebugReference {
-    const enemyQuery = this.normalizeDebugQaFilterQuery(this.debugQaScriptEnemyFilter);
-    const intentQuery = this.normalizeDebugQaFilterQuery(this.debugQaScriptIntentFilter);
-    if (!enemyQuery && !intentQuery) {
-      return reference;
-    }
-
-    const scriptedIntents = reference.scriptedIntents
-      .filter((enemy) => this.isDebugQaQueryMatch(enemyQuery, [enemy.enemyKey, enemy.enemyName]))
-      .map((enemy) => {
-        const filteredIntents = enemy.intents.filter((intent) =>
-          this.isDebugQaQueryMatch(intentQuery, [intent.key, intent.label, intent.trigger]),
-        );
-        return {
-          ...enemy,
-          intents: filteredIntents,
-        };
-      })
-      .filter((enemy) => intentQuery.length === 0 || enemy.intents.length > 0);
-
-    const allowedEnemyKeys = new Set(scriptedIntents.map((enemy) => enemy.enemyKey));
-    const scriptedFloors = reference.scriptedFloors.filter((floor) => allowedEnemyKeys.has(floor.enemyKey));
-    const enemies = reference.enemies.filter((enemy) => allowedEnemyKeys.has(enemy.key));
-
-    return {
-      playerSkills: reference.playerSkills,
-      enemies,
-      scriptedFloors,
-      scriptedIntents,
-    };
+    return filterCombatDebugReferenceFromDebugQa(
+      reference,
+      this.debugQaScriptEnemyFilter,
+      this.debugQaScriptIntentFilter,
+    );
   }
 
   private getDebugQaScriptedIntentsDisplayText(): string {
-    if (!this.debugQaScriptedIntentsReference) {
-      return this.debugQaScriptedIntentsText;
-    }
-
-    const filteredReference = this.filterCombatDebugReference(this.debugQaScriptedIntentsReference);
-    const enemyFilterLabel = this.debugQaScriptEnemyFilter.trim() || '-';
-    const intentFilterLabel = this.debugQaScriptIntentFilter.trim() || '-';
-    return [
-      `Filters => enemy: "${enemyFilterLabel}" | intent: "${intentFilterLabel}"`,
-      '',
-      this.formatCombatDebugScriptedIntentsReference(filteredReference),
-    ].join('\n');
+    return getDebugQaScriptedIntentsDisplayTextFromDebugQa(
+      this.debugQaScriptedIntentsReference,
+      this.debugQaScriptedIntentsText,
+      this.debugQaScriptEnemyFilter,
+      this.debugQaScriptIntentFilter,
+    );
   }
 
   private async exportDebugQaTrace(): Promise<void> {
@@ -7513,13 +7506,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getDebugQaReplayAutoPlayIntervalMs(speed: DebugQaReplayAutoPlaySpeedKey): number {
-    const option = DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS.find((entry) => entry.key === speed);
-    return option?.intervalMs ?? 900;
+    return getDebugQaReplayAutoPlayIntervalMsFromDebugQa(speed, DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS);
   }
 
   private getDebugQaReplayAutoPlaySpeedLabel(speed: DebugQaReplayAutoPlaySpeedKey): string {
-    const option = DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS.find((entry) => entry.key === speed);
-    return option?.label ?? 'Normal (900ms)';
+    return getDebugQaReplayAutoPlaySpeedLabelFromDebugQa(speed, DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS);
   }
 
   private applyStripCalibrationPreset(): void {
@@ -7610,38 +7601,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private formatCombatDebugScriptedIntentsReference(reference: CombatDebugReference): string {
-    const lines: string[] = [];
-
-    lines.push(`Player skills (${reference.playerSkills.length})`);
-    for (const skill of reference.playerSkills) {
-      lines.push(
-        `- ${skill.label} [${skill.key}] | mana ${skill.manaCost} | obscurite ${skill.blockedBySilence ? 'blocked' : 'open'}`,
-      );
-      lines.push(`  ${skill.description}`);
-    }
-
-    lines.push('');
-    lines.push(`Scripted floors (${reference.scriptedFloors.length})`);
-    for (const floor of reference.scriptedFloors) {
-      lines.push(
-        `- Floor ${floor.floor}: ${floor.enemyName} [${floor.enemyKey}] | boss ${floor.scriptedBossEncounter ? 'yes' : 'no'}`,
-      );
-    }
-
-    lines.push('');
-    lines.push(`Enemy intent scripts (${reference.scriptedIntents.length})`);
-    for (const enemy of reference.scriptedIntents) {
-      lines.push(
-        `- ${enemy.enemyName} [${enemy.enemyKey}] | floor ${enemy.scriptedFloor ?? 'n/a'} | boss ${enemy.scriptedBossEncounter ? 'yes' : 'no'}`,
-      );
-      for (const intent of enemy.intents) {
-        lines.push(
-          `  * ${intent.label} [${intent.key}] | interruptible ${intent.interruptible ? 'yes' : 'no'} | ${intent.trigger}`,
-        );
-      }
-    }
-
-    return lines.join('\n');
+    return formatCombatDebugScriptedIntentsReferenceFromDebugQa(reference);
   }
 
   private replayImportedDebugQaTrace(): void {
@@ -7854,129 +7814,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   private parseImportedDebugQaTrace(rawPayload: unknown, sourceFile: string): ImportedDebugQaTrace | null {
-    if (!this.isRecord(rawPayload)) {
-      return null;
-    }
-
-    const timestamp = this.asString(rawPayload.timestamp) ?? new Date().toISOString();
-    const authRecord = this.asRecord(rawPayload.auth);
-    const hudRecord = this.asRecord(rawPayload.hud);
-    const hudStateRecord = this.asRecord(hudRecord?.state);
-    const combatRecord = this.asRecord(rawPayload.combat);
-
-    const authAuthenticatedValue = authRecord?.authenticated;
-    const authAuthenticated =
-      typeof authAuthenticatedValue === 'boolean' ? authAuthenticatedValue : null;
-    const authStatus = this.asString(authRecord?.status);
-    const hudState = this.normalizeImportedHudState(hudStateRecord);
-    const combatState = this.normalizeCombatPayload(combatRecord?.state ?? null);
-    const combatEncounterId =
-      this.asString(combatRecord?.encounterId) ?? combatState?.id ?? null;
-    const combatStatus = this.asCombatUiStatus(combatRecord?.status) ?? (combatState?.status ?? null);
-    const combatMessage = this.asString(combatRecord?.message);
-    const combatError = this.asString(combatRecord?.error);
-    const combatLogs = this.asStringArray(combatRecord?.logs).slice(-20);
-
-    const hasUsefulData =
-      authAuthenticated !== null ||
-      authStatus !== null ||
-      Object.keys(hudState).length > 0 ||
-      combatState !== null ||
-      combatStatus !== null ||
-      combatEncounterId !== null ||
-      combatMessage !== null ||
-      combatError !== null ||
-      combatLogs.length > 0;
-
-    if (!hasUsefulData) {
-      return null;
-    }
-
-    return {
-      sourceFile,
-      timestamp,
-      authAuthenticated,
-      authStatus,
-      hudState,
-      combatEncounterId,
-      combatStatus,
-      combatMessage,
-      combatError,
-      combatLogs,
-      combatState,
-    };
+    return parseImportedDebugQaTraceFromDebugQa(rawPayload, sourceFile, {
+      parsers: {
+        asRecord: (value) => this.asRecord(value),
+        asString: (value) => this.asString(value),
+        asStringArray: (value) => this.asStringArray(value),
+        asNumber: (value) => this.asNumber(value),
+        asCombatUiStatus: (value) => this.asCombatUiStatus(value),
+      },
+      normalizeCombatPayload: (value) => this.normalizeCombatPayload(value),
+    });
   }
 
   private normalizeImportedHudState(rawState: Record<string, unknown> | null): Partial<HudState> {
-    if (!rawState) {
-      return {};
-    }
-
-    const normalized: Partial<HudState> = {};
-    const day = this.asNumber(rawState.day);
-    const gold = this.asNumber(rawState.gold);
-    const level = this.asNumber(rawState.level);
-    const xp = this.asNumber(rawState.xp);
-    const xpToNext = this.asNumber(rawState.xpToNext);
-    const towerCurrentFloor = this.asNumber(rawState.towerCurrentFloor);
-    const towerHighestFloor = this.asNumber(rawState.towerHighestFloor);
-    const hp = this.asNumber(rawState.hp);
-    const maxHp = this.asNumber(rawState.maxHp);
-    const mp = this.asNumber(rawState.mp);
-    const maxMp = this.asNumber(rawState.maxMp);
-    const stamina = this.asNumber(rawState.stamina);
-    const area = this.asString(rawState.area);
-
-    if (day !== null) {
-      normalized.day = Math.max(1, Math.round(day));
-    }
-    if (gold !== null) {
-      normalized.gold = Math.max(0, Math.round(gold));
-    }
-    if (level !== null) {
-      normalized.level = Math.max(1, Math.round(level));
-    }
-    if (xp !== null) {
-      normalized.xp = Math.max(0, Math.round(xp));
-    }
-    if (xpToNext !== null) {
-      normalized.xpToNext = Math.max(1, Math.round(xpToNext));
-    }
-    if (towerCurrentFloor !== null) {
-      normalized.towerCurrentFloor = Math.max(1, Math.round(towerCurrentFloor));
-    }
-    if (towerHighestFloor !== null) {
-      normalized.towerHighestFloor = Math.max(1, Math.round(towerHighestFloor));
-    }
-    if (typeof rawState.towerBossFloor10Defeated === 'boolean') {
-      normalized.towerBossFloor10Defeated = rawState.towerBossFloor10Defeated;
-    }
-    if (typeof rawState.blacksmithUnlocked === 'boolean') {
-      normalized.blacksmithUnlocked = rawState.blacksmithUnlocked;
-    }
-    if (typeof rawState.blacksmithCurseLifted === 'boolean') {
-      normalized.blacksmithCurseLifted = rawState.blacksmithCurseLifted;
-    }
-    if (hp !== null) {
-      normalized.hp = Math.max(0, hp);
-    }
-    if (maxHp !== null) {
-      normalized.maxHp = Math.max(1, maxHp);
-    }
-    if (mp !== null) {
-      normalized.mp = Math.max(0, mp);
-    }
-    if (maxMp !== null) {
-      normalized.maxMp = Math.max(1, maxMp);
-    }
-    if (stamina !== null) {
-      normalized.stamina = Math.max(0, stamina);
-    }
-    if (area) {
-      normalized.area = area;
-    }
-
-    return normalized;
+    return normalizeImportedHudStateFromDebugQa(rawState, {
+      asNumber: (value) => this.asNumber(value),
+      asString: (value) => this.asString(value),
+    });
   }
 
   private applyImportedDebugQaTrace(trace: ImportedDebugQaTrace): void {
@@ -8405,70 +8259,30 @@ export class GameScene extends Phaser.Scene {
   }
 
   private formatApplyStatePresetSuccess(payload: unknown): string | null {
-    const root = this.asRecord(payload);
-    const statePreset = this.asRecord(root?.statePreset);
-    const preset = this.asRecord(statePreset?.preset);
-    const tower = this.asRecord(statePreset?.tower);
-    const towerBefore = this.asRecord(tower?.before);
-    const towerAfter = this.asRecord(tower?.after);
-    const worldFlags = this.asRecord(statePreset?.worldFlags);
-
-    const presetKey = this.asString(preset?.key);
-    const floorBefore = this.asNumber(towerBefore?.currentFloor);
-    const floorAfter = this.asNumber(towerAfter?.currentFloor);
-    const addedFlags = this.asStringArray(worldFlags?.added);
-    const removedFlags = this.asStringArray(worldFlags?.removed);
-
-    if (!presetKey || floorBefore === null || floorAfter === null) {
-      return null;
-    }
-
-    const addedPreview = this.formatDebugQaFlagPreview(addedFlags);
-    const removedPreview = this.formatDebugQaFlagPreview(removedFlags);
-    return `Preset ${presetKey}: floor ${Math.round(floorBefore)} -> ${Math.round(floorAfter)} | +${addedFlags.length} (${addedPreview}) / -${removedFlags.length} (${removedPreview})`;
+    return formatApplyStatePresetSuccessFromDebugQa(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asStringArray: (value) => this.asStringArray(value),
+      asNumber: (value) => this.asNumber(value),
+    });
   }
 
   private formatSetWorldFlagsSuccess(payload: unknown): string | null {
-    const root = this.asRecord(payload);
-    const worldFlags = this.asRecord(root?.worldFlags);
-    const addedFlags = this.asStringArray(worldFlags?.added);
-    const removedFlags = this.asStringArray(worldFlags?.removed);
-    const afterFlags = this.asStringArray(worldFlags?.after);
-
-    if (!worldFlags) {
-      return null;
-    }
-
-    const addedPreview = this.formatDebugQaFlagPreview(addedFlags);
-    const removedPreview = this.formatDebugQaFlagPreview(removedFlags);
-    return `World flags updated: total ${afterFlags.length} | +${addedFlags.length} (${addedPreview}) / -${removedFlags.length} (${removedPreview})`;
+    return formatSetWorldFlagsSuccessFromDebugQa(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asStringArray: (value) => this.asStringArray(value),
+    });
   }
 
   private formatSetQuestStatusSuccess(payload: unknown): string | null {
-    const root = this.asRecord(payload);
-    const quest = this.asRecord(root?.quest);
-
-    const questKey = this.asString(quest?.questKey);
-    const previousStatus = this.asString(quest?.previousStatus);
-    const nextStatus = this.asString(quest?.nextStatus);
-    if (!questKey || !previousStatus || !nextStatus) {
-      return null;
-    }
-
-    return `Quest ${questKey}: ${previousStatus} -> ${nextStatus}`;
+    return formatSetQuestStatusSuccessFromDebugQa(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+    });
   }
 
   private formatDebugQaFlagPreview(flags: string[]): string {
-    if (flags.length === 0) {
-      return 'none';
-    }
-
-    const preview = flags.slice(0, 3).join(', ');
-    if (flags.length <= 3) {
-      return preview;
-    }
-
-    return `${preview}, ...`;
+    return formatDebugQaFlagPreviewFromDebugQa(flags);
   }
 
   private readDebugQaNumber(
@@ -8477,21 +8291,7 @@ export class GameScene extends Phaser.Scene {
     min?: number,
     max?: number,
   ): number {
-    const raw = input?.value?.trim();
-    const parsed = raw ? Number(raw) : fallback;
-    if (!Number.isFinite(parsed)) {
-      return fallback;
-    }
-
-    const rounded = Math.round(parsed);
-    if (typeof min === 'number' && rounded < min) {
-      return min;
-    }
-    if (typeof max === 'number' && rounded > max) {
-      return max;
-    }
-
-    return Math.max(0, rounded);
+    return readDebugQaNumberFromDebugQa(input, fallback, min, max);
   }
 
   private readHeroProfileAppearanceFromUi(): HeroAppearanceKey {
@@ -8523,29 +8323,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   private isQuestStatusValue(value: string): value is QuestStatus {
-    return value === 'active' || value === 'completed' || value === 'claimed';
+    return isQuestStatusValueFromDebugQa(value);
   }
 
   private readDebugQaFlagList(input: HTMLTextAreaElement | null): string[] {
-    const raw = input?.value ?? '';
-    if (!raw.trim()) {
-      return [];
-    }
-
-    const values = raw
-      .split(/[\n,;]+/g)
-      .map((entry) => entry.trim().toLowerCase())
-      .filter((entry) => entry.length > 0);
-
-    return [...new Set(values)];
+    return readDebugQaFlagListFromDebugQa(input);
   }
 
   private getDayPhaseKey(): 'day' | 'night' {
-    return this.hudState.day % 2 === 0 ? 'night' : 'day';
+    return getDayPhaseKeyFromVillageHud(this.hudState.day);
   }
 
   private getDayPhaseLabel(): string {
-    return this.getDayPhaseKey() === 'night' ? 'Nuit' : 'Jour';
+    return getDayPhaseLabelFromVillageHud(this.hudState.day);
   }
 
   private updateDayPhaseVisual(): void {
@@ -8557,15 +8347,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getBlacksmithStatusLabel(): string {
-    if (!this.hudState.blacksmithCurseLifted) {
-      return 'Cursed';
-    }
-
-    if (!this.hudState.blacksmithUnlocked) {
-      return 'Recovering';
-    }
-
-    return 'Unlocked';
+    return getBlacksmithStatusLabelFromVillageHud({
+      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+      blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+    });
   }
 
   private getVillageNpcSummaryLabel(): string {
@@ -8629,180 +8414,66 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getIntroSummaryLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Connexion requise';
-    }
-
-    if (this.introNarrativeBusy && !this.introNarrativeState) {
-      return 'Chargement...';
-    }
-
-    if (!this.introNarrativeState) {
-      return 'Pre-intro';
-    }
-
-    if (this.introNarrativeState.completed) {
-      return 'Intro terminee';
-    }
-
-    if (this.introNarrativeState.currentStep === 'arrive_village') {
-      return 'Acte 1/3';
-    }
-
-    if (this.introNarrativeState.currentStep === 'meet_mayor') {
-      return 'Acte 2/3';
-    }
-
-    return 'Acte 3/3';
+    return getIntroSummaryLabelFromIntro({
+      isAuthenticated: this.isAuthenticated,
+      introNarrativeBusy: this.introNarrativeBusy,
+      introNarrativeState: this.introNarrativeState,
+    });
   }
 
   private getIntroNarrativeLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Connecte toi pour lancer la sequence d intro.';
-    }
-
-    const state = this.introNarrativeState;
-    if (!state || state.currentStep === 'arrive_village') {
-      return 'Tu arrives au village de Briseterre. Les habitants observent ton chariot charge de graines et de vieux outils.';
-    }
-
-    if (state.currentStep === 'meet_mayor') {
-      return 'Le maire Elric te recoit sur la place. Il te presente la Tour maudite et te demande de renforcer les defenses du village.';
-    }
-
-    if (state.currentStep === 'farm_assignment') {
-      return 'Le maire t attribue une parcelle a la lisiere du village. Cette ferme deviendra ta base entre deux expeditions.';
-    }
-
-    return 'Intro completee. Tu peux desormais alterner progression tour et preparation de ferme.';
+    return getIntroNarrativeLabelFromIntro(this.isAuthenticated, this.introNarrativeState);
   }
 
   private getIntroHintLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Connecte ton compte puis clique sur "Continuer intro".';
-    }
-
-    if (this.introNarrativeState?.completed) {
-      return 'Prochaine etape: lot ferme/village pour rendre la parcelle jouable.';
-    }
-
-    return 'Clique sur "Continuer intro" pour valider la prochaine scene narrative.';
+    return getIntroHintLabelFromIntro(this.isAuthenticated, this.introNarrativeState);
   }
 
   private getIntroProgressLabel(): string {
-    const state = this.introNarrativeState;
-    if (!state) {
-      return 'Progression: 0/3';
-    }
-
-    const completedSteps =
-      Number(state.steps.arriveVillage) +
-      Number(state.steps.metMayor) +
-      Number(state.steps.farmAssigned);
-    return `Progression: ${completedSteps}/3`;
+    return getIntroProgressLabelFromIntro(this.introNarrativeState);
   }
 
   private getIntroAdvanceButtonLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Connexion requise';
-    }
-
-    if (this.introNarrativeState?.completed) {
-      return 'Intro completee';
-    }
-
-    return 'Continuer intro';
+    return getIntroAdvanceButtonLabelFromIntro(this.isAuthenticated, this.introNarrativeState);
   }
 
   private getHeroProfileSummaryLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Connexion requise';
-    }
-
-    if (this.heroProfileBusy && !this.heroProfile) {
-      return 'Chargement...';
-    }
-
-    if (!this.heroProfile) {
-      return 'Non cree';
-    }
-
-    return `${this.heroProfile.heroName} | ${this.getHeroAppearanceLabel(this.heroProfile.appearanceKey)}`;
+    return getHeroProfileSummaryLabelFromIntro({
+      isAuthenticated: this.isAuthenticated,
+      heroProfileBusy: this.heroProfileBusy,
+      heroProfile: this.heroProfile,
+      getHeroAppearanceLabel: (key) => this.getHeroAppearanceLabel(key),
+    });
   }
 
   private getHeroAppearanceLabel(key: HeroAppearanceKey): string {
-    const option = HERO_APPEARANCE_OPTIONS.find((entry) => entry.key === key);
-    return option ? option.label : 'Fermier classique';
+    return getHeroAppearanceLabelFromIntro(key, HERO_APPEARANCE_OPTIONS);
   }
 
   private normalizeGameplayIntroPayload(payload: unknown): IntroNarrativeState | null {
-    const root = this.asRecord(payload);
-    if (!root) {
-      return null;
-    }
-
-    const introRecord = this.asRecord(root.intro) ?? root;
-    const currentStepRaw = this.asString(introRecord.currentStep);
-    if (!currentStepRaw || !isIntroNarrativeStepKey(currentStepRaw)) {
-      return null;
-    }
-
-    const steps = this.asRecord(introRecord.steps);
-    return {
-      currentStep: currentStepRaw,
-      completed: Boolean(introRecord.completed),
-      steps: {
-        arriveVillage: Boolean(steps?.arriveVillage),
-        metMayor: Boolean(steps?.metMayor),
-        farmAssigned: Boolean(steps?.farmAssigned),
+    return normalizeGameplayIntroPayloadFromIntro(
+      payload,
+      {
+        asRecord: (value) => this.asRecord(value),
+        asString: (value) => this.asString(value),
       },
-    };
+      isIntroNarrativeStepKey,
+    );
   }
 
   private normalizeVillageNpcEntry(payload: unknown): VillageNpcHudEntry | null {
-    const record = this.asRecord(payload);
-    if (!record) {
-      return null;
-    }
-
-    const stateKey = this.asString(record.stateKey)?.trim().toLowerCase();
-    if (!stateKey) {
-      return null;
-    }
-
-    return {
-      stateKey,
-      available: Boolean(record.available),
-    };
+    return normalizeVillageNpcEntryFromVillageHud(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+    });
   }
 
   private normalizeVillageNpcRelationshipEntry(payload: unknown): VillageNpcRelationshipHudEntry | null {
-    const record = this.asRecord(payload);
-    if (!record) {
-      return null;
-    }
-
-    const friendshipRaw = this.asNumber(record.friendship);
-    const tierRaw = this.asString(record.tier)?.trim().toLowerCase();
-    const lastInteractionDayRaw = this.asNumber(record.lastInteractionDay);
-    if (
-      friendshipRaw === null ||
-      !tierRaw ||
-      (tierRaw !== 'stranger' && tierRaw !== 'familiar' && tierRaw !== 'trusted' && tierRaw !== 'ally')
-    ) {
-      return null;
-    }
-
-    const lastInteractionDay = lastInteractionDayRaw === null || lastInteractionDayRaw < 1
-      ? null
-      : Math.round(lastInteractionDayRaw);
-
-    return {
-      friendship: Math.max(0, Math.round(friendshipRaw)),
-      tier: tierRaw,
-      lastInteractionDay,
-      canTalkToday: Boolean(record.canTalkToday),
-    };
+    return normalizeVillageNpcRelationshipEntryFromVillageHud(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asNumber: (value) => this.asNumber(value),
+    });
   }
 
   private normalizeGameplayFarmStoryPayload(payload: unknown): FarmStoryState | null {
