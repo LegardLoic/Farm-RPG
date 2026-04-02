@@ -31,6 +31,7 @@ import {
   type GameplayLoopState,
   type TowerStoryEventState,
   type TowerStoryState,
+  type ValueParsers,
   normalizeBlacksmithPayload as parseBlacksmithPayload,
   normalizeFarmCraftIngredientState as parseFarmCraftIngredientState,
   normalizeFarmCraftRecipeState as parseFarmCraftRecipeState,
@@ -6170,92 +6171,56 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private normalizeGameplayFarmStoryPayload(payload: unknown): FarmStoryState | null {
-    return parseGameplayFarmStoryPayload(payload, {
+  private getContentValueParsers(): ValueParsers {
+    return {
       asRecord: (value) => this.asRecord(value),
       asString: (value) => this.asString(value),
       asNumber: (value) => this.asNumber(value),
-    }) as FarmStoryState | null;
+    };
+  }
+
+  private normalizeGameplayFarmStoryPayload(payload: unknown): FarmStoryState | null {
+    return parseGameplayFarmStoryPayload(payload, this.getContentValueParsers()) as FarmStoryState | null;
   }
 
   private normalizeFarmStoryEventEntry(payload: unknown): FarmStoryEventState | null {
-    return parseFarmStoryEventEntry(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asNumber: (value) => this.asNumber(value),
-    }) as FarmStoryEventState | null;
+    return parseFarmStoryEventEntry(payload, this.getContentValueParsers()) as FarmStoryEventState | null;
   }
 
   private normalizeGameplayTowerStoryPayload(payload: unknown): TowerStoryState | null {
-    return parseGameplayTowerStoryPayload(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asNumber: (value) => this.asNumber(value),
-    }) as TowerStoryState | null;
+    return parseGameplayTowerStoryPayload(payload, this.getContentValueParsers()) as TowerStoryState | null;
   }
 
   private normalizeTowerStoryEventEntry(payload: unknown): TowerStoryEventState | null {
-    return parseTowerStoryEventEntry(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asNumber: (value) => this.asNumber(value),
-    }) as TowerStoryEventState | null;
+    return parseTowerStoryEventEntry(payload, this.getContentValueParsers()) as TowerStoryEventState | null;
   }
 
   private normalizeGameplayFarmPayload(payload: unknown): FarmState | null {
-    return parseGameplayFarmPayload(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asNumber: (value) => this.asNumber(value),
-    }) as FarmState | null;
+    return parseGameplayFarmPayload(payload, this.getContentValueParsers()) as FarmState | null;
   }
 
   private normalizeGameplayCraftingPayload(payload: unknown): FarmCraftingState | null {
-    return parseGameplayCraftingPayload(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asNumber: (value) => this.asNumber(value),
-    }) as FarmCraftingState | null;
+    return parseGameplayCraftingPayload(payload, this.getContentValueParsers()) as FarmCraftingState | null;
   }
 
   private normalizeGameplayLoopPayload(payload: unknown): GameplayLoopState | null {
-    return parseGameplayLoopPayload(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asNumber: (value) => this.asNumber(value),
-    }) as GameplayLoopState | null;
+    return parseGameplayLoopPayload(payload, this.getContentValueParsers()) as GameplayLoopState | null;
   }
 
   private normalizeFarmCraftRecipeState(payload: unknown): FarmCraftRecipeState | null {
-    return parseFarmCraftRecipeState(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asNumber: (value) => this.asNumber(value),
-    }) as FarmCraftRecipeState | null;
+    return parseFarmCraftRecipeState(payload, this.getContentValueParsers()) as FarmCraftRecipeState | null;
   }
 
   private normalizeFarmCraftIngredientState(payload: unknown): FarmCraftIngredientState | null {
-    return parseFarmCraftIngredientState(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asNumber: (value) => this.asNumber(value),
-    }) as FarmCraftIngredientState | null;
+    return parseFarmCraftIngredientState(payload, this.getContentValueParsers()) as FarmCraftIngredientState | null;
   }
 
   private normalizeFarmCropCatalogEntry(payload: unknown): FarmCropCatalogEntryState | null {
-    return parseFarmCropCatalogEntry(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asNumber: (value) => this.asNumber(value),
-    }) as FarmCropCatalogEntryState | null;
+    return parseFarmCropCatalogEntry(payload, this.getContentValueParsers()) as FarmCropCatalogEntryState | null;
   }
 
   private normalizeFarmPlotState(payload: unknown): FarmPlotState | null {
-    return parseFarmPlotState(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asNumber: (value) => this.asNumber(value),
-    }) as FarmPlotState | null;
+    return parseFarmPlotState(payload, this.getContentValueParsers()) as FarmPlotState | null;
   }
 
   private async fetchJson<T>(path: string, init: RequestInit = {}): Promise<T> {
