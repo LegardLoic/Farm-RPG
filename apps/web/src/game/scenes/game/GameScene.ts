@@ -149,6 +149,23 @@ import {
   runRestoreAutoSaveToSlotAction as runRestoreAutoSaveToSlotActionFromFeature,
 } from './features/saves/saveActionHandlers';
 import {
+  renderAutoSaveActions as renderAutoSaveActionsFromFeature,
+  renderSaveSlotsList as renderSaveSlotsListFromFeature,
+} from './features/saves/saveHudRenderer';
+import {
+  computeAutoSaveRenderSignature as computeAutoSaveRenderSignatureFromFeature,
+  computeSaveSlotsRenderSignature as computeSaveSlotsRenderSignatureFromFeature,
+  getAutoSaveMetaLabel as getAutoSaveMetaLabelFromFeature,
+  getAutoSaveSummaryLabel as getAutoSaveSummaryLabelFromFeature,
+  getSafeSlotStates as getSafeSlotStatesFromFeature,
+  getSaveSlotEquipmentPreviewLabel as getSaveSlotEquipmentPreviewLabelFromFeature,
+  getSaveSlotInventoryPreviewLabel as getSaveSlotInventoryPreviewLabelFromFeature,
+  getSaveSlotMetaLabel as getSaveSlotMetaLabelFromFeature,
+  getSaveSlotsSummaryLabel as getSaveSlotsSummaryLabelFromFeature,
+  getSaveSlotStatsPreviewLabel as getSaveSlotStatsPreviewLabelFromFeature,
+  hasExistingSaveSlot as hasExistingSaveSlotFromFeature,
+} from './features/saves/saveHudLogic';
+import {
   formatVillageNpcStateLabel as formatVillageNpcStateLabelFromLogic,
   formatVillageRelationshipTierLabel as formatVillageRelationshipTierLabelFromLogic,
   getBlacksmithContextDialogue as getBlacksmithContextDialogueFromLogic,
@@ -2754,22 +2771,13 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.autosaveRenderSignature = signature;
-
-    this.autosaveActionsRoot.replaceChildren();
-
-    if (!this.isAuthenticated || !this.autosave) {
-      return;
-    }
-
-    for (const slot of [1, 2, 3]) {
-      const button = document.createElement('button');
-      button.classList.add('hud-autosave-restore');
-      button.dataset.saveAction = 'restore';
-      button.dataset.slot = `${slot}`;
-      button.textContent = this.autosaveRestoreSlotBusy === slot ? `Restoring S${slot}...` : `Restore to Slot ${slot}`;
-      button.disabled = this.autosaveBusy || this.autosaveRestoreSlotBusy !== null;
-      this.autosaveActionsRoot.appendChild(button);
-    }
+    renderAutoSaveActionsFromFeature({
+      root: this.autosaveActionsRoot,
+      isAuthenticated: this.isAuthenticated,
+      hasAutosave: Boolean(this.autosave),
+      autosaveBusy: this.autosaveBusy,
+      autosaveRestoreSlotBusy: this.autosaveRestoreSlotBusy,
+    });
   }
 
   private renderSaveSlotsList(): void {
@@ -2782,137 +2790,19 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.saveSlotsRenderSignature = signature;
-
-    this.saveSlotsListRoot.replaceChildren();
-
-    if (!this.isAuthenticated) {
-      const item = document.createElement('li');
-      item.classList.add('save-slot-item', 'empty');
-      item.textContent = 'Connect to manage save slots.';
-      this.saveSlotsListRoot.appendChild(item);
-      return;
-    }
-
     const slotStates = this.getSafeSlotStates();
-    for (const slotState of slotStates) {
-      const item = document.createElement('li');
-      item.classList.add('save-slot-item');
-      item.dataset.exists = slotState.exists ? '1' : '0';
-
-      const header = document.createElement('div');
-      header.classList.add('save-slot-header');
-
-      const title = document.createElement('strong');
-      title.textContent = `Slot ${slotState.slot}`;
-      header.appendChild(title);
-
-      const badge = document.createElement('span');
-      badge.classList.add('save-slot-state');
-      badge.textContent = slotState.exists ? `v${slotState.version ?? 1}` : 'Empty';
-      header.appendChild(badge);
-      item.appendChild(header);
-
-      const meta = document.createElement('p');
-      meta.classList.add('save-slot-meta');
-      meta.textContent = this.getSaveSlotMetaLabel(slotState);
-      item.appendChild(meta);
-
-      if (slotState.exists) {
-        const preview = document.createElement('div');
-        preview.classList.add('save-slot-preview');
-
-        const previewStats = document.createElement('p');
-        previewStats.classList.add('save-slot-preview-line');
-        previewStats.textContent = this.getSaveSlotStatsPreviewLabel(slotState);
-        preview.appendChild(previewStats);
-
-        const previewInventory = document.createElement('p');
-        previewInventory.classList.add('save-slot-preview-line');
-        previewInventory.textContent = this.getSaveSlotInventoryPreviewLabel(slotState);
-        preview.appendChild(previewInventory);
-
-        const previewEquipment = document.createElement('p');
-        previewEquipment.classList.add('save-slot-preview-line');
-        previewEquipment.textContent = this.getSaveSlotEquipmentPreviewLabel(slotState);
-        preview.appendChild(previewEquipment);
-
-        item.appendChild(preview);
-      }
-
-      const actions = document.createElement('div');
-      actions.classList.add('save-slot-actions');
-
-      const captureBusy = this.saveSlotsActionBusyKey === `capture:${slotState.slot}`;
-      const loadBusy = this.saveSlotsActionBusyKey === `load:${slotState.slot}`;
-      const deleteBusy = this.saveSlotsActionBusyKey === `delete:${slotState.slot}`;
-      const hasBusyAction = this.saveSlotsActionBusyKey !== null;
-      const isLoadConfirmOpen = this.saveSlotsLoadConfirmSlot === slotState.slot;
-      const hasLoadConfirmOpen = this.saveSlotsLoadConfirmSlot !== null;
-
-      const captureButton = document.createElement('button');
-      captureButton.classList.add('hud-save-action', 'capture');
-      captureButton.dataset.saveAction = 'capture';
-      captureButton.dataset.slot = `${slotState.slot}`;
-      captureButton.textContent = captureBusy ? 'Saving...' : 'Capture';
-      captureButton.disabled = this.saveSlotsBusy || hasBusyAction || hasLoadConfirmOpen;
-      actions.appendChild(captureButton);
-
-      const loadButton = document.createElement('button');
-      loadButton.classList.add('hud-save-action');
-      loadButton.dataset.saveAction = 'load';
-      loadButton.dataset.slot = `${slotState.slot}`;
-      loadButton.textContent = loadBusy ? 'Loading...' : (isLoadConfirmOpen ? 'Selected' : 'Load');
-      loadButton.disabled =
-        this.saveSlotsBusy ||
-        hasBusyAction ||
-        !slotState.exists ||
-        (hasLoadConfirmOpen && !isLoadConfirmOpen);
-      actions.appendChild(loadButton);
-
-      const deleteButton = document.createElement('button');
-      deleteButton.classList.add('hud-save-action', 'danger');
-      deleteButton.dataset.saveAction = 'delete';
-      deleteButton.dataset.slot = `${slotState.slot}`;
-      deleteButton.textContent = deleteBusy ? 'Deleting...' : 'Delete';
-      deleteButton.disabled = this.saveSlotsBusy || hasBusyAction || !slotState.exists || hasLoadConfirmOpen;
-      actions.appendChild(deleteButton);
-
-      item.appendChild(actions);
-
-      if (isLoadConfirmOpen) {
-        const confirmPanel = document.createElement('div');
-        confirmPanel.classList.add('save-slot-load-confirm');
-
-        const confirmMessage = document.createElement('p');
-        confirmMessage.classList.add('save-slot-load-confirm-message');
-        confirmMessage.textContent = `Load Slot ${slotState.slot}? This will replace your current progression.`;
-        confirmPanel.appendChild(confirmMessage);
-
-        const confirmActions = document.createElement('div');
-        confirmActions.classList.add('save-slot-load-confirm-actions');
-
-        const confirmButton = document.createElement('button');
-        confirmButton.classList.add('hud-save-action', 'confirm');
-        confirmButton.dataset.saveAction = 'confirm-load';
-        confirmButton.dataset.slot = `${slotState.slot}`;
-        confirmButton.textContent = loadBusy ? 'Loading...' : 'Confirm Load';
-        confirmButton.disabled = this.saveSlotsBusy || hasBusyAction;
-        confirmActions.appendChild(confirmButton);
-
-        const cancelButton = document.createElement('button');
-        cancelButton.classList.add('hud-save-action', 'cancel');
-        cancelButton.dataset.saveAction = 'cancel-load';
-        cancelButton.dataset.slot = `${slotState.slot}`;
-        cancelButton.textContent = 'Cancel';
-        cancelButton.disabled = this.saveSlotsBusy || hasBusyAction;
-        confirmActions.appendChild(cancelButton);
-
-        confirmPanel.appendChild(confirmActions);
-        item.appendChild(confirmPanel);
-      }
-
-      this.saveSlotsListRoot.appendChild(item);
-    }
+    renderSaveSlotsListFromFeature({
+      root: this.saveSlotsListRoot,
+      isAuthenticated: this.isAuthenticated,
+      slotStates,
+      saveSlotsBusy: this.saveSlotsBusy,
+      saveSlotsActionBusyKey: this.saveSlotsActionBusyKey,
+      saveSlotsLoadConfirmSlot: this.saveSlotsLoadConfirmSlot,
+      getSaveSlotMetaLabel: (slotState) => this.getSaveSlotMetaLabel(slotState),
+      getSaveSlotStatsPreviewLabel: (slotState) => this.getSaveSlotStatsPreviewLabel(slotState),
+      getSaveSlotInventoryPreviewLabel: (slotState) => this.getSaveSlotInventoryPreviewLabel(slotState),
+      getSaveSlotEquipmentPreviewLabel: (slotState) => this.getSaveSlotEquipmentPreviewLabel(slotState),
+    });
   }
 
   private renderBlacksmithOffers(): void {
@@ -3260,123 +3150,57 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getAutoSaveSummaryLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Login required';
-    }
-
-    if (this.autosaveBusy && !this.autosave) {
-      return 'Loading...';
-    }
-
-    if (!this.autosave) {
-      return 'No autosave';
-    }
-
-    return `v${this.autosave.version} | ${this.autosave.reason}`;
-  }
-
-  private getAutoSaveMetaLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Connect to view autosave.';
-    }
-
-    if (!this.autosave) {
-      return 'No milestone autosave available yet.';
-    }
-
-    return `Updated: ${this.formatIsoForHud(this.autosave.updatedAt)}`;
-  }
-
-  private getSaveSlotsSummaryLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Login required';
-    }
-
-    if (this.saveSlotsBusy && this.saveSlots.length === 0) {
-      return 'Loading...';
-    }
-
-    const usedCount = this.saveSlots.filter((slot) => slot.exists).length;
-    return `${usedCount}/3 used`;
-  }
-
-  private getSafeSlotStates(): SaveSlotState[] {
-    const bySlot = new Map<number, SaveSlotState>();
-    for (const slotState of this.saveSlots) {
-      bySlot.set(slotState.slot, slotState);
-    }
-
-    return [1, 2, 3].map((slot) => {
-      const entry = bySlot.get(slot);
-      if (entry) {
-        return entry;
-      }
-
-      return {
-        slot,
-        exists: false,
-        version: null,
-        label: null,
-        updatedAt: null,
-        preview: null,
-      };
+    return getAutoSaveSummaryLabelFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      autosaveBusy: this.autosaveBusy,
+      autosave: this.autosave,
     });
   }
 
+  private getAutoSaveMetaLabel(): string {
+    return getAutoSaveMetaLabelFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      autosave: this.autosave,
+      formatIsoForHud: (value) => this.formatIsoForHud(value),
+    });
+  }
+
+  private getSaveSlotsSummaryLabel(): string {
+    return getSaveSlotsSummaryLabelFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      saveSlotsBusy: this.saveSlotsBusy,
+      saveSlots: this.saveSlots,
+    });
+  }
+
+  private getSafeSlotStates(): SaveSlotState[] {
+    return getSafeSlotStatesFromFeature(this.saveSlots);
+  }
+
   private hasExistingSaveSlot(slot: number): boolean {
-    const slotState = this.getSafeSlotStates().find((entry) => entry.slot === slot);
-    return Boolean(slotState?.exists);
+    return hasExistingSaveSlotFromFeature({
+      slot,
+      saveSlots: this.saveSlots,
+    });
   }
 
   private getSaveSlotMetaLabel(slotState: SaveSlotState): string {
-    if (!slotState.exists) {
-      return 'Empty slot.';
-    }
-
-    const label = slotState.label?.trim() ? slotState.label.trim() : 'Manual save';
-    const updated = slotState.updatedAt ? this.formatIsoForHud(slotState.updatedAt) : 'Unknown';
-    return `${label} | Updated: ${updated}`;
+    return getSaveSlotMetaLabelFromFeature({
+      slotState,
+      formatIsoForHud: (value) => this.formatIsoForHud(value),
+    });
   }
 
   private getSaveSlotStatsPreviewLabel(slotState: SaveSlotState): string {
-    if (!slotState.preview) {
-      return 'Stats: preview unavailable.';
-    }
-
-    const level = slotState.preview.playerLevel !== null ? `${slotState.preview.playerLevel}` : '?';
-    const gold = slotState.preview.gold !== null ? `${slotState.preview.gold}` : '?';
-    const floorCurrent = slotState.preview.towerCurrentFloor !== null ? `${slotState.preview.towerCurrentFloor}` : '?';
-    const floorHighest = slotState.preview.towerHighestFloor !== null ? `${slotState.preview.towerHighestFloor}` : '?';
-
-    return `Stats: Lvl ${level} | Gold ${gold} | Floor ${floorCurrent}/${floorHighest}`;
+    return getSaveSlotStatsPreviewLabelFromFeature(slotState);
   }
 
   private getSaveSlotInventoryPreviewLabel(slotState: SaveSlotState): string {
-    if (!slotState.preview) {
-      return 'Inventory: preview unavailable.';
-    }
-
-    if (slotState.preview.inventoryTop.length === 0) {
-      return 'Inventory: empty.';
-    }
-
-    const items = slotState.preview.inventoryTop.map((entry) => `${entry.itemKey} x${entry.quantity}`).join(', ');
-    return `Inventory: ${items}`;
+    return getSaveSlotInventoryPreviewLabelFromFeature(slotState);
   }
 
   private getSaveSlotEquipmentPreviewLabel(slotState: SaveSlotState): string {
-    if (!slotState.preview) {
-      return 'Equipment: preview unavailable.';
-    }
-
-    if (slotState.preview.equippedCount === 0) {
-      return 'Equipment: none equipped.';
-    }
-
-    const equipped = slotState.preview.equipmentTop
-      .map((entry) => `${entry.slot}:${entry.itemKey}`)
-      .join(', ');
-    return `Equipment: ${slotState.preview.equippedCount} equipped (${equipped})`;
+    return getSaveSlotEquipmentPreviewLabelFromFeature(slotState);
   }
 
   private computeQuestRenderSignature(): string {
@@ -3478,36 +3302,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   private computeAutoSaveRenderSignature(): string {
-    return [
-      this.isAuthenticated ? '1' : '0',
-      this.autosaveBusy ? '1' : '0',
-      this.autosaveRestoreSlotBusy ?? '-',
-      this.autosaveError ?? '',
-      this.autosave
-        ? `${this.autosave.version}:${this.autosave.reason}:${this.autosave.updatedAt}`
-        : 'none',
-    ].join('|');
+    return computeAutoSaveRenderSignatureFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      autosaveBusy: this.autosaveBusy,
+      autosaveRestoreSlotBusy: this.autosaveRestoreSlotBusy,
+      autosaveError: this.autosaveError,
+      autosave: this.autosave,
+    });
   }
 
   private computeSaveSlotsRenderSignature(): string {
-    const slots = this.getSafeSlotStates()
-      .map((slot) => {
-        const preview = slot.preview
-          ? `${slot.preview.playerLevel ?? '-'}:${slot.preview.gold ?? '-'}:${slot.preview.towerCurrentFloor ?? '-'}:${slot.preview.towerHighestFloor ?? '-'}:${slot.preview.inventoryTop.map((entry) => `${entry.itemKey}:${entry.quantity}`).join(',')}:${slot.preview.equipmentTop.map((entry) => `${entry.slot}:${entry.itemKey}`).join(',')}:${slot.preview.equippedCount}`
-          : 'none';
-
-        return `${slot.slot}:${slot.exists ? '1' : '0'}:${slot.version ?? '-'}:${slot.label ?? '-'}:${slot.updatedAt ?? '-'}:${preview}`;
-      })
-      .join(';');
-
-    return [
-      this.isAuthenticated ? '1' : '0',
-      this.saveSlotsBusy ? '1' : '0',
-      this.saveSlotsActionBusyKey ?? '-',
-      this.saveSlotsLoadConfirmSlot ?? '-',
-      this.saveSlotsError ?? '',
-      slots,
-    ].join('|');
+    return computeSaveSlotsRenderSignatureFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      saveSlotsBusy: this.saveSlotsBusy,
+      saveSlotsActionBusyKey: this.saveSlotsActionBusyKey,
+      saveSlotsLoadConfirmSlot: this.saveSlotsLoadConfirmSlot,
+      saveSlotsError: this.saveSlotsError,
+      slotStates: this.getSafeSlotStates(),
+    });
   }
 
   private getQuestStatusLabel(status: QuestStatus): string {
