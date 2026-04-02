@@ -6,8 +6,15 @@ import type {
 } from '../../gameScene.types';
 import type {
   VillageNpcKey,
+  VillageNpcRelationshipHudState,
+  VillageNpcHudState,
   VillageZoneInteractionState,
 } from './villageLogic';
+import {
+  getVillageSecondaryDialogue as getVillageSecondaryDialogueFromLogic,
+  getVillageZoneInteractionState as getVillageZoneInteractionStateFromLogic,
+} from './villageLogic';
+import { getVillageZoneByKey as getVillageZoneByKeyFromFeature } from './villageSceneSelection';
 
 export type VillageInteractionTargetKey = VillageSceneZoneKey | string | null | undefined;
 
@@ -307,4 +314,43 @@ export function buildVillageInteractionPlan(input: {
     action,
     steps,
   };
+}
+
+export function buildVillageInteractionPlanFromState(input: {
+  targetKey: VillageSceneZoneKey | undefined;
+  selectedZoneKey: VillageSceneZoneKey | null;
+  zones: VillageSceneZoneConfig[];
+  isAuthenticated: boolean;
+  villageMarketUnlocked: boolean;
+  blacksmithUnlocked: boolean;
+  blacksmithCurseLifted: boolean;
+  villageNpcState: VillageNpcHudState;
+  villageNpcRelationships: VillageNpcRelationshipHudState;
+  villageShopPanelOpen: boolean;
+  towerHighestFloor: number;
+}): VillageInteractionPlan {
+  const selectedZone = getVillageZoneByKeyFromFeature(input.zones, input.targetKey ?? input.selectedZoneKey);
+  const interactionState = selectedZone
+    ? getVillageZoneInteractionStateFromLogic({
+        isAuthenticated: input.isAuthenticated,
+        zone: selectedZone,
+        villageMarketUnlocked: input.villageMarketUnlocked,
+        blacksmithUnlocked: input.blacksmithUnlocked,
+        blacksmithCurseLifted: input.blacksmithCurseLifted,
+        villageNpcState: input.villageNpcState,
+        villageNpcRelationships: input.villageNpcRelationships,
+      })
+    : null;
+
+  return buildVillageInteractionPlan({
+    targetKey: input.targetKey,
+    selectedZoneKey: input.selectedZoneKey,
+    zones: input.zones,
+    interactionState,
+    villageShopPanelOpen: input.villageShopPanelOpen,
+    secondaryDialogueMessage: getVillageSecondaryDialogueFromLogic({
+      isAuthenticated: input.isAuthenticated,
+      towerHighestFloor: input.towerHighestFloor,
+    }),
+  });
 }
