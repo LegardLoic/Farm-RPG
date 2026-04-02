@@ -31,45 +31,12 @@ import {
   type GameplayLoopState,
   type TowerStoryEventState,
   type TowerStoryState,
-  type ValueParsers,
-  normalizeBlacksmithPayload as parseBlacksmithPayload,
-  normalizeFarmCraftIngredientState as parseFarmCraftIngredientState,
-  normalizeFarmCraftRecipeState as parseFarmCraftRecipeState,
-  normalizeFarmCropCatalogEntry as parseFarmCropCatalogEntry,
-  normalizeFarmPlotState as parseFarmPlotState,
-  normalizeFarmStoryEventEntry as parseFarmStoryEventEntry,
-  normalizeGameplayCraftingPayload as parseGameplayCraftingPayload,
-  normalizeGameplayFarmPayload as parseGameplayFarmPayload,
-  normalizeGameplayFarmStoryPayload as parseGameplayFarmStoryPayload,
-  normalizeGameplayLoopPayload as parseGameplayLoopPayload,
-  normalizeGameplayTowerStoryPayload as parseGameplayTowerStoryPayload,
-  normalizeTowerStoryEventEntry as parseTowerStoryEventEntry,
-  normalizeVillageMarketPayload as parseVillageMarketPayload,
 } from './services/payloadNormalizers';
-import {
-  type GameplayPayloadParsers,
-  parseAutoSavePayload as parseAutoSavePayloadFromService,
-  parseCombatPayload as parseCombatPayloadFromService,
-  parseHeroProfilePayload as parseHeroProfilePayloadFromService,
-  parseQuestsPayload as parseQuestsPayloadFromService,
-  parseSaveSlotPreviewPayload as parseSaveSlotPreviewPayloadFromService,
-  parseSaveSlotsPayload as parseSaveSlotsPayloadFromService,
-} from './services/gameplayPayloadParsers';
 import {
   fetchJson as fetchJsonFromApi,
   formatRequestError as formatRequestErrorFromApi,
 } from './services/apiClient';
-import {
-  asCombatStatus as asCombatStatusFromParser,
-  asCombatTurn as asCombatTurnFromParser,
-  asCombatUiStatus as asCombatUiStatusFromParser,
-  asNumber as asNumberFromParser,
-  asQuestStatus as asQuestStatusFromParser,
-  asRecord as asRecordFromParser,
-  asString as asStringFromParser,
-  asStringArray as asStringArrayFromParser,
-  isRecord as isRecordFromParser,
-} from './services/valueParsers';
+import { createGameScenePayloadGateway } from './services/gameScenePayloadGateway';
 import {
   type FarmPlotStateLike,
   formatFarmLabel as formatFarmLabelFromLogic,
@@ -108,6 +75,8 @@ import {
   runSleepAtFarmAction as runSleepAtFarmActionFromFeature,
   runWaterFarmPlotAction as runWaterFarmPlotActionFromFeature,
 } from './features/farm/farmActionHandlers';
+import { isTypingInsideField as isTypingInsideFieldFromCommon } from './features/common/inputGuards';
+import { getSceneObstacleLayout as getSceneObstacleLayoutFromCommon } from './features/common/sceneObstacleLayout';
 import {
   renderFarmCraftingRecipes as renderFarmCraftingRecipesFromFeature,
   renderFarmPanel as renderFarmPanelFromFeature,
@@ -245,8 +214,6 @@ import {
   getBlacksmithStatusLabel as getBlacksmithStatusLabelFromVillageHud,
   getDayPhaseKey as getDayPhaseKeyFromVillageHud,
   getDayPhaseLabel as getDayPhaseLabelFromVillageHud,
-  normalizeVillageNpcEntry as normalizeVillageNpcEntryFromVillageHud,
-  normalizeVillageNpcRelationshipEntry as normalizeVillageNpcRelationshipEntryFromVillageHud,
 } from './features/village/villageHudParsers';
 import {
   getHeroAppearanceLabel as getHeroAppearanceLabelFromIntro,
@@ -256,7 +223,6 @@ import {
   getIntroNarrativeLabel as getIntroNarrativeLabelFromIntro,
   getIntroProgressLabel as getIntroProgressLabelFromIntro,
   getIntroSummaryLabel as getIntroSummaryLabelFromIntro,
-  normalizeGameplayIntroPayload as normalizeGameplayIntroPayloadFromIntro,
 } from './features/intro/introLogic';
 import {
   runAdvanceIntroNarrativeAction as runAdvanceIntroNarrativeActionFromFeature,
@@ -283,8 +249,6 @@ import {
   formatCombatDebugScriptedIntentsReference as formatCombatDebugScriptedIntentsReferenceFromDebugQa,
   formatSetQuestStatusSuccess as formatSetQuestStatusSuccessFromDebugQa,
   formatSetWorldFlagsSuccess as formatSetWorldFlagsSuccessFromDebugQa,
-  getDebugQaReplayAutoPlayIntervalMs as getDebugQaReplayAutoPlayIntervalMsFromDebugQa,
-  getDebugQaReplayAutoPlaySpeedLabel as getDebugQaReplayAutoPlaySpeedLabelFromDebugQa,
   getDebugQaScriptedIntentsDisplayText as getDebugQaScriptedIntentsDisplayTextFromDebugQa,
   isQuestStatusValue as isQuestStatusValueFromDebugQa,
   parseImportedDebugQaTrace as parseImportedDebugQaTraceFromDebugQa,
@@ -310,6 +274,21 @@ import {
   startDebugQaStepReplay as startDebugQaStepReplayFromFeature,
   stopDebugQaStepReplay as stopDebugQaStepReplayFromFeature,
 } from './features/debugQa/debugQaReplayActionHandlers';
+import {
+  applyStripCalibrationPreset as applyStripCalibrationPresetFromFeature,
+  getDebugQaReplayAutoPlayIntervalMs as getDebugQaReplayAutoPlayIntervalMsFromFeature,
+  getDebugQaReplayAutoPlaySpeedLabel as getDebugQaReplayAutoPlaySpeedLabelFromFeature,
+  persistDebugQaReplayAutoPlaySpeed as persistDebugQaReplayAutoPlaySpeedFromFeature,
+  persistStripCalibrationPreset as persistStripCalibrationPresetFromFeature,
+  readDebugQaReplayAutoPlaySpeed as readDebugQaReplayAutoPlaySpeedFromFeature,
+  readStorageValue as readStorageValueFromFeature,
+  readStoredDebugQaReplayAutoPlaySpeed as readStoredDebugQaReplayAutoPlaySpeedFromFeature,
+  readStoredStripCalibrationPreset as readStoredStripCalibrationPresetFromFeature,
+  readStripCalibrationPresetFromUi as readStripCalibrationPresetFromUiFromFeature,
+  stopDebugQaStepReplayAutoPlay as stopDebugQaStepReplayAutoPlayFromFeature,
+  toggleDebugQaStepReplayAutoPlay as toggleDebugQaStepReplayAutoPlayFromFeature,
+  writeStorageValue as writeStorageValueFromFeature,
+} from './features/debugQa/debugQaPlaybackCalibrationHandlers';
 import {
   applyImportedDebugQaTrace as applyImportedDebugQaTraceFromFeature,
   buildCombatTraceSnapshot as buildCombatTraceSnapshotFromFeature,
@@ -640,6 +619,11 @@ export class GameScene extends Phaser.Scene {
   private combatLogs: string[] = [];
   private combatMessage = 'Aucun combat actif.';
   private combatError: string | null = null;
+  private readonly payloadGateway = createGameScenePayloadGateway({
+    getFallbackCombatStatus: () => this.combatState?.status ?? 'active',
+    isHeroAppearanceKey,
+    isIntroNarrativeStepKey,
+  });
   private combatBusy = false;
   private quests: QuestState[] = [];
   private questBusy = false;
@@ -3413,7 +3397,7 @@ export class GameScene extends Phaser.Scene {
     return resolvePortraitEntryPathFromFeature({
       entry,
       animation,
-      asString: (value) => this.asString(value),
+      asString: (value) => this.payloadGateway.asString(value),
     });
   }
 
@@ -3556,7 +3540,7 @@ export class GameScene extends Phaser.Scene {
       const payload = await this.fetchJson<unknown>('/quests', {
         method: 'GET',
       });
-      this.quests = this.normalizeQuestsPayload(payload);
+      this.quests = this.payloadGateway.normalizeQuestsPayload(payload);
     } catch (error) {
       this.questError = this.getErrorMessage(error, 'Unable to load quests.');
       if (this.quests.length === 0) {
@@ -3584,7 +3568,7 @@ export class GameScene extends Phaser.Scene {
         method: 'GET',
       });
 
-      const parsed = this.normalizeBlacksmithPayload(payload);
+      const parsed = this.payloadGateway.normalizeBlacksmithPayload(payload);
       this.blacksmithOffers = parsed.offers;
     } catch (error) {
       this.blacksmithError = this.getErrorMessage(error, 'Unable to load blacksmith shop.');
@@ -3647,7 +3631,7 @@ export class GameScene extends Phaser.Scene {
         method: 'GET',
       });
 
-      this.autosave = this.normalizeAutoSavePayload(payload);
+      this.autosave = this.payloadGateway.normalizeAutoSavePayload(payload);
     } catch (error) {
       this.autosaveError = this.getErrorMessage(error, 'Unable to load autosave.');
       this.autosave = null;
@@ -3672,7 +3656,7 @@ export class GameScene extends Phaser.Scene {
       const payload = await this.fetchJson<unknown>('/saves', {
         method: 'GET',
       });
-      const slots = this.normalizeSaveSlotsPayload(payload);
+      const slots = this.payloadGateway.normalizeSaveSlotsPayload(payload);
       const previewsBySlot = await this.loadSaveSlotPreviews(slots);
       this.saveSlots = slots.map((slot) => ({
         ...slot,
@@ -3706,7 +3690,7 @@ export class GameScene extends Phaser.Scene {
           const payload = await this.fetchJson<unknown>(`/saves/${slot.slot}`, {
             method: 'GET',
           });
-          previewsBySlot.set(slot.slot, this.normalizeSaveSlotPreviewPayload(payload));
+          previewsBySlot.set(slot.slot, this.payloadGateway.normalizeSaveSlotPreviewPayload(payload));
         } catch {
           previewsBySlot.set(slot.slot, null);
         }
@@ -3733,7 +3717,7 @@ export class GameScene extends Phaser.Scene {
       const payload = await this.fetchJson<unknown>('/combat/current', {
         method: 'GET',
       });
-      const encounter = this.normalizeCombatPayload(payload);
+      const encounter = this.payloadGateway.normalizeCombatPayload(payload);
 
       if (encounter) {
         this.applyCombatSnapshot(encounter);
@@ -3774,7 +3758,7 @@ export class GameScene extends Phaser.Scene {
         method: 'POST',
         body: JSON.stringify({}),
       });
-      const encounter = this.normalizeCombatPayload(payload);
+      const encounter = this.payloadGateway.normalizeCombatPayload(payload);
 
       if (!encounter) {
         throw new Error('Combat start returned an empty payload.');
@@ -3833,7 +3817,7 @@ export class GameScene extends Phaser.Scene {
         method: 'POST',
         body: JSON.stringify({ action }),
       });
-      const encounter = this.normalizeCombatPayload(payload);
+      const encounter = this.payloadGateway.normalizeCombatPayload(payload);
 
       if (!encounter) {
         throw new Error('Combat action returned an empty payload.');
@@ -3887,7 +3871,7 @@ export class GameScene extends Phaser.Scene {
         method: 'POST',
         body: JSON.stringify({ reason: 'Player chose to flee from the UI.' }),
       });
-      const encounter = this.normalizeCombatPayload(payload);
+      const encounter = this.payloadGateway.normalizeCombatPayload(payload);
 
       if (!encounter) {
         throw new Error('Combat forfeit returned an empty payload.');
@@ -4387,7 +4371,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyGameplaySnapshot(payload: unknown): void {
-    if (!this.isRecord(payload)) {
+    if (!this.payloadGateway.isRecord(payload)) {
       return;
     }
 
@@ -4397,10 +4381,10 @@ export class GameScene extends Phaser.Scene {
       this.introNarrativeError = null;
     }
 
-    const world = this.asRecord(payload.world);
+    const world = this.payloadGateway.asRecord(payload.world);
     if (world) {
-      const day = this.asNumber(world.day);
-      const zone = this.asString(world.zone);
+      const day = this.payloadGateway.asNumber(world.day);
+      const zone = this.payloadGateway.asString(world.zone);
 
       if (day !== null) {
         this.hudState.day = Math.max(1, Math.round(day));
@@ -4453,19 +4437,19 @@ export class GameScene extends Phaser.Scene {
       this.loopState = loop;
     }
 
-    const progression = this.asRecord(payload.progression);
+    const progression = this.payloadGateway.asRecord(payload.progression);
     if (!progression) {
       return;
     }
 
-    const gold = this.asNumber(progression.gold);
-    const level = this.asNumber(progression.level);
-    const experience = this.asNumber(progression.experience);
-    const experienceToNextLevel = this.asNumber(progression.experienceToNextLevel);
-    const currentHp = this.asNumber(progression.currentHp);
-    const maxHp = this.asNumber(progression.maxHp);
-    const currentMp = this.asNumber(progression.currentMp);
-    const maxMp = this.asNumber(progression.maxMp);
+    const gold = this.payloadGateway.asNumber(progression.gold);
+    const level = this.payloadGateway.asNumber(progression.level);
+    const experience = this.payloadGateway.asNumber(progression.experience);
+    const experienceToNextLevel = this.payloadGateway.asNumber(progression.experienceToNextLevel);
+    const currentHp = this.payloadGateway.asNumber(progression.currentHp);
+    const maxHp = this.payloadGateway.asNumber(progression.maxHp);
+    const currentMp = this.payloadGateway.asNumber(progression.currentMp);
+    const maxMp = this.payloadGateway.asNumber(progression.maxMp);
 
     if (gold !== null) {
       this.hudState.gold = Math.max(0, Math.round(gold));
@@ -4496,15 +4480,15 @@ export class GameScene extends Phaser.Scene {
       this.hudState.mp = Math.max(0, Math.min(this.hudState.maxMp, Math.round(currentMp)));
     }
 
-    const village = this.asRecord(payload.village);
+    const village = this.payloadGateway.asRecord(payload.village);
     if (village) {
-      const blacksmith = this.asRecord(village.blacksmith);
+      const blacksmith = this.payloadGateway.asRecord(village.blacksmith);
       if (blacksmith) {
         this.hudState.blacksmithUnlocked = Boolean(blacksmith.unlocked);
         this.hudState.blacksmithCurseLifted = Boolean(blacksmith.curseLifted);
       }
 
-      const npcs = this.asRecord(village.npcs);
+      const npcs = this.payloadGateway.asRecord(village.npcs);
       if (npcs) {
         const mayor = this.normalizeVillageNpcEntry(npcs.mayor);
         const blacksmithNpc = this.normalizeVillageNpcEntry(npcs.blacksmith);
@@ -4521,7 +4505,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      const relationships = this.asRecord(village.relationships);
+      const relationships = this.payloadGateway.asRecord(village.relationships);
       if (relationships) {
         const mayorRelationship = this.normalizeVillageNpcRelationshipEntry(relationships.mayor);
         const blacksmithRelationship = this.normalizeVillageNpcRelationshipEntry(relationships.blacksmith);
@@ -4539,10 +4523,10 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    const tower = this.asRecord(payload.tower);
+    const tower = this.payloadGateway.asRecord(payload.tower);
     if (tower) {
-      const currentFloor = this.asNumber(tower.currentFloor);
-      const highestFloor = this.asNumber(tower.highestFloor);
+      const currentFloor = this.payloadGateway.asNumber(tower.currentFloor);
+      const highestFloor = this.payloadGateway.asNumber(tower.highestFloor);
       const bossFloor10Defeated = tower.bossFloor10Defeated;
 
       if (currentFloor !== null) {
@@ -5355,106 +5339,117 @@ export class GameScene extends Phaser.Scene {
   }
 
   private toggleDebugQaStepReplayAutoPlay(): void {
-    if (!this.debugQaStepReplayState) {
-      this.debugQaStatus = 'error';
-      this.debugQaError = 'Demarre un replay pas a pas avant d activer l auto-play.';
-      this.debugQaMessage = null;
-      this.updateHud();
-      return;
-    }
-
-    if (this.debugQaReplayAutoPlayIntervalId !== null) {
-      this.stopDebugQaStepReplayAutoPlay(true);
-      this.debugQaStatus = 'success';
-      this.debugQaError = null;
-      this.debugQaMessage = 'Auto-play en pause.';
-      this.updateHud();
-      return;
-    }
-
-    const selectedSpeed = this.readDebugQaReplayAutoPlaySpeed();
-    this.debugQaReplayAutoPlaySpeed = selectedSpeed;
-    this.persistDebugQaReplayAutoPlaySpeed(selectedSpeed);
-    const intervalMs = this.getDebugQaReplayAutoPlayIntervalMs(selectedSpeed);
-    this.debugQaReplayAutoPlayIntervalId = window.setInterval(() => {
-      if (!this.debugQaStepReplayState) {
-        this.stopDebugQaStepReplayAutoPlay(true);
-        return;
-      }
-
-      this.advanceDebugQaStepReplay();
-      if (!this.debugQaStepReplayState) {
-        this.stopDebugQaStepReplayAutoPlay(true);
-      }
-    }, intervalMs);
-
-    this.debugQaStatus = 'success';
-    this.debugQaError = null;
-    this.debugQaMessage = `Auto-play actif (${this.getDebugQaReplayAutoPlaySpeedLabel(selectedSpeed)}).`;
-    this.updateHud();
+    toggleDebugQaStepReplayAutoPlayFromFeature({
+      stepReplayState: this.debugQaStepReplayState,
+      replayAutoPlayIntervalId: this.debugQaReplayAutoPlayIntervalId,
+      replayAutoPlaySpeedSelectValue:
+        this.debugQaReplayAutoPlaySpeedSelect?.value ?? this.debugQaReplayAutoPlaySpeed,
+      replayAutoPlaySpeed: this.debugQaReplayAutoPlaySpeed,
+      replayAutoPlaySpeedOptions: DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS,
+      setReplayAutoPlaySpeed: (value) => {
+        this.debugQaReplayAutoPlaySpeed = value;
+      },
+      setReplayAutoPlayIntervalId: (value) => {
+        this.debugQaReplayAutoPlayIntervalId = value;
+      },
+      persistDebugQaReplayAutoPlaySpeed: (value) => this.persistDebugQaReplayAutoPlaySpeed(value),
+      stopDebugQaStepReplayAutoPlay: (updateHud) => this.stopDebugQaStepReplayAutoPlay(updateHud),
+      advanceDebugQaStepReplay: () => this.advanceDebugQaStepReplay(),
+      hasStepReplayState: () => this.debugQaStepReplayState !== null,
+      setDebugQaStatus: (value) => {
+        this.debugQaStatus = value;
+      },
+      setDebugQaError: (value) => {
+        this.debugQaError = value;
+      },
+      setDebugQaMessage: (value) => {
+        this.debugQaMessage = value;
+      },
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private stopDebugQaStepReplayAutoPlay(updateHud: boolean): void {
-    if (this.debugQaReplayAutoPlayIntervalId !== null) {
-      window.clearInterval(this.debugQaReplayAutoPlayIntervalId);
-      this.debugQaReplayAutoPlayIntervalId = null;
-      if (updateHud) {
-        this.updateHud();
-      }
-    }
+    stopDebugQaStepReplayAutoPlayFromFeature({
+      replayAutoPlayIntervalId: this.debugQaReplayAutoPlayIntervalId,
+      setReplayAutoPlayIntervalId: (value) => {
+        this.debugQaReplayAutoPlayIntervalId = value;
+      },
+      updateHudOnStop: updateHud,
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private readDebugQaReplayAutoPlaySpeed(): DebugQaReplayAutoPlaySpeedKey {
-    const value = this.debugQaReplayAutoPlaySpeedSelect?.value ?? this.debugQaReplayAutoPlaySpeed;
-    return value === 'slow' || value === 'normal' || value === 'fast' ? value : 'normal';
+    return readDebugQaReplayAutoPlaySpeedFromFeature(
+      this.debugQaReplayAutoPlaySpeedSelect?.value ?? this.debugQaReplayAutoPlaySpeed,
+    );
   }
 
   private readStoredDebugQaReplayAutoPlaySpeed(): DebugQaReplayAutoPlaySpeedKey {
-    const stored = this.readStorageValue(DEBUG_QA_REPLAY_AUTOPLAY_SPEED_STORAGE_KEY);
-    return stored === 'slow' || stored === 'normal' || stored === 'fast' ? stored : 'normal';
+    return readStoredDebugQaReplayAutoPlaySpeedFromFeature(
+      DEBUG_QA_REPLAY_AUTOPLAY_SPEED_STORAGE_KEY,
+      (key) => this.readStorageValue(key),
+    );
   }
 
   private persistDebugQaReplayAutoPlaySpeed(speed: DebugQaReplayAutoPlaySpeedKey): void {
-    this.writeStorageValue(DEBUG_QA_REPLAY_AUTOPLAY_SPEED_STORAGE_KEY, speed);
+    persistDebugQaReplayAutoPlaySpeedFromFeature(
+      DEBUG_QA_REPLAY_AUTOPLAY_SPEED_STORAGE_KEY,
+      speed,
+      (key, value) => this.writeStorageValue(key, value),
+    );
   }
 
   private getDebugQaReplayAutoPlayIntervalMs(speed: DebugQaReplayAutoPlaySpeedKey): number {
-    return getDebugQaReplayAutoPlayIntervalMsFromDebugQa(speed, DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS);
+    return getDebugQaReplayAutoPlayIntervalMsFromFeature(speed, DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS);
   }
 
   private getDebugQaReplayAutoPlaySpeedLabel(speed: DebugQaReplayAutoPlaySpeedKey): string {
-    return getDebugQaReplayAutoPlaySpeedLabelFromDebugQa(speed, DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS);
+    return getDebugQaReplayAutoPlaySpeedLabelFromFeature(speed, DEBUG_QA_REPLAY_AUTOPLAY_SPEED_OPTIONS);
   }
 
   private applyStripCalibrationPreset(): void {
-    if (!this.stripCalibrationEnabled) {
-      return;
-    }
-
-    const nextPreset = this.readStripCalibrationPresetFromUi();
-    this.stripCalibrationPreset = nextPreset;
-    this.persistStripCalibrationPreset(nextPreset);
-    this.refreshStripCalibrationRuntime();
-
-    const activePreset = this.getActiveStripCalibrationPreset();
-    this.debugQaStatus = 'success';
-    this.debugQaError = null;
-    this.debugQaMessage = `Strip calibration active: ${activePreset?.label ?? 'Manifest default'}.`;
-    this.updateHud();
+    applyStripCalibrationPresetFromFeature({
+      stripCalibrationEnabled: this.stripCalibrationEnabled,
+      stripCalibrationPresetSelectValue:
+        this.debugQaStripCalibrationSelect?.value ?? this.stripCalibrationPreset,
+      stripCalibrationPreset: this.stripCalibrationPreset,
+      persistStripCalibrationPreset: (value) => this.persistStripCalibrationPreset(value),
+      setStripCalibrationPreset: (value) => {
+        this.stripCalibrationPreset = value;
+      },
+      refreshStripCalibrationRuntime: () => this.refreshStripCalibrationRuntime(),
+      getActiveStripCalibrationPreset: () => this.getActiveStripCalibrationPreset(),
+      setDebugQaStatus: (value) => {
+        this.debugQaStatus = value;
+      },
+      setDebugQaError: (value) => {
+        this.debugQaError = value;
+      },
+      setDebugQaMessage: (value) => {
+        this.debugQaMessage = value;
+      },
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private readStripCalibrationPresetFromUi(): StripCalibrationPresetKey {
-    const value = this.debugQaStripCalibrationSelect?.value ?? this.stripCalibrationPreset;
-    return value === 'manifest' || value === 'snappy' || value === 'cinematic' ? value : 'manifest';
+    return readStripCalibrationPresetFromUiFromFeature(
+      this.debugQaStripCalibrationSelect?.value ?? this.stripCalibrationPreset,
+    );
   }
 
   private readStoredStripCalibrationPreset(): StripCalibrationPresetKey {
-    const stored = this.readStorageValue(DEBUG_QA_STRIP_CALIBRATION_STORAGE_KEY);
-    return stored === 'manifest' || stored === 'snappy' || stored === 'cinematic' ? stored : 'manifest';
+    return readStoredStripCalibrationPresetFromFeature(DEBUG_QA_STRIP_CALIBRATION_STORAGE_KEY, (key) =>
+      this.readStorageValue(key),
+    );
   }
 
   private persistStripCalibrationPreset(preset: StripCalibrationPresetKey): void {
-    this.writeStorageValue(DEBUG_QA_STRIP_CALIBRATION_STORAGE_KEY, preset);
+    persistStripCalibrationPresetFromFeature(DEBUG_QA_STRIP_CALIBRATION_STORAGE_KEY, preset, (key, value) =>
+      this.writeStorageValue(key, value),
+    );
   }
 
   private refreshStripCalibrationRuntime(): void {
@@ -5488,19 +5483,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private readStorageValue(key: string): string | null {
-    try {
-      return window.localStorage.getItem(key);
-    } catch {
-      return null;
-    }
+    return readStorageValueFromFeature(key);
   }
 
   private writeStorageValue(key: string, value: string): void {
-    try {
-      window.localStorage.setItem(key, value);
-    } catch {
-      // Ignore storage quota / privacy mode failures.
-    }
+    writeStorageValueFromFeature(key, value);
   }
 
   private formatCombatDebugScriptedIntentsReference(reference: CombatDebugReference): string {
@@ -5687,13 +5674,13 @@ export class GameScene extends Phaser.Scene {
   private parseImportedDebugQaTrace(rawPayload: unknown, sourceFile: string): ImportedDebugQaTrace | null {
     return parseImportedDebugQaTraceFromDebugQa(rawPayload, sourceFile, {
       parsers: {
-        asRecord: (value) => this.asRecord(value),
-        asString: (value) => this.asString(value),
-        asStringArray: (value) => this.asStringArray(value),
-        asNumber: (value) => this.asNumber(value),
-        asCombatUiStatus: (value) => this.asCombatUiStatus(value),
+        asRecord: (value) => this.payloadGateway.asRecord(value),
+        asString: (value) => this.payloadGateway.asString(value),
+        asStringArray: (value) => this.payloadGateway.asStringArray(value),
+        asNumber: (value) => this.payloadGateway.asNumber(value),
+        asCombatUiStatus: (value) => this.payloadGateway.asCombatUiStatus(value),
       },
-      normalizeCombatPayload: (value) => this.normalizeCombatPayload(value),
+      normalizeCombatPayload: (value) => this.payloadGateway.normalizeCombatPayload(value),
     });
   }
 
@@ -5894,24 +5881,24 @@ export class GameScene extends Phaser.Scene {
 
   private formatApplyStatePresetSuccess(payload: unknown): string | null {
     return formatApplyStatePresetSuccessFromDebugQa(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asStringArray: (value) => this.asStringArray(value),
-      asNumber: (value) => this.asNumber(value),
+      asRecord: (value) => this.payloadGateway.asRecord(value),
+      asString: (value) => this.payloadGateway.asString(value),
+      asStringArray: (value) => this.payloadGateway.asStringArray(value),
+      asNumber: (value) => this.payloadGateway.asNumber(value),
     });
   }
 
   private formatSetWorldFlagsSuccess(payload: unknown): string | null {
     return formatSetWorldFlagsSuccessFromDebugQa(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asStringArray: (value) => this.asStringArray(value),
+      asRecord: (value) => this.payloadGateway.asRecord(value),
+      asStringArray: (value) => this.payloadGateway.asStringArray(value),
     });
   }
 
   private formatSetQuestStatusSuccess(payload: unknown): string | null {
     return formatSetQuestStatusSuccessFromDebugQa(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
+      asRecord: (value) => this.payloadGateway.asRecord(value),
+      asString: (value) => this.payloadGateway.asString(value),
     });
   }
 
@@ -6052,74 +6039,55 @@ export class GameScene extends Phaser.Scene {
   }
 
   private normalizeGameplayIntroPayload(payload: unknown): IntroNarrativeState | null {
-    return normalizeGameplayIntroPayloadFromIntro(payload, { asRecord: (value) => this.asRecord(value), asString: (value) => this.asString(value) }, isIntroNarrativeStepKey);
+    return this.payloadGateway.normalizeGameplayIntroPayload(payload);
   }
 
   private normalizeVillageNpcEntry(payload: unknown): VillageNpcHudEntry | null {
-    return normalizeVillageNpcEntryFromVillageHud(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-    });
+    return this.payloadGateway.normalizeVillageNpcEntry(payload);
   }
 
   private normalizeVillageNpcRelationshipEntry(payload: unknown): VillageNpcRelationshipHudEntry | null {
-    return normalizeVillageNpcRelationshipEntryFromVillageHud(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asNumber: (value) => this.asNumber(value),
-    });
-  }
-
-  private getContentValueParsers(): ValueParsers {
-    return {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asNumber: (value) => this.asNumber(value),
-    };
+    return this.payloadGateway.normalizeVillageNpcRelationshipEntry(payload);
   }
 
   private normalizeGameplayFarmStoryPayload(payload: unknown): FarmStoryState | null {
-    return parseGameplayFarmStoryPayload(payload, this.getContentValueParsers()) as FarmStoryState | null;
+    return this.payloadGateway.normalizeGameplayFarmStoryPayload(payload);
   }
 
   private normalizeFarmStoryEventEntry(payload: unknown): FarmStoryEventState | null {
-    return parseFarmStoryEventEntry(payload, this.getContentValueParsers()) as FarmStoryEventState | null;
+    return this.payloadGateway.normalizeFarmStoryEventEntry(payload);
   }
 
   private normalizeGameplayTowerStoryPayload(payload: unknown): TowerStoryState | null {
-    return parseGameplayTowerStoryPayload(payload, this.getContentValueParsers()) as TowerStoryState | null;
+    return this.payloadGateway.normalizeGameplayTowerStoryPayload(payload);
   }
 
   private normalizeTowerStoryEventEntry(payload: unknown): TowerStoryEventState | null {
-    return parseTowerStoryEventEntry(payload, this.getContentValueParsers()) as TowerStoryEventState | null;
+    return this.payloadGateway.normalizeTowerStoryEventEntry(payload);
   }
 
   private normalizeGameplayFarmPayload(payload: unknown): FarmState | null {
-    return parseGameplayFarmPayload(payload, this.getContentValueParsers()) as FarmState | null;
+    return this.payloadGateway.normalizeGameplayFarmPayload(payload);
   }
 
   private normalizeGameplayCraftingPayload(payload: unknown): FarmCraftingState | null {
-    return parseGameplayCraftingPayload(payload, this.getContentValueParsers()) as FarmCraftingState | null;
+    return this.payloadGateway.normalizeGameplayCraftingPayload(payload);
   }
 
   private normalizeGameplayLoopPayload(payload: unknown): GameplayLoopState | null {
-    return parseGameplayLoopPayload(payload, this.getContentValueParsers()) as GameplayLoopState | null;
+    return this.payloadGateway.normalizeGameplayLoopPayload(payload);
   }
 
-  private normalizeFarmCraftRecipeState(payload: unknown): FarmCraftRecipeState | null {
-    return parseFarmCraftRecipeState(payload, this.getContentValueParsers()) as FarmCraftRecipeState | null;
+  private normalizeVillageMarketPayload(payload: unknown): {
+    unlocked: boolean;
+    seedOffers: VillageSeedOfferState[];
+    cropBuybackOffers: VillageCropBuybackOfferState[];
+  } {
+    return this.payloadGateway.normalizeVillageMarketPayload(payload);
   }
 
-  private normalizeFarmCraftIngredientState(payload: unknown): FarmCraftIngredientState | null {
-    return parseFarmCraftIngredientState(payload, this.getContentValueParsers()) as FarmCraftIngredientState | null;
-  }
-
-  private normalizeFarmCropCatalogEntry(payload: unknown): FarmCropCatalogEntryState | null {
-    return parseFarmCropCatalogEntry(payload, this.getContentValueParsers()) as FarmCropCatalogEntryState | null;
-  }
-
-  private normalizeFarmPlotState(payload: unknown): FarmPlotState | null {
-    return parseFarmPlotState(payload, this.getContentValueParsers()) as FarmPlotState | null;
+  private normalizeHeroProfilePayload(payload: unknown): HeroProfileState | null {
+    return this.payloadGateway.normalizeHeroProfilePayload(payload);
   }
 
   private async fetchJson<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -6128,107 +6096,6 @@ export class GameScene extends Phaser.Scene {
 
   private getErrorMessage(error: unknown, fallback: string): string {
     return formatRequestErrorFromApi(error, fallback);
-  }
-
-  private getGameplayPayloadParsers(): GameplayPayloadParsers<CombatStatus, CombatTurn, QuestStatus> {
-    return {
-      isRecord: (value): value is Record<string, unknown> => this.isRecord(value),
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asStringArray: (value) => this.asStringArray(value),
-      asNumber: (value) => this.asNumber(value),
-      asCombatStatus: (value) => this.asCombatStatus(value),
-      asQuestStatus: (value) => this.asQuestStatus(value),
-      asCombatTurn: (value) => this.asCombatTurn(value),
-    };
-  }
-
-  private normalizeQuestsPayload(payload: unknown): QuestState[] {
-    return parseQuestsPayloadFromService(payload, this.getGameplayPayloadParsers());
-  }
-
-  private normalizeBlacksmithPayload(payload: unknown): { offers: BlacksmithOfferState[] } {
-    return parseBlacksmithPayload(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asNumber: (value) => this.asNumber(value),
-    });
-  }
-
-  private normalizeVillageMarketPayload(payload: unknown): {
-    unlocked: boolean;
-    seedOffers: VillageSeedOfferState[];
-    cropBuybackOffers: VillageCropBuybackOfferState[];
-  } {
-    return parseVillageMarketPayload(payload, {
-      asRecord: (value) => this.asRecord(value),
-      asString: (value) => this.asString(value),
-      asNumber: (value) => this.asNumber(value),
-    });
-  }
-
-  private normalizeSaveSlotsPayload(payload: unknown): SaveSlotState[] {
-    return parseSaveSlotsPayloadFromService(payload, this.getGameplayPayloadParsers());
-  }
-
-  private normalizeAutoSavePayload(payload: unknown): AutoSaveState | null {
-    return parseAutoSavePayloadFromService(payload, this.getGameplayPayloadParsers());
-  }
-
-  private normalizeHeroProfilePayload(payload: unknown): HeroProfileState | null {
-    return parseHeroProfilePayloadFromService(
-      payload,
-      this.getGameplayPayloadParsers(),
-      isHeroAppearanceKey,
-    );
-  }
-
-  private normalizeSaveSlotPreviewPayload(payload: unknown): SaveSlotPreview | null {
-    return parseSaveSlotPreviewPayloadFromService(payload, this.getGameplayPayloadParsers());
-  }
-
-  private normalizeCombatPayload(payload: unknown): CombatEncounterState | null {
-    return parseCombatPayloadFromService(
-      payload,
-      this.getGameplayPayloadParsers(),
-      this.combatState?.status ?? 'active',
-    );
-  }
-
-  private asRecord(value: unknown): Record<string, unknown> | null {
-    return asRecordFromParser(value);
-  }
-
-  private isRecord(value: unknown): value is Record<string, unknown> {
-    return isRecordFromParser(value);
-  }
-
-  private asString(value: unknown): string | null {
-    return asStringFromParser(value);
-  }
-
-  private asStringArray(value: unknown): string[] {
-    return asStringArrayFromParser(value);
-  }
-
-  private asNumber(value: unknown): number | null {
-    return asNumberFromParser(value);
-  }
-
-  private asCombatUiStatus(value: unknown): CombatUiStatus | null {
-    return asCombatUiStatusFromParser(value);
-  }
-
-  private asCombatStatus(value: unknown): CombatStatus | null {
-    return asCombatStatusFromParser(value);
-  }
-
-  private asQuestStatus(value: unknown): QuestStatus | null {
-    return asQuestStatusFromParser(value);
-  }
-
-  private asCombatTurn(value: unknown): CombatTurn | null {
-    return asCombatTurnFromParser(value);
   }
 
   private formatIsoForHud(value: string): string {
@@ -6877,13 +6744,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private isTypingInsideField(): boolean {
-    const active = document.activeElement;
-    if (!active) {
-      return false;
-    }
-
-    const tagName = active.tagName.toUpperCase();
-    return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
+    return isTypingInsideFieldFromCommon(document.activeElement);
   }
 
   private rebuildSceneObstacles(): void {
@@ -6897,23 +6758,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.sceneObstacles = [];
 
-    const layout =
-      this.frontSceneMode === 'village'
-        ? [
-            { x: 286, y: 232, width: 248, height: 170 },
-            { x: 1262, y: 238, width: 246, height: 184 },
-            { x: 1040, y: 566, width: 272, height: 120 },
-            { x: 346, y: 614, width: 126, height: 34 },
-            { x: 808, y: 98, width: 264, height: 86 },
-            { x: 808, y: 804, width: 286, height: 72 },
-            { x: 808, y: 438, width: 232, height: 160 },
-          ]
-        : [
-            { x: 220, y: 235, width: 230, height: 150 },
-            { x: 220, y: 432, width: 62, height: 44 },
-            { x: 1325, y: 330, width: 120, height: 520 },
-            { x: 620, y: 682, width: 760, height: 58 },
-          ];
+    const layout = getSceneObstacleLayoutFromCommon(this.frontSceneMode);
 
     for (const entry of layout) {
       const obstacle = this.createObstacle(entry.x, entry.y, entry.width, entry.height);
