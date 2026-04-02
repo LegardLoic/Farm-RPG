@@ -88,6 +88,8 @@ import {
   getSelectedSeedLabel as getSelectedSeedLabelFromLogic,
   resolveSelectedFarmPlotKey as resolveSelectedFarmPlotKeyFromLogic,
 } from './features/farm/farmLogic';
+import { drawFarmSceneBackdrop } from './features/farm/farmSceneDecor';
+import { createFarmActionZone as createFarmActionZoneFromFeature } from './features/farm/farmSceneZones';
 import {
   buildVillageShopEntries as buildVillageShopEntriesFromLogic,
   computeVillageShopRenderSignature as computeVillageShopRenderSignatureFromLogic,
@@ -121,6 +123,8 @@ import {
   getVillageZoneStateColor as getVillageZoneStateColorFromLogic,
   getVillageZoneStateLabel as getVillageZoneStateLabelFromLogic,
 } from './features/village/villageLogic';
+import { drawVillageSceneBackdrop } from './features/village/villageSceneDecor';
+import { createVillageActionZone as createVillageActionZoneFromFeature } from './features/village/villageSceneZones';
 import {
   getBlacksmithStatusLabel as getBlacksmithStatusLabelFromVillageHud,
   getDayPhaseKey as getDayPhaseKeyFromVillageHud,
@@ -8677,47 +8681,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawFarmDecor(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.fillGradientStyle(0x2f6041, 0x2f6041, 0x1f462f, 0x1f462f, 1);
-    graphics.fillRect(0, 0, 1600, 900);
-
-    graphics.fillStyle(0x3d7248, 1);
-    for (let x = 0; x < 1600; x += 52) {
-      for (let y = 0; y < 900; y += 52) {
-        if ((x + y) % 104 === 0) {
-          graphics.fillCircle(x + 20, y + 16, 2);
-        }
-      }
-    }
-
-    graphics.fillStyle(0x6a5530, 1);
-    graphics.fillRoundedRect(426, 182, 556, 360, 16);
-    graphics.fillStyle(0x7f6637, 0.9);
-    graphics.fillRoundedRect(438, 194, 532, 336, 12);
-
-    graphics.fillStyle(0x7b5130, 1);
-    graphics.fillRoundedRect(92, 148, 250, 170, 16);
-    graphics.fillStyle(0x9d7448, 1);
-    graphics.fillTriangle(92, 148, 220, 74, 342, 148);
-    graphics.fillStyle(0xd7c39a, 1);
-    graphics.fillRect(202, 218, 34, 78);
-
-    graphics.fillStyle(0x6f4b2b, 1);
-    graphics.fillRoundedRect(116, 404, 204, 84, 12);
-    graphics.fillStyle(0x8d6942, 1);
-    graphics.fillRect(184, 404, 12, 84);
-    graphics.fillRect(238, 404, 12, 84);
-
-    graphics.fillStyle(0x886a3f, 1);
-    graphics.fillRoundedRect(1168, 256, 220, 330, 18);
-    graphics.fillStyle(0xb48b57, 1);
-    graphics.fillRoundedRect(1192, 278, 174, 286, 14);
-    graphics.fillStyle(0xd4b277, 1);
-    graphics.fillTriangle(1370, 410, 1450, 440, 1370, 470);
-
-    graphics.lineStyle(4, 0xc5a16a, 0.8);
-    graphics.lineBetween(312, 254, 438, 254);
-    graphics.lineBetween(312, 446, 438, 446);
-    graphics.lineBetween(970, 362, 1168, 362);
+    drawFarmSceneBackdrop(graphics);
 
     this.farmSceneStaticLabels.push(
       this.add
@@ -8777,69 +8741,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawVillageDecor(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.fillGradientStyle(0x5d675f, 0x5d675f, 0x2f3331, 0x2f3331, 1);
-    graphics.fillRect(0, 0, 1600, 900);
-
-    graphics.fillStyle(0x657068, 1);
-    for (let x = 0; x < 1600; x += 58) {
-      for (let y = 0; y < 900; y += 58) {
-        if ((x + y) % 116 === 0) {
-          graphics.fillCircle(x + 18, y + 22, 2);
-        }
-      }
-    }
-
-    graphics.fillStyle(0x64543d, 1);
-    graphics.fillRoundedRect(532, 208, 536, 470, 22);
-    graphics.fillStyle(0x7b684f, 1);
-    graphics.fillRoundedRect(558, 234, 484, 418, 18);
-
-    graphics.fillStyle(0x5f4a35, 1);
-    graphics.fillRoundedRect(136, 124, 298, 206, 16);
-    graphics.fillStyle(0x7f6445, 1);
-    graphics.fillTriangle(136, 124, 284, 52, 434, 124);
-    graphics.fillStyle(0xd5c6a3, 1);
-    graphics.fillRect(258, 212, 50, 108);
-
-    graphics.fillStyle(0x6b5032, 1);
-    graphics.fillRoundedRect(1140, 128, 276, 214, 16);
-    graphics.fillStyle(0x8e6f48, 1);
-    graphics.fillTriangle(1140, 128, 1278, 58, 1416, 128);
-    graphics.fillStyle(0x513a24, 1);
-    graphics.fillRect(1224, 210, 26, 124);
-    graphics.fillRect(1290, 210, 26, 124);
-
-    graphics.fillStyle(0x7f6542, 1);
-    graphics.fillRoundedRect(882, 468, 310, 206, 16);
-    graphics.fillStyle(0xbc8d56, 1);
-    graphics.fillTriangle(900, 468, 1038, 420, 1176, 468);
-    graphics.fillStyle(0xb37a40, 1);
-    graphics.fillRect(924, 556, 248, 22);
-
-    graphics.fillStyle(0x4f5f4e, 1);
-    graphics.fillRoundedRect(188, 520, 336, 220, 18);
-    graphics.fillStyle(0x678267, 1);
-    graphics.fillCircle(230, 536, 34);
-    graphics.fillCircle(292, 704, 28);
-    graphics.fillCircle(466, 538, 30);
-    graphics.fillStyle(0x6f5e46, 1);
-    graphics.fillRoundedRect(286, 604, 118, 30, 8);
-
-    graphics.fillStyle(0x302d2b, 0.96);
-    graphics.fillRoundedRect(666, 22, 286, 132, 22);
-    graphics.fillStyle(0x4a433f, 0.92);
-    graphics.fillRoundedRect(704, 52, 212, 86, 18);
-
-    graphics.fillStyle(0x6a593f, 1);
-    graphics.fillRoundedRect(636, 742, 332, 128, 18);
-    graphics.fillStyle(0x8a704a, 1);
-    graphics.fillRect(668, 760, 268, 18);
-
-    graphics.lineStyle(5, 0xc4ac82, 0.72);
-    graphics.lineBetween(518, 438, 884, 438);
-    graphics.lineBetween(808, 152, 808, 742);
-    graphics.lineBetween(492, 604, 632, 728);
-    graphics.lineBetween(1048, 554, 980, 674);
+    drawVillageSceneBackdrop(graphics);
 
     this.farmSceneStaticLabels.push(
       this.add
@@ -8924,51 +8826,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createVillageActionZone(config: VillageSceneZoneConfig): void {
-    const frame = this.add.rectangle(config.x, config.y, config.width, config.height, 0x3a3f43, 0.12);
-    frame.setStrokeStyle(2, 0xd4c39a, 0.42);
-    frame.setDepth(14);
-    frame.setInteractive({ useHandCursor: true });
-    frame.on('pointerover', () => {
-      this.setVillageSelectedZone(config.key, false);
-      this.updateHud();
-    });
-    frame.on('pointerdown', () => {
-      this.setVillageSelectedZone(config.key, true);
-      void this.handleVillageInteractionIntent(config.key);
-    });
-
-    const overlay = this.add.rectangle(config.x, config.y + 20, config.width - 24, config.height - 48, 0x111418, 0.22);
-    overlay.setDepth(15);
-
-    const title = this.add
-      .text(config.x, config.y - config.height * 0.3, config.title, {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '15px',
-        color: '#f1e5cb',
-        stroke: '#161312',
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5)
-      .setDepth(16);
-
-    const state = this.add
-      .text(config.x, config.y + config.height * 0.22, this.getVillageZoneStateLabel(config), {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '11px',
-        color: '#c8d4dc',
-        stroke: '#111315',
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5)
-      .setDepth(16);
-
-    this.villageSceneZoneVisuals.set(config.key, {
+    const visual = createVillageActionZoneFromFeature({
+      scene: this,
       config,
-      frame,
-      overlay,
-      title,
-      state,
+      getZoneStateLabel: (zone) => this.getVillageZoneStateLabel(zone),
+      onHover: () => {
+        this.setVillageSelectedZone(config.key, false);
+        this.updateHud();
+      },
+      onInteract: () => {
+        this.setVillageSelectedZone(config.key, true);
+        void this.handleVillageInteractionIntent(config.key);
+      },
     });
+    this.villageSceneZoneVisuals.set(config.key, visual);
   }
 
   private createFarmActionZone(
@@ -8978,13 +8849,7 @@ export class GameScene extends Phaser.Scene {
     height: number,
     onTrigger: () => void,
   ): void {
-    const trigger = this.add.rectangle(x, y, width, height, 0xe2b66d, 0.08);
-    trigger.setStrokeStyle(2, 0xe2b66d, 0.38);
-    trigger.setDepth(11);
-    trigger.setInteractive({ useHandCursor: true });
-    trigger.on('pointerdown', () => {
-      onTrigger();
-    });
+    const trigger = createFarmActionZoneFromFeature({ scene: this, x, y, width, height, onTrigger });
     this.farmSceneStaticLabels.push(trigger);
   }
 
