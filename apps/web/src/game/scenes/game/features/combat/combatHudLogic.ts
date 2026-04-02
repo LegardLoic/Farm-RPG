@@ -109,6 +109,48 @@ export function getCombatStatusLabel(status: CombatUiStatus): string {
   }
 }
 
+export function getCombatEncounterFloorLabel(combatState: CombatEncounterState | null, towerCurrentFloor: number): string {
+  if (!combatState) {
+    return '-';
+  }
+
+  return `Etage ${Math.max(1, Math.round(towerCurrentFloor))}`;
+}
+
+export function getCombatEncounterTypeLabel(combatState: CombatEncounterState | null, towerCurrentFloor: number): string {
+  if (!combatState) {
+    return '-';
+  }
+
+  const floor = Math.max(1, Math.round(towerCurrentFloor));
+  if (floor >= 10) {
+    return 'Boss majeur';
+  }
+
+  if (floor === 3 || floor === 5 || floor === 8) {
+    return 'Palier';
+  }
+
+  return 'Normal';
+}
+
+export function getCombatEnemyRoleLabel(combatState: CombatEncounterState | null, towerCurrentFloor: number): string {
+  if (!combatState) {
+    return '-';
+  }
+
+  const floor = Math.max(1, Math.round(towerCurrentFloor));
+  if (floor >= 10) {
+    return 'Avatar de malediction';
+  }
+
+  if (floor === 3 || floor === 5 || floor === 8) {
+    return 'Mini-boss';
+  }
+
+  return 'Ennemi standard';
+}
+
 export function getCombatTurnLabel(combatState: CombatEncounterState | null): string {
   if (!combatState) {
     return '-';

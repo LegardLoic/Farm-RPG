@@ -186,6 +186,8 @@ export function createHudTemplate(params: CreateHudTemplateParams): string {
           </div>
           <div class="hud-combat-meta">
             <div class="hud-combat-stat"><span>Encounter</span><strong data-hud="combatEncounterId">-</strong></div>
+            <div class="hud-combat-stat"><span>Etage</span><strong data-hud="combatFloor">-</strong></div>
+            <div class="hud-combat-stat"><span>Type</span><strong data-hud="combatType">-</strong></div>
             <div class="hud-combat-stat"><span>Tour</span><strong data-hud="combatTurn">-</strong></div>
             <div class="hud-combat-stat"><span>Round</span><strong data-hud="combatRound">-</strong></div>
             <div class="hud-combat-stat"><span>Resultat</span><strong data-hud="combatResult" aria-live="polite" aria-atomic="true">Aucun combat actif.</strong></div>
@@ -206,6 +208,7 @@ export function createHudTemplate(params: CreateHudTemplateParams): string {
                 <span data-hud="combatEnemySpriteFallback">No enemy</span>
               </div>
               <div class="combat-card-line"><span>Name</span><strong data-hud="combatEnemyName">-</strong></div>
+              <div class="combat-card-line"><span>Role</span><strong data-hud="combatEnemyRole">-</strong></div>
               <div class="combat-card-line"><span>HP</span><strong data-hud="combatEnemyHp">-</strong></div>
               <div class="combat-card-line"><span>MP</span><strong data-hud="combatEnemyMp">-</strong></div>
               <div class="combat-card-line"><span>Effects</span><strong data-hud="combatEnemyEffects">-</strong></div>
