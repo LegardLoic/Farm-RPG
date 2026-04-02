@@ -1,0 +1,65 @@
+export function resetHudTeardownState(target: any): void {
+  target.questsRenderSignature = '';
+  target.blacksmithRenderSignature = '';
+  target.villageMarketRenderSignature = '';
+  target.farmRenderSignature = '';
+  target.villageMarketUnlocked = false;
+  target.villageMarketSeedOffers = [];
+  target.villageMarketBuybackOffers = [];
+  target.villageMarketBusy = false;
+  target.villageMarketError = null;
+  target.farmState = null;
+  target.farmStoryState = null;
+  target.farmBusy = false;
+  target.farmError = null;
+  target.farmSelectedSeedItemKey = '';
+  target.farmSelectedPlotKey = null;
+  target.farmFeedbackMessage = null;
+  target.farmCraftingPanelOpen = false;
+  target.farmCraftingState = null;
+  target.farmCraftingBusy = false;
+  target.farmCraftingError = null;
+  target.farmCraftingRenderSignature = '';
+  target.frontSceneMode = 'farm';
+  target.villageSelectedZoneKey = null;
+  target.villageFeedbackMessage = null;
+  target.farmSceneRenderSignature = '';
+  target.villageSceneRenderSignature = '';
+  target.loopState = null;
+  target.loopBusy = false;
+  target.loopError = null;
+  target.towerStoryState = null;
+  target.villageNpcState = {
+    mayor: { stateKey: 'offscreen', available: false },
+    blacksmith: { stateKey: 'cursed', available: false },
+    merchant: { stateKey: 'absent', available: false },
+  };
+  target.autosaveRenderSignature = '';
+  target.saveSlotsRenderSignature = '';
+  target.heroProfile = null;
+  target.heroProfileBusy = false;
+  target.heroProfileError = null;
+  target.heroProfileMessage = null;
+  target.heroProfileNameDraft = '';
+  target.heroProfileAppearanceDraft = 'default';
+  target.introNarrativeState = null;
+  target.introNarrativeBusy = false;
+  target.introNarrativeError = null;
+  target.debugQaBusyAction = null;
+  target.debugQaStatus = 'idle';
+  target.debugQaMessage = null;
+  target.debugQaError = null;
+  target.debugQaImportedTrace = null;
+  target.debugQaStepReplayState = null;
+  target.debugQaReplayAutoPlayIntervalId = null;
+  target.debugQaReplayAutoPlaySpeed = 'normal';
+  target.stripCalibrationPreset = 'manifest';
+  target.debugQaRecapOutcomeFilter = 'all';
+  target.debugQaRecapEnemyFilter = '';
+  target.debugQaScriptEnemyFilter = '';
+  target.debugQaScriptIntentFilter = '';
+  target.debugQaScriptedIntentsReference = null;
+  target.debugQaScriptedIntentsText = 'Click "Load reference" to inspect the combat script QA payload.';
+  target.spriteManifest = null;
+  target.playerUsesStripAnimation = false;
+}

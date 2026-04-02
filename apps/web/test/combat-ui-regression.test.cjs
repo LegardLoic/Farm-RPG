@@ -2,14 +2,42 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
-const { join } = require('node:path');
+const { readdirSync, readFileSync } = require('node:fs');
+const { join, extname } = require('node:path');
 
-const gameScenePath = join(__dirname, '..', 'src', 'game', 'scenes', 'GameScene.ts');
+const gameSceneRootPath = join(__dirname, '..', 'src', 'game', 'scenes', 'game');
 const bootScenePath = join(__dirname, '..', 'src', 'game', 'scenes', 'BootScene.ts');
 const stylesPath = join(__dirname, '..', 'src', 'styles.css');
 
-const gameSceneSource = readFileSync(gameScenePath, 'utf8');
+function collectTypeScriptFiles(rootPath) {
+  const output = [];
+  const stack = [rootPath];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const absolutePath = join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(absolutePath);
+        continue;
+      }
+
+      if (entry.isFile() && extname(entry.name) === '.ts') {
+        output.push(absolutePath);
+      }
+    }
+  }
+
+  return output;
+}
+
+function sourceIncludesAny(patterns) {
+  return patterns.some((pattern) => gameSceneSource.includes(pattern));
+}
+
+const gameSceneSource = collectTypeScriptFiles(gameSceneRootPath)
+  .map((filePath) => readFileSync(filePath, 'utf8'))
+  .join('\n');
 const bootSceneSource = readFileSync(bootScenePath, 'utf8');
 const stylesSource = readFileSync(stylesPath, 'utf8');
 
@@ -33,10 +61,34 @@ test('enemy telegraph keeps current and next intent fields', () => {
 test('combat HUD exposes telemetry field and renderer hook', () => {
   assert.equal(gameSceneSource.includes('data-hud="combatTelemetry"'), true);
   assert.equal(gameSceneSource.includes('data-hud="combatRecap"'), true);
-  assert.equal(gameSceneSource.includes("setHudText('combatTelemetry', this.getCombatTelemetryLabel())"), true);
-  assert.equal(gameSceneSource.includes("setHudText('combatRecap', this.getCombatRecapLabel())"), true);
-  assert.equal(gameSceneSource.includes('private getCombatRecapLabel(): string'), true);
-  assert.equal(gameSceneSource.includes('private getCombatTelemetryLabel(): string'), true);
+  assert.equal(
+    sourceIncludesAny([
+      "setHudText('combatTelemetry', this.getCombatTelemetryLabel())",
+      "setHudText('combatTelemetry', getCombatTelemetryLabelFromLogic(this.combatState))",
+    ]),
+    true,
+  );
+  assert.equal(
+    sourceIncludesAny([
+      "setHudText('combatRecap', this.getCombatRecapLabel())",
+      "setHudText('combatRecap', getCombatRecapLabelFromLogic(this.combatState))",
+    ]),
+    true,
+  );
+  assert.equal(
+    sourceIncludesAny([
+      'private getCombatRecapLabel(): string',
+      'export function getCombatRecapLabel(combatState: CombatEncounterState | null): string',
+    ]),
+    true,
+  );
+  assert.equal(
+    sourceIncludesAny([
+      'private getCombatTelemetryLabel(): string',
+      'export function getCombatTelemetryLabel(combatState: CombatEncounterState | null): string',
+    ]),
+    true,
+  );
 });
 
 test('combat HUD exposes enemy sprite visual wiring', () => {
@@ -76,11 +128,17 @@ test('debug QA exposes local JSON trace export wiring', () => {
   assert.equal(gameSceneSource.includes('private syncDebugQaFiltersFromInputs(): void'), true);
   assert.equal(gameSceneSource.includes('private syncDebugQaFiltersToInputs(): void'), true);
   assert.equal(
-    gameSceneSource.includes('private doesCombatStateMatchRecapFilters(snapshot: CombatEncounterState | null): boolean'),
+    sourceIncludesAny([
+      'private doesCombatStateMatchRecapFilters(snapshot: CombatEncounterState | null): boolean',
+      'export function doesCombatStateMatchRecapFilters(',
+    ]),
     true,
   );
   assert.equal(
-    gameSceneSource.includes('private filterCombatDebugReference(reference: CombatDebugReference): CombatDebugReference'),
+    sourceIncludesAny([
+      'private filterCombatDebugReference(reference: CombatDebugReference): CombatDebugReference',
+      'export function filterCombatDebugReference(',
+    ]),
     true,
   );
   assert.equal(gameSceneSource.includes('private downloadJsonFile(filename: string, payload: unknown): void'), true);
@@ -172,7 +230,13 @@ test('hero profile creation panel exposes expected controls and wiring', () => {
   assert.equal(gameSceneSource.includes('private async refreshHeroProfileState(): Promise<void>'), true);
   assert.equal(gameSceneSource.includes('private async saveHeroProfile(): Promise<void>'), true);
   assert.equal(gameSceneSource.includes('private updateHeroProfileHud(): void'), true);
-  assert.equal(gameSceneSource.includes('private normalizeHeroProfilePayload(payload: unknown): HeroProfileState | null'), true);
+  assert.equal(
+    sourceIncludesAny([
+      'private normalizeHeroProfilePayload(payload: unknown): HeroProfileState | null',
+      'normalizeHeroProfilePayload: (payload: unknown) => HeroProfileState | null;',
+    ]),
+    true,
+  );
   assert.equal(stylesSource.includes('.hud-hero-profile'), true);
   assert.equal(stylesSource.includes('.hud-hero-profile-field'), true);
   assert.equal(stylesSource.includes('.hud-hero-profile-button'), true);
@@ -197,7 +261,13 @@ test('intro narrative panel wiring exists for lot 85', () => {
   assert.equal(gameSceneSource.includes('data-intro-action="advance"'), true);
   assert.equal(gameSceneSource.includes('private updateIntroHud(): void'), true);
   assert.equal(gameSceneSource.includes('private async advanceIntroNarrative(): Promise<void>'), true);
-  assert.equal(gameSceneSource.includes('private normalizeGameplayIntroPayload(payload: unknown): IntroNarrativeState | null'), true);
+  assert.equal(
+    sourceIncludesAny([
+      'private normalizeGameplayIntroPayload(payload: unknown): IntroNarrativeState | null',
+      'normalizeGameplayIntroPayload: (payload: unknown) => IntroNarrativeState | null;',
+    ]),
+    true,
+  );
   assert.equal(stylesSource.includes('.hud-intro'), true);
   assert.equal(stylesSource.includes('.hud-intro-button'), true);
 });
@@ -211,7 +281,13 @@ test('village NPC state panel wiring exists for lot 86', () => {
   assert.equal(gameSceneSource.includes('data-hud="villageNpcBlacksmithDialogue"'), true);
   assert.equal(gameSceneSource.includes('data-hud="villageNpcMerchantDialogue"'), true);
   assert.equal(gameSceneSource.includes('private updateVillageNpcHud(): void'), true);
-  assert.equal(gameSceneSource.includes('private normalizeVillageNpcEntry(payload: unknown): VillageNpcHudEntry | null'), true);
+  assert.equal(
+    sourceIncludesAny([
+      'private normalizeVillageNpcEntry(payload: unknown): VillageNpcHudEntry | null',
+      'normalizeVillageNpcEntry: (payload: unknown) => VillageNpcHudEntry | null;',
+    ]),
+    true,
+  );
   assert.equal(stylesSource.includes('.hud-village-npcs'), true);
   assert.equal(stylesSource.includes('.hud-village-npc-line'), true);
 });
@@ -222,7 +298,10 @@ test('village NPC relationship panel wiring exists for lot 94', () => {
   assert.equal(gameSceneSource.includes("await this.fetchJson('/gameplay/village/npc/interact'"), true);
   assert.equal(gameSceneSource.includes('private async interactVillageNpc(npcKey: VillageNpcKey): Promise<void>'), true);
   assert.equal(
-    gameSceneSource.includes('private normalizeVillageNpcRelationshipEntry(payload: unknown): VillageNpcRelationshipHudEntry | null'),
+    sourceIncludesAny([
+      'private normalizeVillageNpcRelationshipEntry(payload: unknown): VillageNpcRelationshipHudEntry | null',
+      'normalizeVillageNpcRelationshipEntry: (payload: unknown) => VillageNpcRelationshipHudEntry | null;',
+    ]),
     true,
   );
   assert.equal(gameSceneSource.includes('private updateVillageNpcTalkButton('), true);
@@ -249,7 +328,10 @@ test('village market panel wiring exists for lot 87', () => {
   assert.equal(gameSceneSource.includes('private renderVillageMarketOffers(): void'), true);
   assert.equal(gameSceneSource.includes('private getVillageMarketSummaryLabel(): string'), true);
   assert.equal(
-    gameSceneSource.includes('private normalizeVillageMarketPayload(payload: unknown): {'),
+    sourceIncludesAny([
+      'private normalizeVillageMarketPayload(payload: unknown): {',
+      'normalizeVillageMarketPayload: (payload: unknown) => {',
+    ]),
     true,
   );
   assert.equal(gameSceneSource.includes('private async refreshVillageMarketState(): Promise<void>'), true);
@@ -271,7 +353,13 @@ test('farm panel wiring exists for lot 90', () => {
   assert.equal(gameSceneSource.includes('private updateFarmHud(): void'), true);
   assert.equal(gameSceneSource.includes('private renderFarmPanel(): void'), true);
   assert.equal(gameSceneSource.includes('private getFarmSummaryLabel(): string'), true);
-  assert.equal(gameSceneSource.includes('private normalizeGameplayFarmPayload(payload: unknown): FarmState | null'), true);
+  assert.equal(
+    sourceIncludesAny([
+      'private normalizeGameplayFarmPayload(payload: unknown): FarmState | null',
+      'normalizeGameplayFarmPayload: (payload: unknown) => FarmState | null;',
+    ]),
+    true,
+  );
   assert.equal(gameSceneSource.includes('private async plantFarmPlot(plotKey: string): Promise<void>'), true);
   assert.equal(gameSceneSource.includes('private async waterFarmPlot(plotKey: string): Promise<void>'), true);
   assert.equal(gameSceneSource.includes('private async harvestFarmPlot(plotKey: string): Promise<void>'), true);
@@ -288,7 +376,11 @@ test('day-night cycle and sleep action wiring exists for lot 91', () => {
   assert.equal(gameSceneSource.includes('private getDayPhaseLabel(): string'), true);
   assert.equal(gameSceneSource.includes('private updateDayPhaseVisual(): void'), true);
   assert.equal(gameSceneSource.includes('private async sleepAtFarm(): Promise<void>'), true);
-  assert.equal(gameSceneSource.includes("await this.fetchJson<unknown>('/gameplay/sleep'"), true);
+  assert.equal(
+    gameSceneSource.includes("await this.fetchJson<unknown>('/gameplay/sleep'") ||
+      gameSceneSource.includes("await input.fetchJson('/gameplay/sleep'"),
+    true,
+  );
   assert.equal(stylesSource.includes('#game-shell[data-day-phase="night"] #game-root'), true);
   assert.equal(stylesSource.includes('.hud-farm-actions'), true);
   assert.equal(stylesSource.includes('.hud-farm-action.sleep'), true);
@@ -302,9 +394,19 @@ test('farm crafting panel wiring exists for lot 92', () => {
   assert.equal(gameSceneSource.includes('private updateFarmCraftingHud(): void'), true);
   assert.equal(gameSceneSource.includes('private renderFarmCraftingRecipes(): void'), true);
   assert.equal(gameSceneSource.includes('private getFarmCraftingSummaryLabel(): string'), true);
-  assert.equal(gameSceneSource.includes('private normalizeGameplayCraftingPayload(payload: unknown): FarmCraftingState | null'), true);
+  assert.equal(
+    sourceIncludesAny([
+      'private normalizeGameplayCraftingPayload(payload: unknown): FarmCraftingState | null',
+      'normalizeGameplayCraftingPayload: (payload: unknown) => FarmCraftingState | null;',
+    ]),
+    true,
+  );
   assert.equal(gameSceneSource.includes('private async craftFarmRecipe(recipeKey: string): Promise<void>'), true);
-  assert.equal(gameSceneSource.includes("await this.fetchJson('/gameplay/crafting/craft'"), true);
+  assert.equal(
+    gameSceneSource.includes("await this.fetchJson('/gameplay/crafting/craft'") ||
+      gameSceneSource.includes("await input.fetchJson('/gameplay/crafting/craft'"),
+    true,
+  );
   assert.equal(stylesSource.includes('.hud-farm-crafting'), true);
   assert.equal(stylesSource.includes('.hud-farm-crafting-list'), true);
   assert.equal(stylesSource.includes('.farm-crafting-ingredients'), true);
@@ -315,8 +417,20 @@ test('farm scenario day/harvest narrative wiring exists for lot 103', () => {
   assert.equal(gameSceneSource.includes('data-hud="farmStoryNarrative"'), true);
   assert.equal(gameSceneSource.includes('private getFarmStorySummaryLabel(): string'), true);
   assert.equal(gameSceneSource.includes('private getFarmStoryNarrativeLabel(): string'), true);
-  assert.equal(gameSceneSource.includes('private normalizeGameplayFarmStoryPayload(payload: unknown): FarmStoryState | null'), true);
-  assert.equal(gameSceneSource.includes('private normalizeFarmStoryEventEntry(payload: unknown): FarmStoryEventState | null'), true);
+  assert.equal(
+    sourceIncludesAny([
+      'private normalizeGameplayFarmStoryPayload(payload: unknown): FarmStoryState | null',
+      'normalizeGameplayFarmStoryPayload: (payload: unknown) => FarmStoryState | null;',
+    ]),
+    true,
+  );
+  assert.equal(
+    sourceIncludesAny([
+      'private normalizeFarmStoryEventEntry(payload: unknown): FarmStoryEventState | null',
+      'normalizeFarmStoryEventEntry: (payload: unknown) => FarmStoryEventState | null;',
+    ]),
+    true,
+  );
   assert.equal(stylesSource.includes('.hud-farm-story-summary'), true);
   assert.equal(stylesSource.includes('.hud-farm-story-narrative'), true);
 });
@@ -327,8 +441,20 @@ test('tower scenario floor milestone narrative wiring exists for lot 104', () =>
   assert.equal(gameSceneSource.includes('private updateTowerStoryHud(): void'), true);
   assert.equal(gameSceneSource.includes('private getTowerStorySummaryLabel(): string'), true);
   assert.equal(gameSceneSource.includes('private getTowerStoryNarrativeLabel(): string'), true);
-  assert.equal(gameSceneSource.includes('private normalizeGameplayTowerStoryPayload(payload: unknown): TowerStoryState | null'), true);
-  assert.equal(gameSceneSource.includes('private normalizeTowerStoryEventEntry(payload: unknown): TowerStoryEventState | null'), true);
+  assert.equal(
+    sourceIncludesAny([
+      'private normalizeGameplayTowerStoryPayload(payload: unknown): TowerStoryState | null',
+      'normalizeGameplayTowerStoryPayload: (payload: unknown) => TowerStoryState | null;',
+    ]),
+    true,
+  );
+  assert.equal(
+    sourceIncludesAny([
+      'private normalizeTowerStoryEventEntry(payload: unknown): TowerStoryEventState | null',
+      'normalizeTowerStoryEventEntry: (payload: unknown) => TowerStoryEventState | null;',
+    ]),
+    true,
+  );
   assert.equal(stylesSource.includes('.hud-tower-story'), true);
   assert.equal(stylesSource.includes('.hud-tower-story-header'), true);
   assert.equal(stylesSource.includes('.hud-tower-story-narrative'), true);
@@ -356,7 +482,13 @@ test('combat preparation loop panel wiring exists for lot 95', () => {
   assert.equal(gameSceneSource.includes("await this.fetchJson('/gameplay/combat/prepare'"), true);
   assert.equal(gameSceneSource.includes('private updateLoopHud(): void'), true);
   assert.equal(gameSceneSource.includes('private async prepareCombatLoop(): Promise<void>'), true);
-  assert.equal(gameSceneSource.includes('private normalizeGameplayLoopPayload(payload: unknown): GameplayLoopState | null'), true);
+  assert.equal(
+    sourceIncludesAny([
+      'private normalizeGameplayLoopPayload(payload: unknown): GameplayLoopState | null',
+      'normalizeGameplayLoopPayload: (payload: unknown) => GameplayLoopState | null;',
+    ]),
+    true,
+  );
   assert.equal(stylesSource.includes('.hud-loop'), true);
   assert.equal(stylesSource.includes('.hud-loop-grid'), true);
   assert.equal(stylesSource.includes('.hud-loop-button'), true);
@@ -364,7 +496,13 @@ test('combat preparation loop panel wiring exists for lot 95', () => {
 });
 
 test('animation polish wiring exists for lot 97', () => {
-  assert.equal(gameSceneSource.includes("if (action === 'attack' || action === 'sunder' || action === 'interrupt')"), true);
+  const hasInlineAnimationSwitch = gameSceneSource.includes(
+    "if (action === 'attack' || action === 'sunder' || action === 'interrupt')",
+  );
+  const hasExtractedAnimationMapping = gameSceneSource.includes(
+    'const animation = getPlayerCombatActionAnimationFromFeature(action);',
+  );
+  assert.equal(hasInlineAnimationSwitch || hasExtractedAnimationMapping, true);
   assert.equal(gameSceneSource.includes('private triggerPlayerStripAccent(animation: Exclude<StripAnimationName, \'idle\'>, durationMs: number): void'), true);
   assert.equal(gameSceneSource.includes('this.player.setTint(tint);'), true);
   assert.equal(stylesSource.includes('.combat-enemy-strip[data-strip-animation="cast"]'), true);
