@@ -1,5 +1,36 @@
 ﻿import Phaser from 'phaser';
 import { API_BASE_URL } from '../../config/env';
+import {
+  FARM_LABEL_OVERRIDES,
+  FARM_PLOT_LAYOUT_FALLBACK,
+  FARM_SCENE_COL_STEP,
+  FARM_SCENE_ORIGIN_X,
+  FARM_SCENE_ORIGIN_Y,
+  FARM_SCENE_PLAYER_SPAWN,
+  FARM_SCENE_ROW_STEP,
+  VILLAGE_FORGE_SHOP_TABS,
+  VILLAGE_MARKET_SHOP_TABS,
+  VILLAGE_SCENE_PLAYER_SPAWN,
+  VILLAGE_SCENE_ZONES,
+} from './game/frontSceneConfig';
+import type {
+  BlacksmithOfferState,
+  ForgeShopCategoryKey,
+  FrontSceneMode,
+  VillageCropBuybackOfferState,
+  VillageSceneZoneConfig,
+  VillageSceneZoneKey,
+  VillageSceneZoneVisual,
+  VillageSeedOfferState,
+  VillageShopPanelEntry,
+  VillageShopTabKey,
+  VillageShopTabOption,
+  VillageShopType,
+} from './game/frontSceneConfig';
+import {
+  normalizeBlacksmithPayload as parseBlacksmithPayload,
+  normalizeVillageMarketPayload as parseVillageMarketPayload,
+} from './game/shopNormalizers';
 
 type HudState = {
   day: number;
@@ -131,184 +162,6 @@ const MEND_MANA_COST = 3;
 const CLEANSE_MANA_COST = 3;
 const INTERRUPT_MANA_COST = 4;
 
-const FARM_PLOT_LAYOUT_FALLBACK: Array<{ plotKey: string; row: number; col: number }> = [
-  { plotKey: 'plot_r1_c1', row: 1, col: 1 },
-  { plotKey: 'plot_r1_c2', row: 1, col: 2 },
-  { plotKey: 'plot_r1_c3', row: 1, col: 3 },
-  { plotKey: 'plot_r1_c4', row: 1, col: 4 },
-  { plotKey: 'plot_r2_c1', row: 2, col: 1 },
-  { plotKey: 'plot_r2_c2', row: 2, col: 2 },
-  { plotKey: 'plot_r2_c3', row: 2, col: 3 },
-  { plotKey: 'plot_r2_c4', row: 2, col: 4 },
-  { plotKey: 'plot_r3_c1', row: 3, col: 1 },
-  { plotKey: 'plot_r3_c2', row: 3, col: 2 },
-  { plotKey: 'plot_r3_c3', row: 3, col: 3 },
-  { plotKey: 'plot_r3_c4', row: 3, col: 4 },
-];
-
-const FARM_LABEL_OVERRIDES: Record<string, string> = {
-  turnip_seed: 'Graines de navet',
-  carrot_seed: 'Graines de carotte',
-  wheat_seed: 'Graines de ble',
-  turnip: 'Navet',
-  carrot: 'Carotte',
-  wheat: 'Ble',
-  field_medicine: 'Medecine de champ',
-  focus_tonic: 'Tonique de concentration',
-  healing_herb: 'Herbe de soin',
-  mana_tonic: 'Tonique de mana',
-};
-
-const FARM_SCENE_ORIGIN_X = 540;
-const FARM_SCENE_ORIGIN_Y = 260;
-const FARM_SCENE_COL_STEP = 128;
-const FARM_SCENE_ROW_STEP = 96;
-const FARM_SCENE_PLAYER_SPAWN = { x: 240, y: 220 };
-const VILLAGE_SCENE_PLAYER_SPAWN = { x: 804, y: 734 };
-
-type FrontSceneMode = 'farm' | 'village';
-type VillageSceneZoneKey = 'mayor' | 'market' | 'forge' | 'calm' | 'farm_exit' | 'tower_exit';
-type VillageSceneZoneActionKey =
-  | 'talk-mayor'
-  | 'talk-merchant'
-  | 'talk-blacksmith'
-  | 'talk-secondary'
-  | 'open-market'
-  | 'open-forge'
-  | 'go-farm'
-  | 'go-tower';
-type VillageShopType = 'market' | 'forge';
-type VillageShopTabKey = 'buy' | 'sell' | 'weapons' | 'armors' | 'accessories';
-type ForgeShopCategoryKey = 'weapons' | 'armors' | 'accessories';
-
-type VillageShopPanelEntry = {
-  entryKey: string;
-  source: 'market-buy' | 'market-sell' | 'forge';
-  name: string;
-  description: string;
-  priceValue: number;
-  priceLabel: string;
-  actionLabel: string;
-  canTransact: boolean;
-  offerKey: string | null;
-  itemKey: string;
-  ownedQuantity: number | null;
-  usageLabel: string;
-  detailMeta: string;
-  comparisonLabel: string;
-  badgeLabel: string;
-};
-
-type VillageSceneZoneConfig = {
-  key: VillageSceneZoneKey;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  title: string;
-  role: string;
-  hint: string;
-  actionLabel: string;
-  actionKey: VillageSceneZoneActionKey;
-  npcKey?: VillageNpcKey;
-};
-
-type VillageSceneZoneVisual = {
-  config: VillageSceneZoneConfig;
-  frame: Phaser.GameObjects.Rectangle;
-  overlay: Phaser.GameObjects.Rectangle;
-  title: Phaser.GameObjects.Text;
-  state: Phaser.GameObjects.Text;
-};
-
-const VILLAGE_SCENE_ZONES: VillageSceneZoneConfig[] = [
-  {
-    key: 'mayor',
-    x: 286,
-    y: 232,
-    width: 240,
-    height: 168,
-    title: 'Mairie',
-    role: 'Maire - narration principale',
-    hint: 'Accueil du village, suivi de progression.',
-    actionLabel: 'Parler au Maire',
-    actionKey: 'talk-mayor',
-    npcKey: 'mayor',
-  },
-  {
-    key: 'market',
-    x: 1020,
-    y: 540,
-    width: 256,
-    height: 176,
-    title: 'Marche',
-    role: 'Marchande - economie locale',
-    hint: 'Achete des graines, vends les recoltes, puis repars vite.',
-    actionLabel: 'Ouvrir le Marche',
-    actionKey: 'open-market',
-    npcKey: 'merchant',
-  },
-  {
-    key: 'forge',
-    x: 1262,
-    y: 238,
-    width: 240,
-    height: 176,
-    title: 'Forge',
-    role: 'Forgeron - progression materielle',
-    hint: 'Compare les paliers d equipement puis investis ton or.',
-    actionLabel: 'Ouvrir la Forge',
-    actionKey: 'open-forge',
-    npcKey: 'blacksmith',
-  },
-  {
-    key: 'calm',
-    x: 350,
-    y: 610,
-    width: 268,
-    height: 170,
-    title: 'Coin calme',
-    role: 'Habitante secondaire',
-    hint: 'Echanges humains et quetes secondaires.',
-    actionLabel: 'Parler',
-    actionKey: 'talk-secondary',
-  },
-  {
-    key: 'tower_exit',
-    x: 806,
-    y: 102,
-    width: 336,
-    height: 124,
-    title: 'Route de la Tour',
-    role: 'Sortie vers la menace',
-    hint: 'Transition tour/combat prevue aux lots 4+.',
-    actionLabel: 'Aller vers la Tour',
-    actionKey: 'go-tower',
-  },
-  {
-    key: 'farm_exit',
-    x: 808,
-    y: 788,
-    width: 356,
-    height: 122,
-    title: 'Chemin de la Ferme',
-    role: 'Retour au refuge',
-    hint: 'Retourner a la ferme pour cultiver et dormir.',
-    actionLabel: 'Retourner a la Ferme',
-    actionKey: 'go-farm',
-  },
-];
-
-const VILLAGE_MARKET_SHOP_TABS: Array<{ key: VillageShopTabKey; label: string }> = [
-  { key: 'buy', label: 'Acheter' },
-  { key: 'sell', label: 'Vendre' },
-];
-
-const VILLAGE_FORGE_SHOP_TABS: Array<{ key: VillageShopTabKey; label: string }> = [
-  { key: 'weapons', label: 'Armes' },
-  { key: 'armors', label: 'Armures' },
-  { key: 'accessories', label: 'Accessoires' },
-];
 
 type CombatUnitState = {
   hp: number;
@@ -476,32 +329,6 @@ type QuestState = {
   status: QuestStatus;
   canClaim: boolean;
   objectives: QuestObjectiveState[];
-};
-
-type BlacksmithOfferState = {
-  offerKey: string;
-  itemKey: string;
-  name: string;
-  description: string;
-  goldPrice: number;
-  tier: 1 | 2 | 3;
-  requiredFlags: string[];
-};
-
-type VillageSeedOfferState = {
-  offerKey: string;
-  itemKey: string;
-  name: string;
-  description: string;
-  goldPrice: number;
-};
-
-type VillageCropBuybackOfferState = {
-  itemKey: string;
-  name: string;
-  description: string;
-  goldValue: number;
-  ownedQuantity: number;
 };
 
 type FarmCropCatalogEntryState = {
@@ -3087,7 +2914,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
   }
 
-  private getVillageShopTabs(): Array<{ key: VillageShopTabKey; label: string }> {
+  private getVillageShopTabs(): VillageShopTabOption[] {
     return this.villageShopType === 'market' ? VILLAGE_MARKET_SHOP_TABS : VILLAGE_FORGE_SHOP_TABS;
   }
 
@@ -3186,7 +3013,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private computeVillageShopRenderSignature(
-    tabs: Array<{ key: VillageShopTabKey; label: string }>,
+    tabs: VillageShopTabOption[],
     entries: VillageShopPanelEntry[],
     selectedEntry: VillageShopPanelEntry | null,
   ): string {
@@ -3213,7 +3040,7 @@ export class GameScene extends Phaser.Scene {
     ].join('|');
   }
 
-  private renderVillageShopTabs(tabs: Array<{ key: VillageShopTabKey; label: string }>): void {
+  private renderVillageShopTabs(tabs: VillageShopTabOption[]): void {
     if (!this.villageShopTabsRoot) {
       return;
     }
@@ -10355,25 +10182,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private normalizeBlacksmithPayload(payload: unknown): { offers: BlacksmithOfferState[] } {
-    if (!this.isRecord(payload)) {
-      return { offers: [] };
-    }
-
-    const shop = this.asRecord(payload.shop);
-    if (!shop) {
-      return { offers: [] };
-    }
-
-    const rawOffers = shop.offers;
-    if (!Array.isArray(rawOffers)) {
-      return { offers: [] };
-    }
-
-    const offers = rawOffers
-      .map((entry) => this.normalizeBlacksmithOffer(entry))
-      .filter((entry): entry is BlacksmithOfferState => entry !== null);
-
-    return { offers };
+    return parseBlacksmithPayload(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asNumber: (value) => this.asNumber(value),
+    });
   }
 
   private normalizeVillageMarketPayload(payload: unknown): {
@@ -10381,35 +10194,11 @@ export class GameScene extends Phaser.Scene {
     seedOffers: VillageSeedOfferState[];
     cropBuybackOffers: VillageCropBuybackOfferState[];
   } {
-    if (!this.isRecord(payload)) {
-      return {
-        unlocked: false,
-        seedOffers: [],
-        cropBuybackOffers: [],
-      };
-    }
-
-    const shop = this.asRecord(payload.shop);
-    if (!shop) {
-      return {
-        unlocked: false,
-        seedOffers: [],
-        cropBuybackOffers: [],
-      };
-    }
-
-    const rawSeedOffers = Array.isArray(shop.seedOffers) ? shop.seedOffers : [];
-    const rawBuybackOffers = Array.isArray(shop.cropBuybackOffers) ? shop.cropBuybackOffers : [];
-
-    return {
-      unlocked: Boolean(shop.unlocked),
-      seedOffers: rawSeedOffers
-        .map((entry) => this.normalizeVillageSeedOffer(entry))
-        .filter((entry): entry is VillageSeedOfferState => entry !== null),
-      cropBuybackOffers: rawBuybackOffers
-        .map((entry) => this.normalizeVillageCropBuybackOffer(entry))
-        .filter((entry): entry is VillageCropBuybackOfferState => entry !== null),
-    };
+    return parseVillageMarketPayload(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asNumber: (value) => this.asNumber(value),
+    });
   }
 
   private normalizeSaveSlotsPayload(payload: unknown): SaveSlotState[] {
@@ -10601,88 +10390,6 @@ export class GameScene extends Phaser.Scene {
     return {
       slot,
       itemKey,
-    };
-  }
-
-  private normalizeBlacksmithOffer(value: unknown): BlacksmithOfferState | null {
-    if (!this.isRecord(value)) {
-      return null;
-    }
-
-    const offerKey = this.asString(value.offerKey);
-    const itemKey = this.asString(value.itemKey);
-    const name = this.asString(value.name);
-    const description = this.asString(value.description);
-    const goldPrice = this.asNumber(value.goldPrice);
-    const tierRaw = this.asNumber(value.tier);
-    const requiredFlags = Array.isArray(value.requiredFlags)
-      ? value.requiredFlags
-          .map((entry) => this.asString(entry))
-          .filter((entry): entry is string => entry !== null)
-      : [];
-
-    if (!offerKey || !itemKey || !name || !description || goldPrice === null) {
-      return null;
-    }
-
-    const tier = tierRaw === 2 || tierRaw === 3 ? tierRaw : 1;
-
-    return {
-      offerKey,
-      itemKey,
-      name,
-      description,
-      goldPrice: Math.max(0, Math.round(goldPrice)),
-      tier,
-      requiredFlags,
-    };
-  }
-
-  private normalizeVillageSeedOffer(value: unknown): VillageSeedOfferState | null {
-    if (!this.isRecord(value)) {
-      return null;
-    }
-
-    const offerKey = this.asString(value.offerKey);
-    const itemKey = this.asString(value.itemKey);
-    const name = this.asString(value.name);
-    const description = this.asString(value.description);
-    const goldPrice = this.asNumber(value.goldPrice);
-
-    if (!offerKey || !itemKey || !name || !description || goldPrice === null) {
-      return null;
-    }
-
-    return {
-      offerKey,
-      itemKey,
-      name,
-      description,
-      goldPrice: Math.max(0, Math.round(goldPrice)),
-    };
-  }
-
-  private normalizeVillageCropBuybackOffer(value: unknown): VillageCropBuybackOfferState | null {
-    if (!this.isRecord(value)) {
-      return null;
-    }
-
-    const itemKey = this.asString(value.itemKey);
-    const name = this.asString(value.name);
-    const description = this.asString(value.description);
-    const goldValue = this.asNumber(value.goldValue);
-    const ownedQuantity = this.asNumber(value.ownedQuantity);
-
-    if (!itemKey || !name || !description || goldValue === null || ownedQuantity === null) {
-      return null;
-    }
-
-    return {
-      itemKey,
-      name,
-      description,
-      goldValue: Math.max(0, Math.round(goldValue)),
-      ownedQuantity: Math.max(0, Math.round(ownedQuantity)),
     };
   }
 
@@ -12308,3 +12015,5 @@ export class GameScene extends Phaser.Scene {
     return obstacle;
   }
 }
+
+
