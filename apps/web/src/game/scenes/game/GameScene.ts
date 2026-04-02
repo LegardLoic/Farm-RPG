@@ -281,7 +281,6 @@ import {
   filterCombatDebugReference as filterCombatDebugReferenceFromDebugQa,
   formatApplyStatePresetSuccess as formatApplyStatePresetSuccessFromDebugQa,
   formatCombatDebugScriptedIntentsReference as formatCombatDebugScriptedIntentsReferenceFromDebugQa,
-  formatDebugQaFlagPreview as formatDebugQaFlagPreviewFromDebugQa,
   formatSetQuestStatusSuccess as formatSetQuestStatusSuccessFromDebugQa,
   formatSetWorldFlagsSuccess as formatSetWorldFlagsSuccessFromDebugQa,
   getDebugQaReplayAutoPlayIntervalMs as getDebugQaReplayAutoPlayIntervalMsFromDebugQa,
@@ -5924,17 +5923,17 @@ export class GameScene extends Phaser.Scene {
     | null {
     return buildDebugQaRequestFromFeature({
       action,
-      grantXp: this.readDebugQaNumber(this.debugQaGrantXpInput, 250),
-      grantGold: this.readDebugQaNumber(this.debugQaGrantGoldInput, 500),
-      towerFloor: this.readDebugQaNumber(this.debugQaTowerFloorInput, 10, 1, 10),
+      grantXp: readDebugQaNumberFromDebugQa(this.debugQaGrantXpInput, 250),
+      grantGold: readDebugQaNumberFromDebugQa(this.debugQaGrantGoldInput, 500),
+      towerFloor: readDebugQaNumberFromDebugQa(this.debugQaTowerFloorInput, 10, 1, 10),
       statePresetKey: (this.debugQaStatePresetSelect?.value.trim() || 'mid_tower') as DebugStatePresetKey,
       loadoutPresetKey: this.debugQaLoadoutPresetSelect?.value.trim() || 'tower_mid',
-      worldFlags: this.readDebugQaFlagList(this.debugQaWorldFlagsInput),
-      worldFlagsToRemove: this.readDebugQaFlagList(this.debugQaWorldFlagsRemoveInput),
+      worldFlags: readDebugQaFlagListFromDebugQa(this.debugQaWorldFlagsInput),
+      worldFlagsToRemove: readDebugQaFlagListFromDebugQa(this.debugQaWorldFlagsRemoveInput),
       replaceWorldFlags: Boolean(this.debugQaWorldFlagsReplaceInput?.checked),
       questKey: this.debugQaQuestKeyInput?.value.trim() ?? '',
       questStatusRaw: this.debugQaQuestStatusSelect?.value.trim() ?? '',
-      isQuestStatusValue: (value) => this.isQuestStatusValue(value),
+      isQuestStatusValue: (value) => isQuestStatusValueFromDebugQa(value),
     });
   }
 
@@ -5976,19 +5975,6 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private formatDebugQaFlagPreview(flags: string[]): string {
-    return formatDebugQaFlagPreviewFromDebugQa(flags);
-  }
-
-  private readDebugQaNumber(
-    input: HTMLInputElement | null,
-    fallback: number,
-    min?: number,
-    max?: number,
-  ): number {
-    return readDebugQaNumberFromDebugQa(input, fallback, min, max);
-  }
-
   private readHeroProfileAppearanceFromUi(): HeroAppearanceKey {
     const raw = this.heroProfileAppearanceSelect?.value?.trim() ?? '';
     if (isHeroAppearanceKey(raw)) {
@@ -6017,14 +6003,6 @@ export class GameScene extends Phaser.Scene {
     return availableSeeds.has(value) ? value : '';
   }
 
-  private isQuestStatusValue(value: string): value is QuestStatus {
-    return isQuestStatusValueFromDebugQa(value);
-  }
-
-  private readDebugQaFlagList(input: HTMLTextAreaElement | null): string[] {
-    return readDebugQaFlagListFromDebugQa(input);
-  }
-
   private getDayPhaseKey(): 'day' | 'night' {
     return getDayPhaseKeyFromVillageHud(this.hudState.day);
   }
@@ -6042,10 +6020,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getBlacksmithStatusLabel(): string {
-    return getBlacksmithStatusLabelFromVillageHud({
-      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
-      blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
-    });
+    return getBlacksmithStatusLabelFromVillageHud({ blacksmithUnlocked: this.hudState.blacksmithUnlocked, blacksmithCurseLifted: this.hudState.blacksmithCurseLifted });
   }
 
   private getVillageNpcSummaryLabel(): string {
@@ -6109,11 +6084,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getIntroSummaryLabel(): string {
-    return getIntroSummaryLabelFromIntro({
-      isAuthenticated: this.isAuthenticated,
-      introNarrativeBusy: this.introNarrativeBusy,
-      introNarrativeState: this.introNarrativeState,
-    });
+    return getIntroSummaryLabelFromIntro({ isAuthenticated: this.isAuthenticated, introNarrativeBusy: this.introNarrativeBusy, introNarrativeState: this.introNarrativeState });
   }
 
   private getIntroNarrativeLabel(): string {
@@ -6133,12 +6104,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getHeroProfileSummaryLabel(): string {
-    return getHeroProfileSummaryLabelFromIntro({
-      isAuthenticated: this.isAuthenticated,
-      heroProfileBusy: this.heroProfileBusy,
-      heroProfile: this.heroProfile,
-      getHeroAppearanceLabel: (key) => this.getHeroAppearanceLabel(key),
-    });
+    return getHeroProfileSummaryLabelFromIntro({ isAuthenticated: this.isAuthenticated, heroProfileBusy: this.heroProfileBusy, heroProfile: this.heroProfile, getHeroAppearanceLabel: (key) => this.getHeroAppearanceLabel(key) });
   }
 
   private getHeroAppearanceLabel(key: HeroAppearanceKey): string {
@@ -6146,14 +6112,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private normalizeGameplayIntroPayload(payload: unknown): IntroNarrativeState | null {
-    return normalizeGameplayIntroPayloadFromIntro(
-      payload,
-      {
-        asRecord: (value) => this.asRecord(value),
-        asString: (value) => this.asString(value),
-      },
-      isIntroNarrativeStepKey,
-    );
+    return normalizeGameplayIntroPayloadFromIntro(payload, { asRecord: (value) => this.asRecord(value), asString: (value) => this.asString(value) }, isIntroNarrativeStepKey);
   }
 
   private normalizeVillageNpcEntry(payload: unknown): VillageNpcHudEntry | null {
