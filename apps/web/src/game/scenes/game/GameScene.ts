@@ -294,6 +294,11 @@ import {
   readDebugQaFlagList as readDebugQaFlagListFromDebugQa,
   readDebugQaNumber as readDebugQaNumberFromDebugQa,
 } from './features/debugQa/debugQaHelpers';
+import {
+  buildDebugQaRequest as buildDebugQaRequestFromFeature,
+  getDebugQaSuccessMessage as getDebugQaSuccessMessageFromFeature,
+  runDebugQaAction as runDebugQaActionFromFeature,
+} from './features/debugQa/debugQaActionHandlers';
 import { updateDebugQaHud as updateDebugQaHudFromFeature } from './features/debugQa/debugQaHudRenderer';
 import {
   bindHudElements as bindHudElementsFromHud,
@@ -5880,49 +5885,29 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async handleDebugQaAction(action: DebugQaActionName): Promise<void> {
-    if (!this.debugQaEnabled) {
-      return;
-    }
-
-    if (!this.isAuthenticated) {
-      this.debugQaError = 'Connecte toi pour utiliser le debug QA.';
-      this.debugQaMessage = null;
-      this.debugQaStatus = 'error';
-      this.updateHud();
-      return;
-    }
-
-    const request = this.buildDebugQaRequest(action);
-    if (!request) {
-      this.debugQaError = 'Debug QA values are invalid.';
-      this.debugQaMessage = null;
-      this.debugQaStatus = 'error';
-      this.updateHud();
-      return;
-    }
-
-    this.debugQaBusyAction = action;
-    this.debugQaStatus = 'loading';
-    this.debugQaError = null;
-    this.debugQaMessage = request.loadingLabel;
-    this.updateHud();
-
-    try {
-      const responsePayload = await this.fetchJson<unknown>(request.path, {
-        method: 'POST',
-        body: JSON.stringify(request.body),
-      });
-      this.debugQaStatus = 'success';
-      this.debugQaMessage = this.getDebugQaSuccessMessage(action, responsePayload, request.successLabel);
-      await this.bootstrapSessionState();
-    } catch (error) {
-      this.debugQaStatus = 'error';
-      this.debugQaError = this.getErrorMessage(error, request.failureLabel);
-      this.debugQaMessage = null;
-    } finally {
-      this.debugQaBusyAction = null;
-      this.updateHud();
-    }
+    await runDebugQaActionFromFeature({
+      action,
+      debugQaEnabled: this.debugQaEnabled,
+      isAuthenticated: this.isAuthenticated,
+      request: this.buildDebugQaRequest(action),
+      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
+      setDebugQaBusyAction: (value) => {
+        this.debugQaBusyAction = value;
+      },
+      setDebugQaStatus: (value) => {
+        this.debugQaStatus = value;
+      },
+      setDebugQaError: (value) => {
+        this.debugQaError = value;
+      },
+      setDebugQaMessage: (value) => {
+        this.debugQaMessage = value;
+      },
+      getDebugQaSuccessMessage: (payload, fallback) => this.getDebugQaSuccessMessage(action, payload, fallback),
+      bootstrapSessionState: () => this.bootstrapSessionState(),
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private buildDebugQaRequest(
@@ -5936,102 +5921,20 @@ export class GameScene extends Phaser.Scene {
         failureLabel: string;
       }
     | null {
-    switch (action) {
-      case 'grant-resources': {
-        const xp = this.readDebugQaNumber(this.debugQaGrantXpInput, 250);
-        const gold = this.readDebugQaNumber(this.debugQaGrantGoldInput, 500);
-        return {
-          path: '/debug/admin/grant-resources',
-          body: {
-            experience: xp,
-            gold,
-            items: [],
-          },
-          loadingLabel: `Granting ${xp} XP / ${gold} gold...`,
-          successLabel: `Granted ${xp} XP / ${gold} gold.`,
-          failureLabel: 'Unable to grant debug resources.',
-        };
-      }
-      case 'set-tower-floor': {
-        const floor = this.readDebugQaNumber(this.debugQaTowerFloorInput, 10, 1, 10);
-        return {
-          path: '/debug/admin/set-tower-floor',
-          body: { floor },
-          loadingLabel: `Setting tower floor to ${floor}...`,
-          successLabel: `Tower floor set to ${floor}.`,
-          failureLabel: 'Unable to set tower floor.',
-        };
-      }
-      case 'apply-state-preset': {
-        const presetKey = (this.debugQaStatePresetSelect?.value.trim() || 'mid_tower') as DebugStatePresetKey;
-        return {
-          path: '/debug/admin/apply-state-preset',
-          body: { presetKey },
-          loadingLabel: `Applying ${presetKey} state preset...`,
-          successLabel: `State preset ${presetKey} applied.`,
-          failureLabel: 'Unable to apply state preset.',
-        };
-      }
-      case 'apply-loadout-preset': {
-        const presetKey = this.debugQaLoadoutPresetSelect?.value.trim() || 'tower_mid';
-        return {
-          path: '/debug/admin/apply-loadout-preset',
-          body: { presetKey },
-          loadingLabel: `Applying ${presetKey} loadout...`,
-          successLabel: `Loadout preset ${presetKey} applied.`,
-          failureLabel: 'Unable to apply loadout preset.',
-        };
-      }
-      case 'complete-quests': {
-        return {
-          path: '/debug/admin/complete-quests',
-          body: {},
-          loadingLabel: 'Completing quests...',
-          successLabel: 'Quests marked as completed.',
-          failureLabel: 'Unable to complete quests.',
-        };
-      }
-      case 'set-world-flags': {
-        const flags = this.readDebugQaFlagList(this.debugQaWorldFlagsInput);
-        const removeFlags = this.readDebugQaFlagList(this.debugQaWorldFlagsRemoveInput);
-        const replace = Boolean(this.debugQaWorldFlagsReplaceInput?.checked);
-        if (!replace && flags.length === 0 && removeFlags.length === 0) {
-          return null;
-        }
-
-        return {
-          path: '/debug/admin/set-world-flags',
-          body: {
-            flags,
-            removeFlags,
-            replace,
-          },
-          loadingLabel: replace ? 'Replacing world flags...' : 'Updating world flags...',
-          successLabel: replace ? 'World flags replaced.' : 'World flags updated.',
-          failureLabel: 'Unable to set world flags.',
-        };
-      }
-      case 'set-quest-status': {
-        const questKey = this.debugQaQuestKeyInput?.value.trim() ?? '';
-        const status = this.debugQaQuestStatusSelect?.value.trim() as QuestStatus;
-        if (!questKey || !this.isQuestStatusValue(status)) {
-          return null;
-        }
-
-        return {
-          path: '/debug/admin/set-quest-status',
-          body: {
-            questKey,
-            status,
-          },
-          loadingLabel: `Setting quest ${questKey} to ${status}...`,
-          successLabel: `Quest ${questKey} set to ${status}.`,
-          failureLabel: 'Unable to set quest status.',
-        };
-      }
-      default:
-        return null;
-    }
+    return buildDebugQaRequestFromFeature({
+      action,
+      grantXp: this.readDebugQaNumber(this.debugQaGrantXpInput, 250),
+      grantGold: this.readDebugQaNumber(this.debugQaGrantGoldInput, 500),
+      towerFloor: this.readDebugQaNumber(this.debugQaTowerFloorInput, 10, 1, 10),
+      statePresetKey: (this.debugQaStatePresetSelect?.value.trim() || 'mid_tower') as DebugStatePresetKey,
+      loadoutPresetKey: this.debugQaLoadoutPresetSelect?.value.trim() || 'tower_mid',
+      worldFlags: this.readDebugQaFlagList(this.debugQaWorldFlagsInput),
+      worldFlagsToRemove: this.readDebugQaFlagList(this.debugQaWorldFlagsRemoveInput),
+      replaceWorldFlags: Boolean(this.debugQaWorldFlagsReplaceInput?.checked),
+      questKey: this.debugQaQuestKeyInput?.value.trim() ?? '',
+      questStatusRaw: this.debugQaQuestStatusSelect?.value.trim() ?? '',
+      isQuestStatusValue: (value) => this.isQuestStatusValue(value),
+    });
   }
 
   private getDebugQaSuccessMessage(
@@ -6039,28 +5942,14 @@ export class GameScene extends Phaser.Scene {
     payload: unknown,
     fallback: string,
   ): string {
-    if (action === 'apply-state-preset') {
-      const message = this.formatApplyStatePresetSuccess(payload);
-      if (message) {
-        return message;
-      }
-    }
-
-    if (action === 'set-world-flags') {
-      const message = this.formatSetWorldFlagsSuccess(payload);
-      if (message) {
-        return message;
-      }
-    }
-
-    if (action === 'set-quest-status') {
-      const message = this.formatSetQuestStatusSuccess(payload);
-      if (message) {
-        return message;
-      }
-    }
-
-    return fallback;
+    return getDebugQaSuccessMessageFromFeature({
+      action,
+      payload,
+      fallback,
+      formatApplyStatePresetSuccess: (payloadValue) => this.formatApplyStatePresetSuccess(payloadValue),
+      formatSetWorldFlagsSuccess: (payloadValue) => this.formatSetWorldFlagsSuccess(payloadValue),
+      formatSetQuestStatusSuccess: (payloadValue) => this.formatSetQuestStatusSuccess(payloadValue),
+    });
   }
 
   private formatApplyStatePresetSuccess(payload: unknown): string | null {
