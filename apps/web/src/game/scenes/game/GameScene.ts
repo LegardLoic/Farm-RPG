@@ -134,6 +134,10 @@ import {
   selectVillageShopEntry as selectVillageShopEntryFromLogic,
 } from './features/shops/villageShopLogic';
 import {
+  renderBlacksmithOffers as renderBlacksmithOffersFromFeature,
+  renderVillageMarketOffers as renderVillageMarketOffersFromFeature,
+} from './features/shops/shopHudRenderer';
+import {
   formatVillageNpcStateLabel as formatVillageNpcStateLabelFromLogic,
   formatVillageRelationshipTierLabel as formatVillageRelationshipTierLabelFromLogic,
   getBlacksmithContextDialogue as getBlacksmithContextDialogueFromLogic,
@@ -2910,68 +2914,15 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.blacksmithRenderSignature = signature;
-
-    this.blacksmithOffersRoot.replaceChildren();
-
-    if (!this.isAuthenticated) {
-      const item = document.createElement('li');
-      item.classList.add('shop-item', 'empty');
-      item.textContent = 'Connect to access the shop.';
-      this.blacksmithOffersRoot.appendChild(item);
-      return;
-    }
-
-    if (!this.hudState.blacksmithUnlocked) {
-      const item = document.createElement('li');
-      item.classList.add('shop-item', 'empty');
-      item.textContent = this.hudState.blacksmithCurseLifted
-        ? 'Blacksmith is recovering. Complete progression to unlock the shop.'
-        : 'Blacksmith is still cursed.';
-      this.blacksmithOffersRoot.appendChild(item);
-      return;
-    }
-
-    if (this.blacksmithOffers.length === 0) {
-      const item = document.createElement('li');
-      item.classList.add('shop-item', 'empty');
-      item.textContent = this.blacksmithBusy ? 'Loading offers...' : 'No offers available.';
-      this.blacksmithOffersRoot.appendChild(item);
-      return;
-    }
-
-    for (const offer of this.blacksmithOffers) {
-      const item = document.createElement('li');
-      item.classList.add('shop-item');
-
-      const header = document.createElement('div');
-      header.classList.add('shop-item-header');
-
-      const name = document.createElement('strong');
-      name.textContent = offer.name;
-      header.appendChild(name);
-
-      const price = document.createElement('span');
-      price.classList.add('shop-price');
-      price.textContent = `${offer.goldPrice}g`;
-      header.appendChild(price);
-
-      item.appendChild(header);
-
-      const description = document.createElement('p');
-      description.classList.add('shop-description');
-      description.textContent = offer.description;
-      item.appendChild(description);
-
-      const buyButton = document.createElement('button');
-      buyButton.classList.add('hud-shop-buy');
-      buyButton.textContent = `Buy (${offer.goldPrice}g)`;
-      buyButton.dataset.shopAction = 'buy';
-      buyButton.dataset.offerKey = offer.offerKey;
-      buyButton.disabled = this.blacksmithBusy || this.hudState.gold < offer.goldPrice;
-      item.appendChild(buyButton);
-
-      this.blacksmithOffersRoot.appendChild(item);
-    }
+    renderBlacksmithOffersFromFeature({
+      root: this.blacksmithOffersRoot,
+      isAuthenticated: this.isAuthenticated,
+      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+      blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+      blacksmithBusy: this.blacksmithBusy,
+      gold: this.hudState.gold,
+      offers: this.blacksmithOffers,
+    });
   }
 
   private renderVillageMarketOffers(): void {
@@ -2986,122 +2937,16 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.villageMarketRenderSignature = signature;
-
-    seedsRoot.replaceChildren();
-    buybackRoot.replaceChildren();
-
-    if (!this.isAuthenticated) {
-      const seedItem = document.createElement('li');
-      seedItem.classList.add('shop-item', 'empty');
-      seedItem.textContent = 'Connect to access seed offers.';
-      seedsRoot.appendChild(seedItem);
-
-      const buybackItem = document.createElement('li');
-      buybackItem.classList.add('shop-item', 'empty');
-      buybackItem.textContent = 'Connect to access crop buyback.';
-      buybackRoot.appendChild(buybackItem);
-      return;
-    }
-
-    if (!this.villageMarketUnlocked) {
-      const lockMessage = this.villageMarketBusy
-        ? 'Checking market unlock...'
-        : 'Market locked. Progress intro and floor milestones.';
-
-      const seedItem = document.createElement('li');
-      seedItem.classList.add('shop-item', 'empty');
-      seedItem.textContent = lockMessage;
-      seedsRoot.appendChild(seedItem);
-
-      const buybackItem = document.createElement('li');
-      buybackItem.classList.add('shop-item', 'empty');
-      buybackItem.textContent = 'Crop buyback unavailable while market is locked.';
-      buybackRoot.appendChild(buybackItem);
-      return;
-    }
-
-    if (this.villageMarketSeedOffers.length === 0) {
-      const seedItem = document.createElement('li');
-      seedItem.classList.add('shop-item', 'empty');
-      seedItem.textContent = this.villageMarketBusy ? 'Loading seed offers...' : 'No seed offers available.';
-      seedsRoot.appendChild(seedItem);
-    } else {
-      for (const offer of this.villageMarketSeedOffers) {
-        const item = document.createElement('li');
-        item.classList.add('shop-item');
-
-        const header = document.createElement('div');
-        header.classList.add('shop-item-header');
-
-        const name = document.createElement('strong');
-        name.textContent = offer.name;
-        header.appendChild(name);
-
-        const price = document.createElement('span');
-        price.classList.add('shop-price');
-        price.textContent = `${offer.goldPrice}g`;
-        header.appendChild(price);
-        item.appendChild(header);
-
-        const description = document.createElement('p');
-        description.classList.add('shop-description');
-        description.textContent = offer.description;
-        item.appendChild(description);
-
-        const buyButton = document.createElement('button');
-        buyButton.classList.add('hud-shop-buy');
-        buyButton.textContent = `Buy x1 (${offer.goldPrice}g)`;
-        buyButton.dataset.marketAction = 'buy-seed';
-        buyButton.dataset.offerKey = offer.offerKey;
-        buyButton.disabled = this.villageMarketBusy || this.hudState.gold < offer.goldPrice;
-        item.appendChild(buyButton);
-
-        seedsRoot.appendChild(item);
-      }
-    }
-
-    if (this.villageMarketBuybackOffers.length === 0) {
-      const buybackItem = document.createElement('li');
-      buybackItem.classList.add('shop-item', 'empty');
-      buybackItem.textContent = this.villageMarketBusy
-        ? 'Loading crop buyback offers...'
-        : 'No crop buyback offers available.';
-      buybackRoot.appendChild(buybackItem);
-      return;
-    }
-
-    for (const offer of this.villageMarketBuybackOffers) {
-      const item = document.createElement('li');
-      item.classList.add('shop-item');
-
-      const header = document.createElement('div');
-      header.classList.add('shop-item-header');
-
-      const name = document.createElement('strong');
-      name.textContent = offer.name;
-      header.appendChild(name);
-
-      const price = document.createElement('span');
-      price.classList.add('shop-price');
-      price.textContent = `Sell ${offer.goldValue}g`;
-      header.appendChild(price);
-      item.appendChild(header);
-
-      const description = document.createElement('p');
-      description.classList.add('shop-description');
-      description.textContent = `${offer.description} | Owned ${offer.ownedQuantity}`;
-      item.appendChild(description);
-
-      const sellButton = document.createElement('button');
-      sellButton.classList.add('hud-shop-buy');
-      sellButton.textContent = `Sell x1 (${offer.goldValue}g)`;
-      sellButton.dataset.marketAction = 'sell-crop';
-      sellButton.dataset.itemKey = offer.itemKey;
-      sellButton.disabled = this.villageMarketBusy || offer.ownedQuantity < 1;
-      item.appendChild(sellButton);
-
-      buybackRoot.appendChild(item);
-    }
+    renderVillageMarketOffersFromFeature({
+      seedsRoot,
+      buybackRoot,
+      isAuthenticated: this.isAuthenticated,
+      villageMarketUnlocked: this.villageMarketUnlocked,
+      villageMarketBusy: this.villageMarketBusy,
+      gold: this.hudState.gold,
+      seedOffers: this.villageMarketSeedOffers,
+      buybackOffers: this.villageMarketBuybackOffers,
+    });
   }
 
   private renderFarmPanel(): void {
