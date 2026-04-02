@@ -113,6 +113,12 @@ import {
   validateCombatActionRequest as validateCombatActionRequestFromFeature,
 } from './features/combat/combatActionLogic';
 import {
+  getCombatLogsFallback as getCombatLogsFallbackFromFeature,
+  renderCombatEffectChips as renderCombatEffectChipsFromFeature,
+  renderCombatEnemySprite as renderCombatEnemySpriteFromFeature,
+  renderCombatLogs as renderCombatLogsFromFeature,
+} from './features/combat/combatHudRenderer';
+import {
   getCombatEnemySpritePath as getCombatEnemySpritePathFromFeature,
   resolvePortraitEntryPath as resolvePortraitEntryPathFromFeature,
   resolveSpriteAssetPath as resolveSpriteAssetPathFromFeature,
@@ -3235,30 +3241,19 @@ export class GameScene extends Phaser.Scene {
     if (!this.combatLogsList) {
       return;
     }
-
-    this.combatLogsList.replaceChildren();
-    const entries = this.combatLogs.length > 0 ? this.combatLogs : [this.getCombatLogsFallback()];
-
-    for (const entry of entries) {
-      const item = document.createElement('li');
-      item.textContent = entry;
-      if (this.combatLogs.length === 0) {
-        item.classList.add('combat-log-empty');
-      }
-      this.combatLogsList.appendChild(item);
-    }
+    renderCombatLogsFromFeature({
+      root: this.combatLogsList,
+      combatLogs: this.combatLogs,
+      fallback: this.getCombatLogsFallback(),
+    });
   }
 
   private getCombatLogsFallback(): string {
-    if (!this.isAuthenticated) {
-      return 'Connecte toi pour lancer un combat.';
-    }
-
-    if (this.combatBusy) {
-      return 'Chargement du combat...';
-    }
-
-    return this.combatState ? 'Aucun log de combat pour le moment.' : 'Aucun combat actif.';
+    return getCombatLogsFallbackFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      combatBusy: this.combatBusy,
+      hasCombatState: Boolean(this.combatState),
+    });
   }
 
   private setHudText(key: string, value: string): void {
@@ -3273,25 +3268,10 @@ export class GameScene extends Phaser.Scene {
     if (!element) {
       return;
     }
-
-    element.classList.add('combat-effects-value');
-    element.replaceChildren();
-
-    if (effects.length === 0) {
-      const none = document.createElement('span');
-      none.classList.add('combat-effect-chip', 'empty');
-      none.textContent = 'None';
-      element.appendChild(none);
-      return;
-    }
-
-    for (const effect of effects) {
-      const chip = document.createElement('span');
-      chip.classList.add('combat-effect-chip');
-      chip.dataset.effectTone = effect.tone;
-      chip.textContent = effect.label;
-      element.appendChild(chip);
-    }
+    renderCombatEffectChipsFromFeature({
+      element,
+      effects,
+    });
   }
 
   private renderCombatEnemySprite(): void {
@@ -3303,69 +3283,25 @@ export class GameScene extends Phaser.Scene {
     }
 
     const enemy = this.combatState?.enemy;
-    if (!enemy) {
-      this.stopEnemyHudStripPlayback();
-      stripElement.hidden = true;
-      stripElement.style.removeProperty('background-image');
-      image.hidden = true;
-      image.removeAttribute('src');
-      image.dataset.enemyKey = '';
-      image.dataset.visualType = '';
-      image.dataset.visualState = '';
-      fallback.hidden = false;
-      fallback.textContent = 'No enemy';
-      return;
-    }
-
     const preferredAnimation = this.getEnemyHudStripPreferredAnimation();
-    const enemyStrip = this.getStripManifestEntry(enemy.key);
-    if (enemyStrip?.path) {
-      this.startEnemyHudStripPlayback(stripElement, enemy.key, enemyStrip, preferredAnimation);
-      stripElement.hidden = false;
-      image.hidden = true;
-      image.removeAttribute('src');
-      image.dataset.enemyKey = '';
-      image.dataset.visualType = '';
-      image.dataset.visualState = '';
-      fallback.hidden = true;
-      fallback.textContent = '';
-      return;
-    }
+    const enemyStrip = enemy ? this.getStripManifestEntry(enemy.key) : null;
+    const portraitPath = enemy ? this.getCombatEnemyPortraitPath(enemy.key, preferredAnimation) : null;
+    const spritePath = enemy ? this.getCombatEnemySpritePath(enemy.key) : null;
 
-    this.stopEnemyHudStripPlayback();
-    stripElement.hidden = true;
-    stripElement.style.removeProperty('background-image');
-
-    const portraitPath = this.getCombatEnemyPortraitPath(enemy.key, preferredAnimation);
-    const visualPath = portraitPath ?? this.getCombatEnemySpritePath(enemy.key);
-    if (!visualPath) {
-      image.hidden = true;
-      image.removeAttribute('src');
-      image.dataset.enemyKey = '';
-      image.dataset.visualType = '';
-      image.dataset.visualState = '';
-      fallback.hidden = false;
-      fallback.textContent = enemy.key;
-      return;
-    }
-
-    const visualType = portraitPath ? 'portrait' : 'sprite';
-    const visualState = visualType === 'portrait' ? this.toPortraitStateKey(preferredAnimation) : '';
-    if (
-      image.dataset.enemyKey !== enemy.key ||
-      image.getAttribute('src') !== visualPath ||
-      image.dataset.visualType !== visualType ||
-      image.dataset.visualState !== visualState
-    ) {
-      image.src = visualPath;
-      image.dataset.enemyKey = enemy.key;
-      image.dataset.visualType = visualType;
-      image.dataset.visualState = visualState;
-    }
-    image.alt = `${enemy.name} ${visualType}`;
-    image.hidden = false;
-    fallback.hidden = true;
-    fallback.textContent = '';
+    renderCombatEnemySpriteFromFeature({
+      stripElement,
+      image,
+      fallback,
+      enemy: enemy ? { key: enemy.key, name: enemy.name } : null,
+      preferredAnimation,
+      enemyStrip,
+      portraitPath,
+      spritePath,
+      stopEnemyHudStripPlayback: () => this.stopEnemyHudStripPlayback(),
+      startEnemyHudStripPlayback: (element, enemyKey, strip, animation) =>
+        this.startEnemyHudStripPlayback(element, enemyKey, strip, animation),
+      toPortraitStateKey: (animation) => this.toPortraitStateKey(animation),
+    });
   }
 
   private getEnemyHudStripPreferredAnimation(): StripAnimationName {
