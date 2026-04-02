@@ -74,6 +74,17 @@ import {
 } from './features/farm/farmActionHandlers';
 import { resolveFarmHotkeyCommand as resolveFarmHotkeyCommandFromFeature } from './features/farm/farmHotkeyController';
 import { isTypingInsideField as isTypingInsideFieldFromCommon } from './features/common/inputGuards';
+import {
+  activateGamepadHudElement as activateGamepadHudElementFromCommon,
+  applyGamepadHudFocusState as applyGamepadHudFocusStateFromCommon,
+  clearGamepadHudFocus as clearGamepadHudFocusFromCommon,
+  computeGamepadNavigationStep as computeGamepadNavigationStepFromCommon,
+  consumeGamepadJustPressedButtons as consumeGamepadJustPressedButtonsFromCommon,
+  getGamepadHudFocusableElements as getGamepadHudFocusableElementsFromCommon,
+  getPrimaryConnectedGamepad as getPrimaryConnectedGamepadFromCommon,
+  getWrappedGamepadHudFocusIndex as getWrappedGamepadHudFocusIndexFromCommon,
+  resolveRetainedGamepadHudFocusIndex as resolveRetainedGamepadHudFocusIndexFromCommon,
+} from './features/common/gamepadHudLogic';
 import { getSceneObstacleLayout as getSceneObstacleLayoutFromCommon } from './features/common/sceneObstacleLayout';
 import {
   renderFarmCraftingRecipes as renderFarmCraftingRecipesFromFeature,
@@ -84,6 +95,10 @@ import {
   getPlayerCombatActionAnimation as getPlayerCombatActionAnimationFromFeature,
   validateCombatActionRequest as validateCombatActionRequestFromFeature,
 } from './features/combat/combatActionLogic';
+import {
+  getCombatEnemyIntentUi as getCombatEnemyIntentUiFromFeature,
+  getCombatIntentIconTooltip as getCombatIntentIconTooltipFromFeature,
+} from './features/combat/combatIntentUiLogic';
 import {
   applyEnemyHudStripFrame as applyEnemyHudStripFrameFromFeature,
   getCombatEnemyPortraitPath as getCombatEnemyPortraitPathFromFeature,
@@ -315,6 +330,11 @@ import {
   bindHudElements as bindHudElementsFromHud,
   clearHudElementBindings as clearHudElementBindingsFromHud,
 } from './hud/hudBindings';
+import {
+  bindHudEventListeners as bindHudEventListenersFromHud,
+  unbindHudEventListeners as unbindHudEventListenersFromHud,
+} from './hud/hudEventLifecycle';
+import { resetHudTeardownState as resetHudTeardownStateFromHud } from './hud/hudTeardownState';
 import { createHudTemplate as createHudTemplateFromHud } from './hud/hudTemplate';
 import type {
   AutoSaveState,
@@ -1304,36 +1324,25 @@ export class GameScene extends Phaser.Scene {
       this.debugQaStripCalibrationSelect.value = this.stripCalibrationPreset;
     }
     this.syncDebugQaFiltersToInputs();
-    if (this.debugQaReplayAutoPlaySpeedSelect) {
-      this.debugQaReplayAutoPlaySpeedSelect.addEventListener('change', this.onDebugQaReplayAutoPlaySpeedChange);
-    }
-    if (this.debugQaStripCalibrationSelect) {
-      this.debugQaStripCalibrationSelect.addEventListener('change', this.onDebugQaStripCalibrationChange);
-    }
-    if (this.debugQaRecapOutcomeFilterSelect) {
-      this.debugQaRecapOutcomeFilterSelect.addEventListener('change', this.onDebugQaFilterInputChange);
-    }
-    if (this.debugQaRecapEnemyFilterInput) {
-      this.debugQaRecapEnemyFilterInput.addEventListener('input', this.onDebugQaFilterInputChange);
-    }
-    if (this.debugQaScriptEnemyFilterInput) {
-      this.debugQaScriptEnemyFilterInput.addEventListener('input', this.onDebugQaFilterInputChange);
-    }
-    if (this.debugQaScriptIntentFilterInput) {
-      this.debugQaScriptIntentFilterInput.addEventListener('input', this.onDebugQaFilterInputChange);
-    }
-    if (this.debugQaImportFileInput) {
-      this.debugQaImportFileInput.addEventListener('change', this.onDebugQaImportFileChange);
-    }
-    if (this.heroProfileNameInput) {
-      this.heroProfileNameInput.addEventListener('input', this.onHeroProfileNameInput);
-    }
-    if (this.heroProfileAppearanceSelect) {
-      this.heroProfileAppearanceSelect.addEventListener('change', this.onHeroProfileAppearanceChange);
-    }
-    if (this.farmSeedSelect) {
-      this.farmSeedSelect.addEventListener('change', this.onFarmSeedSelectionChange);
-    }
+    bindHudEventListenersFromHud({
+      debugQaReplayAutoPlaySpeedSelect: this.debugQaReplayAutoPlaySpeedSelect,
+      debugQaStripCalibrationSelect: this.debugQaStripCalibrationSelect,
+      debugQaRecapOutcomeFilterSelect: this.debugQaRecapOutcomeFilterSelect,
+      debugQaRecapEnemyFilterInput: this.debugQaRecapEnemyFilterInput,
+      debugQaScriptEnemyFilterInput: this.debugQaScriptEnemyFilterInput,
+      debugQaScriptIntentFilterInput: this.debugQaScriptIntentFilterInput,
+      debugQaImportFileInput: this.debugQaImportFileInput,
+      heroProfileNameInput: this.heroProfileNameInput,
+      heroProfileAppearanceSelect: this.heroProfileAppearanceSelect,
+      farmSeedSelect: this.farmSeedSelect,
+      onDebugQaReplayAutoPlaySpeedChange: this.onDebugQaReplayAutoPlaySpeedChange,
+      onDebugQaStripCalibrationChange: this.onDebugQaStripCalibrationChange,
+      onDebugQaFilterInputChange: this.onDebugQaFilterInputChange,
+      onDebugQaImportFileChange: this.onDebugQaImportFileChange,
+      onHeroProfileNameInput: this.onHeroProfileNameInput,
+      onHeroProfileAppearanceChange: this.onHeroProfileAppearanceChange,
+      onFarmSeedSelectionChange: this.onFarmSeedSelectionChange,
+    });
     this.hudRoot.addEventListener('click', this.onHudClick);
     this.syncHudSceneMode();
     this.updateHud();
@@ -1377,36 +1386,25 @@ export class GameScene extends Phaser.Scene {
     }
     this.sceneObstacles = [];
 
-    if (this.debugQaImportFileInput) {
-      this.debugQaImportFileInput.removeEventListener('change', this.onDebugQaImportFileChange);
-    }
-    if (this.debugQaReplayAutoPlaySpeedSelect) {
-      this.debugQaReplayAutoPlaySpeedSelect.removeEventListener('change', this.onDebugQaReplayAutoPlaySpeedChange);
-    }
-    if (this.debugQaStripCalibrationSelect) {
-      this.debugQaStripCalibrationSelect.removeEventListener('change', this.onDebugQaStripCalibrationChange);
-    }
-    if (this.debugQaRecapOutcomeFilterSelect) {
-      this.debugQaRecapOutcomeFilterSelect.removeEventListener('change', this.onDebugQaFilterInputChange);
-    }
-    if (this.debugQaRecapEnemyFilterInput) {
-      this.debugQaRecapEnemyFilterInput.removeEventListener('input', this.onDebugQaFilterInputChange);
-    }
-    if (this.debugQaScriptEnemyFilterInput) {
-      this.debugQaScriptEnemyFilterInput.removeEventListener('input', this.onDebugQaFilterInputChange);
-    }
-    if (this.debugQaScriptIntentFilterInput) {
-      this.debugQaScriptIntentFilterInput.removeEventListener('input', this.onDebugQaFilterInputChange);
-    }
-    if (this.heroProfileNameInput) {
-      this.heroProfileNameInput.removeEventListener('input', this.onHeroProfileNameInput);
-    }
-    if (this.heroProfileAppearanceSelect) {
-      this.heroProfileAppearanceSelect.removeEventListener('change', this.onHeroProfileAppearanceChange);
-    }
-    if (this.farmSeedSelect) {
-      this.farmSeedSelect.removeEventListener('change', this.onFarmSeedSelectionChange);
-    }
+    unbindHudEventListenersFromHud({
+      debugQaReplayAutoPlaySpeedSelect: this.debugQaReplayAutoPlaySpeedSelect,
+      debugQaStripCalibrationSelect: this.debugQaStripCalibrationSelect,
+      debugQaRecapOutcomeFilterSelect: this.debugQaRecapOutcomeFilterSelect,
+      debugQaRecapEnemyFilterInput: this.debugQaRecapEnemyFilterInput,
+      debugQaScriptEnemyFilterInput: this.debugQaScriptEnemyFilterInput,
+      debugQaScriptIntentFilterInput: this.debugQaScriptIntentFilterInput,
+      debugQaImportFileInput: this.debugQaImportFileInput,
+      heroProfileNameInput: this.heroProfileNameInput,
+      heroProfileAppearanceSelect: this.heroProfileAppearanceSelect,
+      farmSeedSelect: this.farmSeedSelect,
+      onDebugQaReplayAutoPlaySpeedChange: this.onDebugQaReplayAutoPlaySpeedChange,
+      onDebugQaStripCalibrationChange: this.onDebugQaStripCalibrationChange,
+      onDebugQaFilterInputChange: this.onDebugQaFilterInputChange,
+      onDebugQaImportFileChange: this.onDebugQaImportFileChange,
+      onHeroProfileNameInput: this.onHeroProfileNameInput,
+      onHeroProfileAppearanceChange: this.onHeroProfileAppearanceChange,
+      onFarmSeedSelectionChange: this.onFarmSeedSelectionChange,
+    });
 
     if (this.hudRoot) {
       this.hudRoot.removeEventListener('click', this.onHudClick);
@@ -1415,69 +1413,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     clearHudElementBindingsFromHud(this as unknown as Record<string, unknown>);
-    this.questsRenderSignature = '';
-    this.blacksmithRenderSignature = '';
-    this.villageMarketRenderSignature = '';
-    this.farmRenderSignature = '';
-    this.villageMarketUnlocked = false;
-    this.villageMarketSeedOffers = [];
-    this.villageMarketBuybackOffers = [];
-    this.villageMarketBusy = false;
-    this.villageMarketError = null;
-    this.farmState = null;
-    this.farmStoryState = null;
-    this.farmBusy = false;
-    this.farmError = null;
-    this.farmSelectedSeedItemKey = '';
-    this.farmSelectedPlotKey = null;
-    this.farmFeedbackMessage = null;
-    this.farmCraftingPanelOpen = false;
-    this.farmCraftingState = null;
-    this.farmCraftingBusy = false;
-    this.farmCraftingError = null;
-    this.farmCraftingRenderSignature = '';
-    this.frontSceneMode = 'farm';
-    this.villageSelectedZoneKey = null;
-    this.villageFeedbackMessage = null;
-    this.farmSceneRenderSignature = '';
-    this.villageSceneRenderSignature = '';
-    this.loopState = null;
-    this.loopBusy = false;
-    this.loopError = null;
-    this.towerStoryState = null;
-    this.villageNpcState = {
-      mayor: { stateKey: 'offscreen', available: false },
-      blacksmith: { stateKey: 'cursed', available: false },
-      merchant: { stateKey: 'absent', available: false },
-    };
-    this.autosaveRenderSignature = '';
-    this.saveSlotsRenderSignature = '';
-    this.heroProfile = null;
-    this.heroProfileBusy = false;
-    this.heroProfileError = null;
-    this.heroProfileMessage = null;
-    this.heroProfileNameDraft = '';
-    this.heroProfileAppearanceDraft = 'default';
-    this.introNarrativeState = null;
-    this.introNarrativeBusy = false;
-    this.introNarrativeError = null;
-    this.debugQaBusyAction = null;
-    this.debugQaStatus = 'idle';
-    this.debugQaMessage = null;
-    this.debugQaError = null;
-    this.debugQaImportedTrace = null;
-    this.debugQaStepReplayState = null;
-    this.debugQaReplayAutoPlayIntervalId = null;
-    this.debugQaReplayAutoPlaySpeed = 'normal';
-    this.stripCalibrationPreset = 'manifest';
-    this.debugQaRecapOutcomeFilter = 'all';
-    this.debugQaRecapEnemyFilter = '';
-    this.debugQaScriptEnemyFilter = '';
-    this.debugQaScriptIntentFilter = '';
-    this.debugQaScriptedIntentsReference = null;
-    this.debugQaScriptedIntentsText = 'Click "Load reference" to inspect the combat script QA payload.';
-    this.spriteManifest = null;
-    this.playerUsesStripAnimation = false;
+    resetHudTeardownStateFromHud(this);
   }
   private updateHud(): void {
     if (!this.hudRoot) {
@@ -2140,7 +2076,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateGamepadInput(): void {
-    const gamepad = this.getPrimaryConnectedGamepad();
+    const gamepad = getPrimaryConnectedGamepadFromCommon();
     if (!gamepad) {
       if (this.gamepadPreviousButtonStates.length > 0 || this.gamepadHudFocusIndex !== -1) {
         this.resetGamepadInputState();
@@ -2148,79 +2084,71 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.updateGamepadHudFocusables();
-    const justPressedButtons = this.consumeGamepadJustPressedButtons(gamepad);
+    this.syncGamepadHudFocusables(false);
+    const consumption = consumeGamepadJustPressedButtonsFromCommon(gamepad, this.gamepadPreviousButtonStates);
+    this.gamepadPreviousButtonStates = consumption.nextStates;
+    const justPressedButtons = consumption.justPressed;
     if (justPressedButtons.size === 0) {
       return;
     }
 
-    this.handleGamepadHudNavigation(justPressedButtons);
+    const navigationStep = computeGamepadNavigationStepFromCommon(justPressedButtons, {
+      up: GAMEPAD_BUTTON_DPAD_UP,
+      left: GAMEPAD_BUTTON_DPAD_LEFT,
+      down: GAMEPAD_BUTTON_DPAD_DOWN,
+      right: GAMEPAD_BUTTON_DPAD_RIGHT,
+      leftBumper: GAMEPAD_BUTTON_LEFT_BUMPER,
+      rightBumper: GAMEPAD_BUTTON_RIGHT_BUMPER,
+    });
+    if (navigationStep !== 0) {
+      this.moveGamepadHudFocus(navigationStep);
+    }
+
     this.handleGamepadCombatShortcuts(justPressedButtons);
 
     if (justPressedButtons.has(GAMEPAD_BUTTON_A)) {
       if (this.activateFocusedGamepadHudElement()) {
         return;
       }
-      if (this.tryHandleGamepadPrimaryCombatAction()) {
+
+      if (
+        this.isAuthenticated &&
+        this.combatState &&
+        this.combatState.status === 'active' &&
+        this.combatState.turn === 'player' &&
+        this.tryPerformCombatActionFromGamepad('attack')
+      ) {
         return;
       }
-    }
-  }
 
-  private getPrimaryConnectedGamepad(): Gamepad | null {
-    const pads = navigator.getGamepads?.();
-    if (!pads) {
-      return null;
-    }
-
-    for (const pad of pads) {
-      if (pad?.connected) {
-        return pad;
+      if (this.combatStartButton && !this.combatStartButton.disabled) {
+        void this.startCombat();
       }
     }
-
-    return null;
   }
 
-  private consumeGamepadJustPressedButtons(gamepad: Gamepad): Set<number> {
-    const justPressed = new Set<number>();
-    const nextStates: boolean[] = [];
+  private syncGamepadHudFocusables(focusDomElement: boolean): void {
+    const previousFocusedElement =
+      this.gamepadHudFocusIndex >= 0 ? this.gamepadHudFocusableElements[this.gamepadHudFocusIndex] ?? null : null;
+    const focusables = getGamepadHudFocusableElementsFromCommon(this.hudRoot);
+    this.gamepadHudFocusableElements = focusables;
 
-    gamepad.buttons.forEach((button, index) => {
-      const pressed = Boolean(button.pressed);
-      const previous = this.gamepadPreviousButtonStates[index] ?? false;
-      nextStates[index] = pressed;
-      if (pressed && !previous) {
-        justPressed.add(index);
-      }
-    });
-
-    this.gamepadPreviousButtonStates = nextStates;
-    return justPressed;
-  }
-
-  private handleGamepadHudNavigation(justPressedButtons: Set<number>): void {
-    let step = 0;
-    if (justPressedButtons.has(GAMEPAD_BUTTON_DPAD_UP) || justPressedButtons.has(GAMEPAD_BUTTON_DPAD_LEFT)) {
-      step -= 1;
-    }
-    if (justPressedButtons.has(GAMEPAD_BUTTON_DPAD_DOWN) || justPressedButtons.has(GAMEPAD_BUTTON_DPAD_RIGHT)) {
-      step += 1;
-    }
-    if (justPressedButtons.has(GAMEPAD_BUTTON_LEFT_BUMPER)) {
-      step -= 1;
-    }
-    if (justPressedButtons.has(GAMEPAD_BUTTON_RIGHT_BUMPER)) {
-      step += 1;
-    }
-
-    if (step < 0) {
-      this.moveGamepadHudFocus(-1);
+    if (focusables.length === 0) {
+      clearGamepadHudFocusFromCommon(this.hudRoot);
+      this.gamepadHudFocusIndex = -1;
       return;
     }
-    if (step > 0) {
-      this.moveGamepadHudFocus(1);
-    }
+
+    this.gamepadHudFocusIndex = resolveRetainedGamepadHudFocusIndexFromCommon({
+      focusables,
+      currentIndex: this.gamepadHudFocusIndex,
+      previousFocusedElement,
+    });
+    applyGamepadHudFocusStateFromCommon({
+      focusables,
+      focusIndex: this.gamepadHudFocusIndex,
+      focusDomElement,
+    });
   }
 
   private handleGamepadCombatShortcuts(justPressedButtons: Set<number>): void {
@@ -2254,27 +2182,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private tryHandleGamepadPrimaryCombatAction(): boolean {
-    if (!this.isAuthenticated) {
-      return false;
-    }
-
-    if (
-      this.combatState &&
-      this.combatState.status === 'active' &&
-      this.combatState.turn === 'player'
-    ) {
-      return this.tryPerformCombatActionFromGamepad('attack');
-    }
-
-    if (this.combatStartButton && !this.combatStartButton.disabled) {
-      void this.startCombat();
-      return true;
-    }
-
-    return false;
-  }
-
   private tryPerformCombatActionFromGamepad(action: CombatActionName): boolean {
     const buttonByAction: Partial<Record<CombatActionName, HTMLButtonElement | null>> = {
       attack: this.combatAttackButton,
@@ -2296,177 +2203,46 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  private updateGamepadHudFocusables(): void {
-    if (!this.hudRoot) {
-      this.clearGamepadHudFocus(true);
-      this.gamepadHudFocusableElements = [];
-      return;
-    }
-
-    const previousFocusedElement =
-      this.gamepadHudFocusIndex >= 0 ? this.gamepadHudFocusableElements[this.gamepadHudFocusIndex] : null;
-    const focusables = this.getGamepadHudFocusableElements();
-    this.gamepadHudFocusableElements = focusables;
-
-    if (focusables.length === 0) {
-      this.clearGamepadHudFocus(true);
-      return;
-    }
-
-    if (previousFocusedElement) {
-      const retainedIndex = focusables.indexOf(previousFocusedElement);
-      if (retainedIndex >= 0) {
-        this.gamepadHudFocusIndex = retainedIndex;
-      } else if (this.gamepadHudFocusIndex >= focusables.length) {
-        this.gamepadHudFocusIndex = focusables.length - 1;
-      }
-    } else if (this.gamepadHudFocusIndex >= focusables.length) {
-      this.gamepadHudFocusIndex = focusables.length - 1;
-    }
-
-    this.applyGamepadHudFocusState(false);
-  }
-
-  private getGamepadHudFocusableElements(): HTMLElement[] {
-    if (!this.hudRoot) {
-      return [];
-    }
-
-    const selector = [
-      'button',
-      'select',
-      'input:not([type="hidden"]):not([type="file"])',
-      'textarea',
-    ].join(', ');
-
-    return Array.from(this.hudRoot.querySelectorAll<HTMLElement>(selector)).filter((element) =>
-      this.isHudElementGamepadFocusable(element),
-    );
-  }
-
-  private isHudElementGamepadFocusable(element: HTMLElement): boolean {
-    const isFormControl = element instanceof HTMLButtonElement ||
-      element instanceof HTMLInputElement ||
-      element instanceof HTMLSelectElement ||
-      element instanceof HTMLTextAreaElement
-    const disabled = isFormControl ? element.disabled : element.hasAttribute('disabled');
-    if (disabled) {
-      return false;
-    }
-
-    if (element.matches('[hidden]')) {
-      return false;
-    }
-
-    const style = window.getComputedStyle(element);
-    return style.display !== 'none' && style.visibility !== 'hidden';
-  }
-
   private moveGamepadHudFocus(step: number): void {
-    this.updateGamepadHudFocusables();
+    this.syncGamepadHudFocusables(false);
     const total = this.gamepadHudFocusableElements.length;
     if (total === 0) {
       return;
     }
 
-    if (this.gamepadHudFocusIndex < 0) {
-      this.gamepadHudFocusIndex = step > 0 ? 0 : total - 1;
-    } else {
-      this.gamepadHudFocusIndex = (this.gamepadHudFocusIndex + step + total) % total;
-    }
-
-    this.focusGamepadHudElement(this.gamepadHudFocusIndex, true);
-  }
-
-  private focusGamepadHudElement(index: number, focusDomElement: boolean): void {
-    if (index < 0 || index >= this.gamepadHudFocusableElements.length) {
-      return;
-    }
-
-    this.gamepadHudFocusIndex = index;
-    this.applyGamepadHudFocusState(focusDomElement);
-  }
-
-  private applyGamepadHudFocusState(focusDomElement: boolean): void {
-    this.gamepadHudFocusableElements.forEach((element, index) => {
-      if (index === this.gamepadHudFocusIndex) {
-        element.dataset.gamepadFocused = '1';
-      } else {
-        delete element.dataset.gamepadFocused;
-      }
+    this.gamepadHudFocusIndex = getWrappedGamepadHudFocusIndexFromCommon(this.gamepadHudFocusIndex, total, step);
+    applyGamepadHudFocusStateFromCommon({
+      focusables: this.gamepadHudFocusableElements,
+      focusIndex: this.gamepadHudFocusIndex,
+      focusDomElement: true,
     });
-
-    if (!focusDomElement || this.gamepadHudFocusIndex < 0) {
-      return;
-    }
-
-    const active = this.gamepadHudFocusableElements[this.gamepadHudFocusIndex];
-    if (!active) {
-      return;
-    }
-
-    active.focus({ preventScroll: true });
-    active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
   private activateFocusedGamepadHudElement(): boolean {
-    this.updateGamepadHudFocusables();
+    this.syncGamepadHudFocusables(false);
     const total = this.gamepadHudFocusableElements.length;
     if (total === 0) {
       return false;
     }
 
     if (this.gamepadHudFocusIndex < 0 || this.gamepadHudFocusIndex >= total) {
-      this.focusGamepadHudElement(0, true);
-      return false;
-    }
-
-    const active = this.gamepadHudFocusableElements[this.gamepadHudFocusIndex];
-    if (!active) {
-      return false;
-    }
-
-    if (active instanceof HTMLButtonElement) {
-      active.click();
-      return true;
-    }
-
-    if (active instanceof HTMLSelectElement) {
-      if (active.options.length === 0) {
-        return false;
-      }
-      const nextIndex = (active.selectedIndex + 1 + active.options.length) % active.options.length;
-      active.selectedIndex = nextIndex;
-      active.dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
-    }
-
-    if (active instanceof HTMLInputElement && active.type === 'checkbox') {
-      active.checked = !active.checked;
-      active.dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
-    }
-
-    active.focus({ preventScroll: true });
-    return true;
-  }
-
-  private clearGamepadHudFocus(resetIndex: boolean): void {
-    if (this.hudRoot) {
-      this.hudRoot.querySelectorAll<HTMLElement>('[data-gamepad-focused="1"]').forEach((element) => {
-        delete element.dataset.gamepadFocused;
+      this.gamepadHudFocusIndex = 0;
+      applyGamepadHudFocusStateFromCommon({
+        focusables: this.gamepadHudFocusableElements,
+        focusIndex: this.gamepadHudFocusIndex,
+        focusDomElement: true,
       });
+      return false;
     }
 
-    if (resetIndex) {
-      this.gamepadHudFocusIndex = -1;
-    }
+    return activateGamepadHudElementFromCommon(this.gamepadHudFocusableElements[this.gamepadHudFocusIndex] ?? null);
   }
 
   private resetGamepadInputState(): void {
     this.gamepadPreviousButtonStates = [];
     this.gamepadHudFocusableElements = [];
-    this.clearGamepadHudFocus(true);
+    clearGamepadHudFocusFromCommon(this.hudRoot);
+    this.gamepadHudFocusIndex = -1;
   }
 
   private updateDebugQaHud(): void {
@@ -4588,7 +4364,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const intentUi = this.getCombatEnemyIntentUi(intentKey, isPreview);
+    const intentUi = getCombatEnemyIntentUiFromFeature({
+      combatState: this.combatState,
+      intentKey,
+      isPreview,
+    });
     element.classList.add('combat-intent-chip');
     element.replaceChildren();
     if (intentUi.icon !== 'none') {
@@ -4596,7 +4376,7 @@ export class GameScene extends Phaser.Scene {
       icon.classList.add('combat-intent-icon');
       icon.dataset.intentIcon = intentUi.icon;
       icon.textContent = intentUi.iconLabel;
-      const iconTooltip = this.getCombatIntentIconTooltip(intentUi.iconLabel);
+      const iconTooltip = getCombatIntentIconTooltipFromFeature(intentUi.iconLabel);
       icon.title = iconTooltip;
       icon.setAttribute('aria-label', iconTooltip);
       element.appendChild(icon);
@@ -4610,164 +4390,6 @@ export class GameScene extends Phaser.Scene {
     element.dataset.intentTone = intentUi.tone;
     element.dataset.intentPulse = intentUi.pulse ? '1' : '0';
     element.dataset.intentLayer = isPreview ? 'next' : 'current';
-  }
-
-  private getCombatEnemyIntentUi(
-    intentKey: 'enemyTelegraphIntent' | 'enemyTelegraphNextIntent',
-    isPreview: boolean,
-  ): {
-    label: string;
-    tone: 'neutral' | 'calm' | 'warning' | 'danger' | 'utility';
-    pulse: boolean;
-    icon: 'none' | 'attack' | 'magic' | 'cleanse' | 'dispel' | 'ulti';
-    iconLabel: string;
-  } {
-    if (!this.combatState || this.combatState.status !== 'active' || this.combatState.turn !== 'player') {
-      return { label: '-', tone: 'neutral', pulse: false, icon: 'none', iconLabel: '-' };
-    }
-
-    const intent = this.combatState.scriptState?.[intentKey];
-    if (typeof intent !== 'string' || intent.length === 0) {
-      return isPreview
-        ? { label: 'NO PREVIEW', tone: 'neutral', pulse: false, icon: 'none', iconLabel: '-' }
-        : { label: 'UNCLEAR', tone: 'warning', pulse: false, icon: 'none', iconLabel: '?' };
-    }
-
-    const mapped = this.mapEnemyIntentUi(intent);
-    if (!mapped) {
-      return { label: 'UNCLEAR', tone: 'warning', pulse: false, icon: 'none', iconLabel: '?' };
-    }
-
-    return {
-      label: isPreview ? `NEXT: ${mapped.preview}` : mapped.current,
-      tone: mapped.tone,
-      pulse: isPreview ? false : mapped.pulse,
-      icon: mapped.icon,
-      iconLabel: mapped.iconLabel,
-    };
-  }
-
-  private mapEnemyIntentUi(intent: string):
-    | {
-      current: string;
-      preview: string;
-      tone: 'calm' | 'warning' | 'danger' | 'utility';
-      pulse: boolean;
-      icon: 'attack' | 'magic' | 'cleanse' | 'dispel' | 'ulti';
-      iconLabel: string;
-    }
-    | null {
-    switch (intent) {
-      case 'basic_strike':
-        return {
-          current: 'ATK: STRIKE',
-          preview: 'STRIKE',
-          tone: 'calm',
-          pulse: false,
-          icon: 'attack',
-          iconLabel: 'ATK',
-        };
-      case 'root_smash':
-        return {
-          current: 'SKILL: ROOT SMASH',
-          preview: 'ROOT SMASH',
-          tone: 'danger',
-          pulse: true,
-          icon: 'attack',
-          iconLabel: 'ATK',
-        };
-      case 'opening_punish':
-        return {
-          current: 'SKILL: PUNISH',
-          preview: 'PUNISH',
-          tone: 'warning',
-          pulse: false,
-          icon: 'attack',
-          iconLabel: 'ATK',
-        };
-      case 'cinder_burst':
-        return {
-          current: 'SKILL: CINDER BURST',
-          preview: 'CINDER BURST',
-          tone: 'danger',
-          pulse: true,
-          icon: 'magic',
-          iconLabel: 'MAG',
-        };
-      case 'molten_shell':
-        return {
-          current: 'UTILITY: CLEANSE',
-          preview: 'CLEANSE',
-          tone: 'utility',
-          pulse: false,
-          icon: 'cleanse',
-          iconLabel: 'CLN',
-        };
-      case 'twin_slash':
-        return {
-          current: 'SKILL: TWIN SLASH',
-          preview: 'TWIN SLASH',
-          tone: 'danger',
-          pulse: true,
-          icon: 'attack',
-          iconLabel: 'ATK',
-        };
-      case 'iron_recenter':
-        return {
-          current: 'UTILITY: CLEANSE',
-          preview: 'CLEANSE',
-          tone: 'utility',
-          pulse: false,
-          icon: 'cleanse',
-          iconLabel: 'CLN',
-        };
-      case 'cataclysm_ray':
-        return {
-          current: 'ULT: CATACLYSM RAY',
-          preview: 'CATACLYSM RAY',
-          tone: 'danger',
-          pulse: true,
-          icon: 'ulti',
-          iconLabel: 'ULT',
-        };
-      case 'cursed_claw':
-        return {
-          current: 'ATK: CURSED CLAW',
-          preview: 'CURSED CLAW',
-          tone: 'warning',
-          pulse: false,
-          icon: 'attack',
-          iconLabel: 'ATK',
-        };
-      case 'null_sigil':
-        return {
-          current: 'UTILITY: DISPEL',
-          preview: 'DISPEL',
-          tone: 'utility',
-          pulse: false,
-          icon: 'dispel',
-          iconLabel: 'DSP',
-        };
-      default:
-        return null;
-    }
-  }
-
-  private getCombatIntentIconTooltip(iconLabel: string): string {
-    switch (iconLabel) {
-      case 'ATK':
-        return 'ATK: attaque physique';
-      case 'MAG':
-        return 'MAG: attaque magique';
-      case 'CLN':
-        return 'CLN: retire un debuff ennemi';
-      case 'DSP':
-        return 'DSP: retire un buff joueur';
-      case 'ULT':
-        return 'ULT: attaque ultime';
-      default:
-        return iconLabel;
-    }
   }
 
   private clearCombatError(): void {
