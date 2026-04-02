@@ -113,6 +113,12 @@ import {
   validateCombatActionRequest as validateCombatActionRequestFromFeature,
 } from './features/combat/combatActionLogic';
 import {
+  getLoopBlockersLabel as getLoopBlockersLabelFromFeature,
+  getLoopPreparationLabel as getLoopPreparationLabelFromFeature,
+  getLoopSummaryLabel as getLoopSummaryLabelFromFeature,
+  getLoopSuppliesLabel as getLoopSuppliesLabelFromFeature,
+} from './features/combat/combatLoopHudLogic';
+import {
   getCombatLogsFallback as getCombatLogsFallbackFromFeature,
   renderCombatEffectChips as renderCombatEffectChipsFromFeature,
   renderCombatEnemySprite as renderCombatEnemySpriteFromFeature,
@@ -143,6 +149,10 @@ import {
   renderBlacksmithOffers as renderBlacksmithOffersFromFeature,
   renderVillageMarketOffers as renderVillageMarketOffersFromFeature,
 } from './features/shops/shopHudRenderer';
+import {
+  getBlacksmithShopSummaryLabel as getBlacksmithShopSummaryLabelFromFeature,
+  getVillageMarketSummaryLabel as getVillageMarketSummaryLabelFromFeature,
+} from './features/shops/shopHudLogic';
 import {
   renderVillageShopEntries as renderVillageShopEntriesFromFeature,
   renderVillageShopTabs as renderVillageShopTabsFromFeature,
@@ -2854,31 +2864,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getBlacksmithShopSummaryLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Login required';
-    }
-
-    if (!this.hudState.blacksmithUnlocked) {
-      return this.hudState.blacksmithCurseLifted ? 'Recovering' : 'Locked';
-    }
-
-    return this.blacksmithBusy
-      ? 'Refreshing...'
-      : `${this.blacksmithOffers.length} offers | Gold ${this.hudState.gold}`;
+    return getBlacksmithShopSummaryLabelFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+      blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+      blacksmithBusy: this.blacksmithBusy,
+      blacksmithOffersCount: this.blacksmithOffers.length,
+      gold: this.hudState.gold,
+    });
   }
 
   private getVillageMarketSummaryLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Login required';
-    }
-
-    if (!this.villageMarketUnlocked) {
-      return this.villageMarketBusy ? 'Checking unlock...' : 'Locked';
-    }
-
-    return this.villageMarketBusy
-      ? 'Refreshing...'
-      : `${this.villageMarketSeedOffers.length} seeds | ${this.villageMarketBuybackOffers.length} crops`;
+    return getVillageMarketSummaryLabelFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      villageMarketUnlocked: this.villageMarketUnlocked,
+      villageMarketBusy: this.villageMarketBusy,
+      villageMarketSeedOffersCount: this.villageMarketSeedOffers.length,
+      villageMarketBuybackOffersCount: this.villageMarketBuybackOffers.length,
+    });
   }
 
   private getFarmSummaryLabel(): string {
@@ -2914,67 +2917,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getLoopSummaryLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Login required';
-    }
-
-    if (this.loopBusy && !this.loopState) {
-      return 'Loading...';
-    }
-
-    if (!this.loopState) {
-      return 'No data';
-    }
-
-    if (this.loopState.preparation.active) {
-      return 'Preparation active';
-    }
-
-    return this.loopState.preparation.ready ? 'Preparation ready' : 'Preparation blocked';
+    return getLoopSummaryLabelFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      loopBusy: this.loopBusy,
+      loopState: this.loopState,
+    });
   }
 
   private getLoopSuppliesLabel(): string {
-    if (!this.loopState) {
-      return '-';
-    }
-
-    return `Herb ${this.loopState.supplies.healingHerb} | Tonic ${this.loopState.supplies.manaTonic}`;
+    return getLoopSuppliesLabelFromFeature(this.loopState);
   }
 
   private getLoopPreparationLabel(): string {
-    if (!this.loopState) {
-      return '-';
-    }
-
-    const prep = this.loopState.preparation;
-    if (!prep.active) {
-      return prep.ready ? 'Ready to apply' : 'Inactive';
-    }
-
-    const bonuses: string[] = [];
-    if (prep.hpBoostActive) {
-      bonuses.push('+HP');
-    }
-    if (prep.mpBoostActive) {
-      bonuses.push('+MP');
-    }
-    if (prep.attackBoostActive) {
-      bonuses.push('+ATK');
-    }
-
-    return bonuses.length > 0 ? bonuses.join(' / ') : 'Active';
+    return getLoopPreparationLabelFromFeature(this.loopState);
   }
 
   private getLoopBlockersLabel(): string {
-    if (!this.loopState) {
-      return '-';
-    }
-
-    if (this.loopState.preparation.blockers.length > 0) {
-      return this.loopState.preparation.blockers[0] ?? '-';
-    }
-
-    return this.loopState.preparation.nextStep;
+    return getLoopBlockersLabelFromFeature(this.loopState);
   }
 
   private getTowerStorySummaryLabel(): string {
