@@ -104,6 +104,10 @@ import {
   runWaterFarmPlotAction as runWaterFarmPlotActionFromFeature,
 } from './features/farm/farmActionHandlers';
 import {
+  renderFarmCraftingRecipes as renderFarmCraftingRecipesFromFeature,
+  renderFarmPanel as renderFarmPanelFromFeature,
+} from './features/farm/farmHudRenderer';
+import {
   computeCombatActionAvailability as computeCombatActionAvailabilityFromFeature,
   getPlayerCombatActionAnimation as getPlayerCombatActionAnimationFromFeature,
   validateCombatActionRequest as validateCombatActionRequestFromFeature,
@@ -3112,131 +3116,19 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.farmRenderSignature = signature;
-
-    seedSelect.replaceChildren();
-    plotsRoot.replaceChildren();
-
-    if (!this.isAuthenticated) {
-      const option = document.createElement('option');
-      option.value = '';
-      option.textContent = 'Connexion requise';
-      seedSelect.appendChild(option);
-      seedSelect.value = '';
-      seedSelect.disabled = true;
-
-      const item = document.createElement('li');
-      item.classList.add('farm-plot-item', 'empty');
-      item.textContent = 'Connecte-toi pour gerer les parcelles de la ferme.';
-      plotsRoot.appendChild(item);
-      return;
-    }
-
-    const farm = this.farmState;
-    if (!farm) {
-      const option = document.createElement('option');
-      option.value = '';
-      option.textContent = this.farmBusy ? 'Chargement...' : 'Aucune donnee ferme';
-      seedSelect.appendChild(option);
-      seedSelect.value = '';
-      seedSelect.disabled = true;
-
-      const item = document.createElement('li');
-      item.classList.add('farm-plot-item', 'empty');
-      item.textContent = this.farmBusy ? 'Chargement des parcelles...' : 'Aucune donnee ferme disponible.';
-      plotsRoot.appendChild(item);
-      return;
-    }
-
-    const unlockedCrops = farm.cropCatalog.filter((entry) => entry.unlocked);
-    if (unlockedCrops.length === 0) {
-      const option = document.createElement('option');
-      option.value = '';
-      option.textContent = 'Aucune graine debloquee';
-      seedSelect.appendChild(option);
-      this.farmSelectedSeedItemKey = '';
-    } else {
-      const unlockedSeedKeys = new Set(unlockedCrops.map((entry) => entry.seedItemKey));
-      if (!unlockedSeedKeys.has(this.farmSelectedSeedItemKey)) {
-        const firstUnlocked = unlockedCrops[0];
-        this.farmSelectedSeedItemKey = firstUnlocked ? firstUnlocked.seedItemKey : '';
-      }
-
-      for (const crop of unlockedCrops) {
-        const option = document.createElement('option');
-        option.value = crop.seedItemKey;
-        option.textContent = `${this.formatFarmLabel(crop.seedItemKey)} (${crop.growthDays}j)`;
-        seedSelect.appendChild(option);
-      }
-    }
-
-    seedSelect.value = this.farmSelectedSeedItemKey;
-    seedSelect.disabled = this.farmBusy || !farm.unlocked || unlockedCrops.length === 0;
-
-    if (!farm.unlocked) {
-      const item = document.createElement('li');
-      item.classList.add('farm-plot-item', 'empty');
-      item.textContent = 'Ferme verrouillee. Termine l intro (attribution de ferme).';
-      plotsRoot.appendChild(item);
-      return;
-    }
-
-    if (farm.plots.length === 0) {
-      const item = document.createElement('li');
-      item.classList.add('farm-plot-item', 'empty');
-      item.textContent = this.farmBusy ? 'Chargement des parcelles...' : 'Aucune parcelle configuree.';
-      plotsRoot.appendChild(item);
-      return;
-    }
-
-    const sortedPlots = [...farm.plots].sort((left, right) => (
-      left.row - right.row || left.col - right.col || left.plotKey.localeCompare(right.plotKey)
-    ));
-
-    for (const plot of sortedPlots) {
-      const item = document.createElement('li');
-      item.classList.add('farm-plot-item');
-      if (plot.readyToHarvest) {
-        item.dataset.ready = '1';
-      }
-      if (!plot.cropKey) {
-        item.dataset.empty = '1';
-      }
-      if (plot.plotKey === this.farmSelectedPlotKey) {
-        item.dataset.selected = '1';
-      }
-
-      const header = document.createElement('div');
-      header.classList.add('farm-plot-header');
-
-      const title = document.createElement('strong');
-      title.textContent = `Parcelle ${plot.row}-${plot.col}`;
-      header.appendChild(title);
-
-      const badge = document.createElement('span');
-      badge.classList.add('farm-plot-meta');
-      badge.textContent = this.getFarmPlotPhaseLabel(plot);
-      header.appendChild(badge);
-      item.appendChild(header);
-
-      const status = document.createElement('p');
-      status.classList.add('farm-plot-status');
-      status.textContent = this.getFarmPlotStatusLabel(plot);
-      item.appendChild(status);
-
-      const actions = document.createElement('div');
-      actions.classList.add('farm-plot-actions');
-
-      const focusButton = document.createElement('button');
-      focusButton.classList.add('hud-farm-action');
-      focusButton.dataset.farmAction = 'select';
-      focusButton.dataset.plotKey = plot.plotKey;
-      focusButton.textContent = plot.plotKey === this.farmSelectedPlotKey ? 'Ciblee' : 'Cibler';
-      focusButton.disabled = this.farmBusy;
-      actions.appendChild(focusButton);
-
-      item.appendChild(actions);
-      plotsRoot.appendChild(item);
-    }
+    const result = renderFarmPanelFromFeature({
+      seedSelect,
+      plotsRoot,
+      isAuthenticated: this.isAuthenticated,
+      farmBusy: this.farmBusy,
+      farmState: this.farmState,
+      selectedSeedItemKey: this.farmSelectedSeedItemKey,
+      selectedPlotKey: this.farmSelectedPlotKey,
+      formatFarmLabel: (raw) => this.formatFarmLabel(raw),
+      getFarmPlotPhaseLabel: (plot) => this.getFarmPlotPhaseLabel(plot),
+      getFarmPlotStatusLabel: (plot) => this.getFarmPlotStatusLabel(plot),
+    });
+    this.farmSelectedSeedItemKey = result.selectedSeedItemKey;
   }
 
   private renderFarmCraftingRecipes(): void {
@@ -3250,90 +3142,14 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.farmCraftingRenderSignature = signature;
-
-    craftingRoot.replaceChildren();
-
-    if (!this.isAuthenticated) {
-      const item = document.createElement('li');
-      item.classList.add('shop-item', 'empty');
-      item.textContent = 'Connecte-toi pour utiliser le craft de ferme.';
-      craftingRoot.appendChild(item);
-      return;
-    }
-
-    if (this.farmCraftingBusy && !this.farmCraftingState) {
-      const item = document.createElement('li');
-      item.classList.add('shop-item', 'empty');
-      item.textContent = 'Chargement des recettes...';
-      craftingRoot.appendChild(item);
-      return;
-    }
-
-    const crafting = this.farmCraftingState;
-    if (!crafting) {
-      const item = document.createElement('li');
-      item.classList.add('shop-item', 'empty');
-      item.textContent = 'Aucune donnee de craft disponible.';
-      craftingRoot.appendChild(item);
-      return;
-    }
-
-    if (!crafting.unlocked) {
-      const item = document.createElement('li');
-      item.classList.add('shop-item', 'empty');
-      item.textContent = 'Craft verrouille. Termine l attribution de la ferme.';
-      craftingRoot.appendChild(item);
-      return;
-    }
-
-    const unlockedRecipes = crafting.recipes.filter((recipe) => recipe.unlocked);
-    if (unlockedRecipes.length === 0) {
-      const item = document.createElement('li');
-      item.classList.add('shop-item', 'empty');
-      item.textContent = this.farmCraftingBusy ? 'Mise a jour des recettes...' : 'Aucune recette debloquee.';
-      craftingRoot.appendChild(item);
-      return;
-    }
-
-    for (const recipe of unlockedRecipes) {
-      const item = document.createElement('li');
-      item.classList.add('shop-item', 'farm-crafting-item');
-
-      const header = document.createElement('div');
-      header.classList.add('shop-item-header');
-
-      const name = document.createElement('strong');
-      name.textContent = recipe.name;
-      header.appendChild(name);
-
-      const output = document.createElement('span');
-      output.classList.add('shop-price');
-      output.textContent = `+${recipe.outputQuantity} ${this.formatFarmLabel(recipe.outputItemKey)}`;
-      header.appendChild(output);
-      item.appendChild(header);
-
-      const description = document.createElement('p');
-      description.classList.add('shop-description');
-      description.textContent = recipe.description;
-      item.appendChild(description);
-
-      const ingredients = document.createElement('p');
-      ingredients.classList.add('farm-crafting-ingredients');
-      ingredients.textContent = `Requis: ${recipe.ingredients
-        .map((entry) => `${this.formatFarmLabel(entry.itemKey)} ${entry.ownedQuantity}/${entry.requiredQuantity}`)
-        .join(' | ')}`;
-      item.appendChild(ingredients);
-
-      const craftButton = document.createElement('button');
-      craftButton.classList.add('hud-shop-buy');
-      craftButton.textContent = `Fabriquer x1 (max ${recipe.maxCraftable})`;
-      craftButton.dataset.farmCraftAction = 'craft';
-      craftButton.dataset.recipeKey = recipe.recipeKey;
-      craftButton.disabled = this.farmCraftingBusy || this.farmBusy || recipe.maxCraftable < 1;
-      item.appendChild(craftButton);
-
-      craftingRoot.appendChild(item);
-    }
+    renderFarmCraftingRecipesFromFeature({
+      craftingRoot,
+      isAuthenticated: this.isAuthenticated,
+      farmCraftingBusy: this.farmCraftingBusy,
+      farmBusy: this.farmBusy,
+      craftingState: this.farmCraftingState,
+      formatFarmLabel: (raw) => this.formatFarmLabel(raw),
+    });
   }
 
   private renderQuestList(): void {
