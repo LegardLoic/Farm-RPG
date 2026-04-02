@@ -113,6 +113,16 @@ import {
   validateCombatActionRequest as validateCombatActionRequestFromFeature,
 } from './features/combat/combatActionLogic';
 import {
+  applyEnemyHudStripFrame as applyEnemyHudStripFrameFromFeature,
+  getCombatEnemyPortraitPath as getCombatEnemyPortraitPathFromFeature,
+  getEnemyHudStripPreferredAnimation as getEnemyHudStripPreferredAnimationFromFeature,
+  getStripFrames as getStripFramesFromFeature,
+  getStripHudTimings as getStripHudTimingsFromFeature,
+  getStripManifestEntry as getStripManifestEntryFromFeature,
+  getStripPlayerTimings as getStripPlayerTimingsFromFeature,
+  resolveTimingValue as resolveTimingValueFromFeature,
+} from './features/combat/combatStripLogic';
+import {
   getLoopBlockersLabel as getLoopBlockersLabelFromFeature,
   getLoopPreparationLabel as getLoopPreparationLabelFromFeature,
   getLoopSummaryLabel as getLoopSummaryLabelFromFeature,
@@ -3264,15 +3274,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getEnemyHudStripPreferredAnimation(): StripAnimationName {
-    if (this.enemyHudStripOverrideAnimation) {
-      return this.enemyHudStripOverrideAnimation;
-    }
-
-    if (!this.combatState || this.combatState.status !== 'active') {
-      return 'idle';
-    }
-
-    return this.combatState.turn === 'enemy' ? 'cast' : 'idle';
+    return getEnemyHudStripPreferredAnimationFromFeature({
+      enemyHudStripOverrideAnimation: this.enemyHudStripOverrideAnimation,
+      combatState: this.combatState,
+    });
   }
 
   private startEnemyHudStripPlayback(
@@ -3340,10 +3345,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyEnemyHudStripFrame(element: HTMLElement, frameIndex: number, frameCount: number): void {
-    const safeFrameCount = Math.max(1, frameCount);
-    const clampedIndex = Phaser.Math.Clamp(frameIndex, 0, safeFrameCount - 1);
-    const ratio = safeFrameCount === 1 ? 0 : clampedIndex / (safeFrameCount - 1);
-    element.style.backgroundPosition = `${ratio * 100}% 0%`;
+    applyEnemyHudStripFrameFromFeature({
+      element,
+      frameIndex,
+      frameCount,
+    });
   }
 
   private stopEnemyHudStripPlayback(): void {
@@ -3385,46 +3391,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getStripManifestEntry(entityKey: string): SpriteManifestStripEntry | null {
-    const manifest = this.getSpriteManifest();
-    if (!manifest.strips) {
-      return null;
-    }
-
-    const directEntry = manifest.strips[entityKey];
-    if (directEntry) {
-      return directEntry;
-    }
-
-    for (const entry of Object.values(manifest.strips)) {
-      if (entry.key === entityKey) {
-        return entry;
-      }
-    }
-
-    return null;
+    return getStripManifestEntryFromFeature({
+      manifest: this.getSpriteManifest(),
+      entityKey,
+    });
   }
 
   private getStripFrames(strip: SpriteManifestStripEntry, animation: StripAnimationName): number[] {
-    const maxFrame = Math.max(0, strip.frameCount - 1);
-    const configured = strip.animations?.[animation];
-    const sanitized = Array.isArray(configured)
-      ? configured.filter((frame): frame is number => Number.isInteger(frame) && frame >= 0 && frame <= maxFrame)
-      : [];
-
-    if (sanitized.length > 0) {
-      return sanitized;
-    }
-
-    if (animation === 'hit') {
-      return [Math.min(1, maxFrame), maxFrame];
-    }
-    if (animation === 'cast') {
-      return [0, maxFrame];
-    }
-    if (maxFrame <= 0) {
-      return [0];
-    }
-    return [0, Math.min(1, maxFrame)];
+    return getStripFramesFromFeature(strip, animation);
   }
 
   private getStripPlayerTimings(strip: SpriteManifestStripEntry | null): {
@@ -3434,27 +3408,10 @@ export class GameScene extends Phaser.Scene {
     hitDurationMs: number;
     castDurationMs: number;
   } {
-    const player = strip?.timings?.player;
-    const base = {
-      idleFps: this.resolveTimingValue(player?.idleFps, 4, 1, 24),
-      hitFps: this.resolveTimingValue(player?.hitFps, 8, 1, 24),
-      castFps: this.resolveTimingValue(player?.castFps, 8, 1, 24),
-      hitDurationMs: this.resolveTimingValue(player?.hitDurationMs, 360, 80, 3000),
-      castDurationMs: this.resolveTimingValue(player?.castDurationMs, 420, 80, 3000),
-    };
-
-    const preset = this.getActiveStripCalibrationPreset();
-    if (!preset) {
-      return base;
-    }
-
-    return {
-      idleFps: this.scaleTimingWithPreset(base.idleFps, preset.playerFpsMultiplier, 1, 24),
-      hitFps: this.scaleTimingWithPreset(base.hitFps, preset.playerFpsMultiplier, 1, 24),
-      castFps: this.scaleTimingWithPreset(base.castFps, preset.playerFpsMultiplier, 1, 24),
-      hitDurationMs: this.scaleTimingWithPreset(base.hitDurationMs, preset.playerActionDurationMultiplier, 80, 3000),
-      castDurationMs: this.scaleTimingWithPreset(base.castDurationMs, preset.playerActionDurationMultiplier, 80, 3000),
-    };
+    return getStripPlayerTimingsFromFeature({
+      strip,
+      preset: this.getActiveStripCalibrationPreset(),
+    });
   }
 
   private getStripHudTimings(strip: SpriteManifestStripEntry | null): {
@@ -3464,34 +3421,14 @@ export class GameScene extends Phaser.Scene {
     hitDurationMs: number;
     castDurationMs: number;
   } {
-    const hud = strip?.timings?.hud;
-    const base = {
-      idleIntervalMs: this.resolveTimingValue(hud?.idleIntervalMs, 240, 60, 2000),
-      hitIntervalMs: this.resolveTimingValue(hud?.hitIntervalMs, 140, 60, 2000),
-      castIntervalMs: this.resolveTimingValue(hud?.castIntervalMs, 170, 60, 2000),
-      hitDurationMs: this.resolveTimingValue(hud?.hitDurationMs, 460, 80, 3000),
-      castDurationMs: this.resolveTimingValue(hud?.castDurationMs, 420, 80, 3000),
-    };
-
-    const preset = this.getActiveStripCalibrationPreset();
-    if (!preset) {
-      return base;
-    }
-
-    return {
-      idleIntervalMs: this.scaleTimingWithPreset(base.idleIntervalMs, preset.hudIntervalMultiplier, 60, 2000),
-      hitIntervalMs: this.scaleTimingWithPreset(base.hitIntervalMs, preset.hudIntervalMultiplier, 60, 2000),
-      castIntervalMs: this.scaleTimingWithPreset(base.castIntervalMs, preset.hudIntervalMultiplier, 60, 2000),
-      hitDurationMs: this.scaleTimingWithPreset(base.hitDurationMs, preset.hudActionDurationMultiplier, 80, 3000),
-      castDurationMs: this.scaleTimingWithPreset(base.castDurationMs, preset.hudActionDurationMultiplier, 80, 3000),
-    };
+    return getStripHudTimingsFromFeature({
+      strip,
+      preset: this.getActiveStripCalibrationPreset(),
+    });
   }
 
   private resolveTimingValue(value: number | undefined, fallback: number, min: number, max: number): number {
-    if (typeof value !== 'number' || !Number.isFinite(value)) {
-      return fallback;
-    }
-    return Phaser.Math.Clamp(Math.round(value), min, max);
+    return resolveTimingValueFromFeature(value, fallback, min, max);
   }
 
   private ensureStripAnimations(strip: SpriteManifestStripEntry): void {
@@ -3577,17 +3514,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getCombatEnemyPortraitPath(enemyKey: string, animation: StripAnimationName): string | null {
-    const manifest = this.getSpriteManifest();
-    const byEnemyKey = manifest.portraits?.byEnemyKey;
-    if (byEnemyKey && typeof byEnemyKey === 'object') {
-      const directPath = byEnemyKey[enemyKey];
-      const resolvedDirectPath = this.resolvePortraitEntryPath(directPath, animation);
-      if (resolvedDirectPath) {
-        return resolvedDirectPath;
-      }
-    }
-
-    return this.resolvePortraitEntryPath(manifest.portraits?.fallback, animation);
+    return getCombatEnemyPortraitPathFromFeature({
+      enemyKey,
+      animation,
+      manifest: this.getSpriteManifest(),
+      resolvePortraitEntryPath: (entry, animationValue) =>
+        this.resolvePortraitEntryPath(entry, animationValue),
+    });
   }
 
   private resolvePortraitEntryPath(
@@ -5691,16 +5624,6 @@ export class GameScene extends Phaser.Scene {
     return STRIP_CALIBRATION_PRESETS.find((preset) => preset.key === this.stripCalibrationPreset) ?? null;
   }
 
-  private scaleTimingWithPreset(
-    value: number,
-    multiplier: number,
-    min: number,
-    max: number,
-  ): number {
-    const scaled = value * multiplier;
-    return Phaser.Math.Clamp(Math.round(scaled), min, max);
-  }
-
   private readStorageValue(key: string): string | null {
     try {
       return window.localStorage.getItem(key);
@@ -7518,9 +7441,3 @@ export class GameScene extends Phaser.Scene {
     return obstacle;
   }
 }
-
-
-
-
-
-
