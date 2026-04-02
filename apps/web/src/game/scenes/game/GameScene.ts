@@ -70,6 +70,7 @@ import {
   isRecord as isRecordFromParser,
 } from './services/valueParsers';
 import {
+  type FarmPlotStateLike,
   formatFarmLabel as formatFarmLabelFromLogic,
   getFarmCraftingSummaryLabel as getFarmCraftingSummaryLabelFromLogic,
   getFarmFeedbackLabel as getFarmFeedbackLabelFromLogic,
@@ -94,6 +95,7 @@ import {
   renderFarmScenePlotVisuals as renderFarmScenePlotVisualsFromFeature,
 } from './features/farm/farmSceneRenderer';
 import { createFarmActionZone as createFarmActionZoneFromFeature } from './features/farm/farmSceneZones';
+import { buildFarmContextViewModel as buildFarmContextViewModelFromFeature } from './features/farm/farmContextLogic';
 import {
   buildVillageShopEntries as buildVillageShopEntriesFromLogic,
   computeVillageShopRenderSignature as computeVillageShopRenderSignatureFromLogic,
@@ -4402,7 +4404,7 @@ export class GameScene extends Phaser.Scene {
     return `${this.towerStoryState.activeEventTitle}: ${this.towerStoryState.activeEventNarrative}`;
   }
 
-  private getFarmPlotStatusLabel(plot: FarmPlotState): string {
+  private getFarmPlotStatusLabel(plot: FarmPlotStateLike): string {
     return getFarmPlotStatusLabelFromLogic(plot);
   }
 
@@ -9118,68 +9120,57 @@ export class GameScene extends Phaser.Scene {
   private updateFarmContextPanel(): void {
     const farm = this.farmState;
     const selectedPlot = this.getFarmPlotByKey(this.farmSelectedPlotKey);
-    const canUseFarm = Boolean(this.isAuthenticated && farm?.unlocked);
+    const context = buildFarmContextViewModelFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      farmUnlocked: Boolean(farm?.unlocked),
+      selectedPlot,
+      selectedSeedItemKey: this.farmSelectedSeedItemKey,
+      farmBusy: this.farmBusy,
+      getFarmPlotStatusLabel: (plot) => this.getFarmPlotStatusLabel(plot),
+      formatFarmLabel: (raw) => this.formatFarmLabel(raw),
+    });
 
     if (this.farmContextTitleValue) {
-      if (selectedPlot) {
-        this.farmContextTitleValue.textContent = `Parcelle ${selectedPlot.row}-${selectedPlot.col}`;
-      } else if (!canUseFarm) {
-        this.farmContextTitleValue.textContent = 'Ferme indisponible';
-      } else {
-        this.farmContextTitleValue.textContent = 'Selectionne une parcelle';
-      }
+      this.farmContextTitleValue.textContent = context.title;
     }
 
     if (this.farmContextStatusValue) {
-      if (!this.isAuthenticated) {
-        this.farmContextStatusValue.textContent = 'Connecte-toi pour lancer la boucle agricole.';
-      } else if (!farm?.unlocked) {
-        this.farmContextStatusValue.textContent = 'Termine l intro pour recuperer officiellement la ferme.';
-      } else if (!selectedPlot) {
-        this.farmContextStatusValue.textContent = 'Selectionne une parcelle depuis la scene ou la grille.';
-      } else {
-        this.farmContextStatusValue.textContent = this.getFarmPlotStatusLabel(selectedPlot);
-      }
+      this.farmContextStatusValue.textContent = context.status;
     }
-
-    const canPlant = Boolean(canUseFarm && selectedPlot && !selectedPlot.cropKey && this.farmSelectedSeedItemKey);
-    const canWater = Boolean(canUseFarm && selectedPlot?.cropKey && !selectedPlot.wateredToday);
-    const canHarvest = Boolean(canUseFarm && selectedPlot?.cropKey && selectedPlot.readyToHarvest);
+    const selectedPlotKey = context.selectedPlotKey;
 
     const plantButton = this.farmContextPlantButton;
     if (plantButton) {
       plantButton.dataset.farmAction = 'plant';
-      if (selectedPlot) {
-        plantButton.dataset.plotKey = selectedPlot.plotKey;
+      if (selectedPlotKey) {
+        plantButton.dataset.plotKey = selectedPlotKey;
       } else {
         delete plantButton.dataset.plotKey;
       }
-      plantButton.textContent = this.farmSelectedSeedItemKey
-        ? `Planter (${this.formatFarmLabel(this.farmSelectedSeedItemKey)})`
-        : 'Planter';
-      plantButton.disabled = this.farmBusy || !canPlant;
+      plantButton.textContent = context.plantLabel;
+      plantButton.disabled = !context.canPlant;
     }
 
     const waterButton = this.farmContextWaterButton;
     if (waterButton) {
       waterButton.dataset.farmAction = 'water';
-      if (selectedPlot) {
-        waterButton.dataset.plotKey = selectedPlot.plotKey;
+      if (selectedPlotKey) {
+        waterButton.dataset.plotKey = selectedPlotKey;
       } else {
         delete waterButton.dataset.plotKey;
       }
-      waterButton.disabled = this.farmBusy || !canWater;
+      waterButton.disabled = !context.canWater;
     }
 
     const harvestButton = this.farmContextHarvestButton;
     if (harvestButton) {
       harvestButton.dataset.farmAction = 'harvest';
-      if (selectedPlot) {
-        harvestButton.dataset.plotKey = selectedPlot.plotKey;
+      if (selectedPlotKey) {
+        harvestButton.dataset.plotKey = selectedPlotKey;
       } else {
         delete harvestButton.dataset.plotKey;
       }
-      harvestButton.disabled = this.farmBusy || !canHarvest;
+      harvestButton.disabled = !context.canHarvest;
     }
   }
 
