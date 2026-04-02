@@ -34,6 +34,7 @@ import {
   formatRequestError as formatRequestErrorFromApi,
 } from './services/apiClient';
 import { createGameScenePayloadGateway } from './services/gameScenePayloadGateway';
+import { applyGameplaySnapshotToState as applyGameplaySnapshotToStateFromService } from './services/gameplaySnapshotApplier';
 import {
   type FarmPlotStateLike,
   formatFarmLabel as formatFarmLabelFromLogic,
@@ -241,7 +242,6 @@ import { createVillageActionZone as createVillageActionZoneFromFeature } from '.
 import { updateVillageContextPanel as updateVillageContextPanelFromFeature } from './features/village/villageContextHudRenderer';
 import { buildVillageInteractionPlan as buildVillageInteractionPlanFromFeature } from './features/village/villageInteractionController';
 import {
-  getBlacksmithStatusLabel as getBlacksmithStatusLabelFromVillageHud,
   getDayPhaseKey as getDayPhaseKeyFromVillageHud,
   getDayPhaseLabel as getDayPhaseLabelFromVillageHud,
 } from './features/village/villageHudParsers';
@@ -334,6 +334,7 @@ import {
   bindHudEventListeners as bindHudEventListenersFromHud,
   unbindHudEventListeners as unbindHudEventListenersFromHud,
 } from './hud/hudEventLifecycle';
+import { buildHudRootSummary as buildHudRootSummaryFromHud } from './hud/hudRootSummary';
 import { resetHudTeardownState as resetHudTeardownStateFromHud } from './hud/hudTeardownState';
 import { createHudTemplate as createHudTemplateFromHud } from './hud/hudTemplate';
 import type {
@@ -1422,28 +1423,16 @@ export class GameScene extends Phaser.Scene {
 
     this.syncHudSceneMode();
     const activeAreaLabel = this.getActiveAreaLabel();
-    this.setHudText('day', `Jour ${this.hudState.day}`);
-    this.setHudText('dayPhase', this.getDayPhaseLabel());
-    this.setHudText('farmDay', `Jour ${this.hudState.day}`);
-    this.setHudText('farmDayPhase', this.getDayPhaseLabel());
-    this.setHudText('farmZone', activeAreaLabel);
-    this.setHudText('gold', `${this.hudState.gold} po`);
-    this.setHudText('level', `${this.hudState.level}`);
-    this.setHudText('xp', `${this.hudState.xp} / ${this.hudState.xpToNext}`);
-    this.setHudText('towerFloor', `${this.hudState.towerCurrentFloor} (best ${this.hudState.towerHighestFloor})`);
-    this.setHudText('towerBoss10', this.hudState.towerBossFloor10Defeated ? 'Defeated' : 'Pending');
-    this.setHudText(
-      'blacksmithStatus',
-      getBlacksmithStatusLabelFromVillageHud({
-        blacksmithUnlocked: this.hudState.blacksmithUnlocked,
-        blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
-      }),
-    );
-    this.setHudText('hp', `${this.formatValue(this.hudState.hp)} / ${this.formatValue(this.hudState.maxHp)}`);
-    this.setHudText('mp', `${this.formatValue(this.hudState.mp)} / ${this.formatValue(this.hudState.maxMp)}`);
-    this.setHudText('stamina', `${Math.max(0, Math.round(this.hudState.stamina))} / 8`);
-    this.setHudText('area', activeAreaLabel);
-    this.setHudText('authStatus', this.authStatus);
+    const hudSummary = buildHudRootSummaryFromHud({
+      hudState: this.hudState,
+      activeAreaLabel,
+      authStatus: this.authStatus,
+      dayPhaseLabel: this.getDayPhaseLabel(),
+      formatValue: (value) => this.formatValue(value),
+    });
+    for (const [key, value] of Object.entries(hudSummary)) {
+      this.setHudText(key, value);
+    }
     this.updateHeroProfileHud();
     this.updateIntroHud();
     this.updateCombatHud();
@@ -4011,179 +4000,37 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyGameplaySnapshot(payload: unknown): void {
-    if (!this.payloadGateway.isRecord(payload)) {
-      return;
-    }
+    const next = applyGameplaySnapshotToStateFromService({
+      payload,
+      payloadGateway: this.payloadGateway,
+      state: {
+        introNarrativeState: this.introNarrativeState,
+        introNarrativeError: this.introNarrativeError,
+        hudState: this.hudState,
+        farmState: this.farmState,
+        farmSelectedSeedItemKey: this.farmSelectedSeedItemKey,
+        farmSelectedPlotKey: this.farmSelectedPlotKey,
+        farmStoryState: this.farmStoryState,
+        farmCraftingState: this.farmCraftingState,
+        loopState: this.loopState,
+        villageNpcState: this.villageNpcState,
+        villageNpcRelationships: this.villageNpcRelationships,
+        towerStoryState: this.towerStoryState,
+      },
+    });
 
-    const introNarrativeState = this.payloadGateway.normalizeGameplayIntroPayload(payload);
-    if (introNarrativeState) {
-      this.introNarrativeState = introNarrativeState;
-      this.introNarrativeError = null;
-    }
-
-    const world = this.payloadGateway.asRecord(payload.world);
-    if (world) {
-      const day = this.payloadGateway.asNumber(world.day);
-      const zone = this.payloadGateway.asString(world.zone);
-
-      if (day !== null) {
-        this.hudState.day = Math.max(1, Math.round(day));
-      }
-
-      if (zone) {
-        this.hudState.area = zone;
-      }
-    }
-
-    const farm = this.payloadGateway.normalizeGameplayFarmPayload(payload);
-    if (farm) {
-      this.farmState = farm;
-      if (farm.unlocked) {
-        const unlockedSeedKeys = new Set(
-          farm.cropCatalog.filter((entry) => entry.unlocked).map((entry) => entry.seedItemKey),
-        );
-        if (!unlockedSeedKeys.has(this.farmSelectedSeedItemKey)) {
-          this.farmSelectedSeedItemKey = farm.cropCatalog.find((entry) => entry.unlocked)?.seedItemKey ?? '';
-        }
-        if (
-          !this.farmSelectedPlotKey ||
-          !farm.plots.some((plot) => plot.plotKey === this.farmSelectedPlotKey)
-        ) {
-          const preferredPlot =
-            farm.plots.find((plot) => plot.readyToHarvest) ??
-            farm.plots.find((plot) => !plot.cropKey) ??
-            farm.plots[0] ??
-            null;
-          this.farmSelectedPlotKey = preferredPlot?.plotKey ?? null;
-        }
-      } else {
-        this.farmSelectedSeedItemKey = '';
-        this.farmSelectedPlotKey = null;
-      }
-    }
-
-    const farmStory = this.payloadGateway.normalizeGameplayFarmStoryPayload(payload);
-    if (farmStory) {
-      this.farmStoryState = farmStory;
-    }
-
-    const crafting = this.payloadGateway.normalizeGameplayCraftingPayload(payload);
-    if (crafting) {
-      this.farmCraftingState = crafting;
-    }
-
-    const loop = this.payloadGateway.normalizeGameplayLoopPayload(payload);
-    if (loop) {
-      this.loopState = loop;
-    }
-
-    const progression = this.payloadGateway.asRecord(payload.progression);
-    if (!progression) {
-      return;
-    }
-
-    const gold = this.payloadGateway.asNumber(progression.gold);
-    const level = this.payloadGateway.asNumber(progression.level);
-    const experience = this.payloadGateway.asNumber(progression.experience);
-    const experienceToNextLevel = this.payloadGateway.asNumber(progression.experienceToNextLevel);
-    const currentHp = this.payloadGateway.asNumber(progression.currentHp);
-    const maxHp = this.payloadGateway.asNumber(progression.maxHp);
-    const currentMp = this.payloadGateway.asNumber(progression.currentMp);
-    const maxMp = this.payloadGateway.asNumber(progression.maxMp);
-
-    if (gold !== null) {
-      this.hudState.gold = Math.max(0, Math.round(gold));
-    }
-
-    if (level !== null) {
-      this.hudState.level = Math.max(1, Math.round(level));
-    }
-
-    if (experience !== null) {
-      this.hudState.xp = Math.max(0, Math.round(experience));
-    }
-
-    if (experienceToNextLevel !== null) {
-      this.hudState.xpToNext = Math.max(1, Math.round(experienceToNextLevel));
-    }
-
-    if (maxHp !== null) {
-      this.hudState.maxHp = Math.max(1, Math.round(maxHp));
-    }
-    if (currentHp !== null) {
-      this.hudState.hp = Math.max(0, Math.min(this.hudState.maxHp, Math.round(currentHp)));
-    }
-    if (maxMp !== null) {
-      this.hudState.maxMp = Math.max(1, Math.round(maxMp));
-    }
-    if (currentMp !== null) {
-      this.hudState.mp = Math.max(0, Math.min(this.hudState.maxMp, Math.round(currentMp)));
-    }
-
-    const village = this.payloadGateway.asRecord(payload.village);
-    if (village) {
-      const blacksmith = this.payloadGateway.asRecord(village.blacksmith);
-      if (blacksmith) {
-        this.hudState.blacksmithUnlocked = Boolean(blacksmith.unlocked);
-        this.hudState.blacksmithCurseLifted = Boolean(blacksmith.curseLifted);
-      }
-
-      const npcs = this.payloadGateway.asRecord(village.npcs);
-      if (npcs) {
-        const mayor = this.payloadGateway.normalizeVillageNpcEntry(npcs.mayor);
-        const blacksmithNpc = this.payloadGateway.normalizeVillageNpcEntry(npcs.blacksmith);
-        const merchant = this.payloadGateway.normalizeVillageNpcEntry(npcs.merchant);
-
-        if (mayor) {
-          this.villageNpcState.mayor = mayor;
-        }
-        if (blacksmithNpc) {
-          this.villageNpcState.blacksmith = blacksmithNpc;
-        }
-        if (merchant) {
-          this.villageNpcState.merchant = merchant;
-        }
-      }
-
-      const relationships = this.payloadGateway.asRecord(village.relationships);
-      if (relationships) {
-        const mayorRelationship = this.payloadGateway.normalizeVillageNpcRelationshipEntry(relationships.mayor);
-        const blacksmithRelationship = this.payloadGateway.normalizeVillageNpcRelationshipEntry(relationships.blacksmith);
-        const merchantRelationship = this.payloadGateway.normalizeVillageNpcRelationshipEntry(relationships.merchant);
-
-        if (mayorRelationship) {
-          this.villageNpcRelationships.mayor = mayorRelationship;
-        }
-        if (blacksmithRelationship) {
-          this.villageNpcRelationships.blacksmith = blacksmithRelationship;
-        }
-        if (merchantRelationship) {
-          this.villageNpcRelationships.merchant = merchantRelationship;
-        }
-      }
-    }
-
-    const tower = this.payloadGateway.asRecord(payload.tower);
-    if (tower) {
-      const currentFloor = this.payloadGateway.asNumber(tower.currentFloor);
-      const highestFloor = this.payloadGateway.asNumber(tower.highestFloor);
-      const bossFloor10Defeated = tower.bossFloor10Defeated;
-
-      if (currentFloor !== null) {
-        this.hudState.towerCurrentFloor = Math.max(1, Math.round(currentFloor));
-      }
-
-      if (highestFloor !== null) {
-        this.hudState.towerHighestFloor = Math.max(1, Math.round(highestFloor));
-      }
-
-      this.hudState.towerBossFloor10Defeated = Boolean(bossFloor10Defeated);
-    }
-
-    const towerStory = this.payloadGateway.normalizeGameplayTowerStoryPayload(payload);
-    if (towerStory) {
-      this.towerStoryState = towerStory;
-    }
+    this.introNarrativeState = next.introNarrativeState;
+    this.introNarrativeError = next.introNarrativeError;
+    this.hudState = next.hudState;
+    this.farmState = next.farmState;
+    this.farmSelectedSeedItemKey = next.farmSelectedSeedItemKey;
+    this.farmSelectedPlotKey = next.farmSelectedPlotKey;
+    this.farmStoryState = next.farmStoryState;
+    this.farmCraftingState = next.farmCraftingState;
+    this.loopState = next.loopState;
+    this.villageNpcState = next.villageNpcState;
+    this.villageNpcRelationships = next.villageNpcRelationships;
+    this.towerStoryState = next.towerStoryState;
   }
 
   private resetGameplayHudState(): void {
