@@ -217,3 +217,53 @@ export function applyGameplaySnapshotToState(input: {
 
   return next;
 }
+
+export type GameplaySnapshotSceneLike = {
+  payloadGateway: GameScenePayloadGateway;
+  introNarrativeState: IntroNarrativeState | null;
+  introNarrativeError: string | null;
+  hudState: HudState;
+  farmState: FarmState | null;
+  farmSelectedSeedItemKey: string;
+  farmSelectedPlotKey: string | null;
+  farmStoryState: FarmStoryState | null;
+  farmCraftingState: FarmCraftingState | null;
+  loopState: GameplayLoopState | null;
+  villageNpcState: VillageNpcHudState;
+  villageNpcRelationships: VillageNpcRelationshipHudState;
+  towerStoryState: TowerStoryState | null;
+};
+
+export function applyGameplaySnapshotForScene(scene: GameplaySnapshotSceneLike, payload: unknown): void {
+  const next = applyGameplaySnapshotToState({
+    payload,
+    payloadGateway: scene.payloadGateway,
+    state: {
+      introNarrativeState: scene.introNarrativeState,
+      introNarrativeError: scene.introNarrativeError,
+      hudState: scene.hudState,
+      farmState: scene.farmState,
+      farmSelectedSeedItemKey: scene.farmSelectedSeedItemKey,
+      farmSelectedPlotKey: scene.farmSelectedPlotKey,
+      farmStoryState: scene.farmStoryState,
+      farmCraftingState: scene.farmCraftingState,
+      loopState: scene.loopState,
+      villageNpcState: scene.villageNpcState,
+      villageNpcRelationships: scene.villageNpcRelationships,
+      towerStoryState: scene.towerStoryState,
+    },
+  });
+
+  scene.introNarrativeState = next.introNarrativeState;
+  scene.introNarrativeError = next.introNarrativeError;
+  scene.hudState = next.hudState;
+  scene.farmState = next.farmState;
+  scene.farmSelectedSeedItemKey = next.farmSelectedSeedItemKey;
+  scene.farmSelectedPlotKey = next.farmSelectedPlotKey;
+  scene.farmStoryState = next.farmStoryState;
+  scene.farmCraftingState = next.farmCraftingState;
+  scene.loopState = next.loopState;
+  scene.villageNpcState = next.villageNpcState;
+  scene.villageNpcRelationships = next.villageNpcRelationships;
+  scene.towerStoryState = next.towerStoryState;
+}

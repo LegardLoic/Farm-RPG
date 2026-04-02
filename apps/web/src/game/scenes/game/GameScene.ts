@@ -35,7 +35,7 @@ import {
 } from './services/apiClient';
 import { resetGameplayHudStateForScene as resetGameplayHudStateForSceneFromService } from './services/gameplayStateReset';
 import { createGameScenePayloadGateway } from './services/gameScenePayloadGateway';
-import { applyGameplaySnapshotToState as applyGameplaySnapshotToStateFromService } from './services/gameplaySnapshotApplier';
+import { applyGameplaySnapshotForScene as applyGameplaySnapshotForSceneFromService } from './services/gameplaySnapshotApplier';
 import {
   refreshCombatStateForScene as refreshCombatStateForSceneFromService,
   refreshSaveSlotsStateForScene as refreshSaveSlotsStateForSceneFromService,
@@ -132,6 +132,7 @@ import { runPrepareCombatLoopActionForScene as runPrepareCombatLoopActionForScen
 import {
   getCombatLogsFallback as getCombatLogsFallbackFromFeature,
   renderCombatEffectChips as renderCombatEffectChipsFromFeature,
+  renderCombatEnemyIntentChip as renderCombatEnemyIntentChipFromFeature,
   renderCombatEnemySprite as renderCombatEnemySpriteFromFeature,
   renderCombatLogs as renderCombatLogsFromFeature,
 } from './features/combat/combatHudRenderer';
@@ -3192,37 +3193,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyGameplaySnapshot(payload: unknown): void {
-    const next = applyGameplaySnapshotToStateFromService({
+    applyGameplaySnapshotForSceneFromService(
+      this as unknown as Parameters<typeof applyGameplaySnapshotForSceneFromService>[0],
       payload,
-      payloadGateway: this.payloadGateway,
-      state: {
-        introNarrativeState: this.introNarrativeState,
-        introNarrativeError: this.introNarrativeError,
-        hudState: this.hudState,
-        farmState: this.farmState,
-        farmSelectedSeedItemKey: this.farmSelectedSeedItemKey,
-        farmSelectedPlotKey: this.farmSelectedPlotKey,
-        farmStoryState: this.farmStoryState,
-        farmCraftingState: this.farmCraftingState,
-        loopState: this.loopState,
-        villageNpcState: this.villageNpcState,
-        villageNpcRelationships: this.villageNpcRelationships,
-        towerStoryState: this.towerStoryState,
-      },
-    });
-
-    this.introNarrativeState = next.introNarrativeState;
-    this.introNarrativeError = next.introNarrativeError;
-    this.hudState = next.hudState;
-    this.farmState = next.farmState;
-    this.farmSelectedSeedItemKey = next.farmSelectedSeedItemKey;
-    this.farmSelectedPlotKey = next.farmSelectedPlotKey;
-    this.farmStoryState = next.farmStoryState;
-    this.farmCraftingState = next.farmCraftingState;
-    this.loopState = next.loopState;
-    this.villageNpcState = next.villageNpcState;
-    this.villageNpcRelationships = next.villageNpcRelationships;
-    this.towerStoryState = next.towerStoryState;
+    );
   }
 
   private resetGameplayHudState(): void {
@@ -3352,37 +3326,15 @@ export class GameScene extends Phaser.Scene {
     intentKey: 'enemyTelegraphIntent' | 'enemyTelegraphNextIntent',
     isPreview: boolean,
   ): void {
-    const element = this.hudRoot?.querySelector<HTMLElement>(selector);
-    if (!element) {
-      return;
-    }
-
-    const intentUi = getCombatEnemyIntentUiFromFeature({
-      combatState: this.combatState,
+    renderCombatEnemyIntentChipFromFeature({
+      hudRoot: this.hudRoot,
+      selector,
       intentKey,
       isPreview,
+      combatState: this.combatState,
+      getCombatEnemyIntentUi: (input) => getCombatEnemyIntentUiFromFeature(input),
+      getCombatIntentIconTooltip: (label) => getCombatIntentIconTooltipFromFeature(label),
     });
-    element.classList.add('combat-intent-chip');
-    element.replaceChildren();
-    if (intentUi.icon !== 'none') {
-      const icon = document.createElement('span');
-      icon.classList.add('combat-intent-icon');
-      icon.dataset.intentIcon = intentUi.icon;
-      icon.textContent = intentUi.iconLabel;
-      const iconTooltip = getCombatIntentIconTooltipFromFeature(intentUi.iconLabel);
-      icon.title = iconTooltip;
-      icon.setAttribute('aria-label', iconTooltip);
-      element.appendChild(icon);
-    }
-
-    const text = document.createElement('span');
-    text.classList.add('combat-intent-text');
-    text.textContent = intentUi.label;
-    element.appendChild(text);
-
-    element.dataset.intentTone = intentUi.tone;
-    element.dataset.intentPulse = intentUi.pulse ? '1' : '0';
-    element.dataset.intentLayer = isPreview ? 'next' : 'current';
   }
 
   private clearCombatError(): void {

@@ -1,4 +1,5 @@
 import type {
+  CombatEncounterState,
   CombatEffectChip,
   SpriteManifestPortraitState,
   SpriteManifestStripEntry,
@@ -66,6 +67,58 @@ export function renderCombatEffectChips(params: {
     chip.textContent = effect.label;
     params.element.appendChild(chip);
   }
+}
+
+export function renderCombatEnemyIntentChip(params: {
+  hudRoot: HTMLElement | null;
+  selector: string;
+  intentKey: 'enemyTelegraphIntent' | 'enemyTelegraphNextIntent';
+  isPreview: boolean;
+  combatState: CombatEncounterState | null;
+  getCombatEnemyIntentUi: (input: {
+    combatState: CombatEncounterState | null;
+    intentKey: 'enemyTelegraphIntent' | 'enemyTelegraphNextIntent';
+    isPreview: boolean;
+  }) => {
+    icon: string;
+    iconLabel: string;
+    label: string;
+    tone: string;
+    pulse: boolean;
+  };
+  getCombatIntentIconTooltip: (label: string) => string;
+}): void {
+  const element = params.hudRoot?.querySelector<HTMLElement>(params.selector);
+  if (!element) {
+    return;
+  }
+
+  const intentUi = params.getCombatEnemyIntentUi({
+    combatState: params.combatState,
+    intentKey: params.intentKey,
+    isPreview: params.isPreview,
+  });
+  element.classList.add('combat-intent-chip');
+  element.replaceChildren();
+  if (intentUi.icon !== 'none') {
+    const icon = document.createElement('span');
+    icon.classList.add('combat-intent-icon');
+    icon.dataset.intentIcon = intentUi.icon;
+    icon.textContent = intentUi.iconLabel;
+    const iconTooltip = params.getCombatIntentIconTooltip(intentUi.iconLabel);
+    icon.title = iconTooltip;
+    icon.setAttribute('aria-label', iconTooltip);
+    element.appendChild(icon);
+  }
+
+  const text = document.createElement('span');
+  text.classList.add('combat-intent-text');
+  text.textContent = intentUi.label;
+  element.appendChild(text);
+
+  element.dataset.intentTone = intentUi.tone;
+  element.dataset.intentPulse = intentUi.pulse ? '1' : '0';
+  element.dataset.intentLayer = params.isPreview ? 'next' : 'current';
 }
 
 export function renderCombatEnemySprite(params: {
