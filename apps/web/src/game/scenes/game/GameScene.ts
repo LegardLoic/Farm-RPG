@@ -143,6 +143,12 @@ import {
   runSellVillageCropAction as runSellVillageCropActionFromFeature,
 } from './features/shops/shopActionHandlers';
 import {
+  runCaptureSaveSlotAction as runCaptureSaveSlotActionFromFeature,
+  runDeleteSaveSlotAction as runDeleteSaveSlotActionFromFeature,
+  runLoadSaveSlotAction as runLoadSaveSlotActionFromFeature,
+  runRestoreAutoSaveToSlotAction as runRestoreAutoSaveToSlotActionFromFeature,
+} from './features/saves/saveActionHandlers';
+import {
   formatVillageNpcStateLabel as formatVillageNpcStateLabelFromLogic,
   formatVillageRelationshipTierLabel as formatVillageRelationshipTierLabelFromLogic,
   getBlacksmithContextDialogue as getBlacksmithContextDialogueFromLogic,
@@ -4839,35 +4845,25 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async restoreAutoSaveToSlot(slot: number): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.autosaveError = 'Login required to restore autosave.';
-      this.updateHud();
-      return;
-    }
-
-    if (!this.autosave) {
-      this.autosaveError = 'No autosave available.';
-      this.updateHud();
-      return;
-    }
-
-    this.saveSlotsLoadConfirmSlot = null;
-    this.autosaveRestoreSlotBusy = slot;
-    this.autosaveError = null;
-    this.updateHud();
-
-    try {
-      await this.fetchJson(`/saves/auto/restore/${slot}`, {
-        method: 'POST',
-      });
-      await this.refreshAutoSaveState();
-      await this.refreshSaveSlotsState();
-    } catch (error) {
-      this.autosaveError = this.getErrorMessage(error, `Unable to restore autosave to slot ${slot}.`);
-    } finally {
-      this.autosaveRestoreSlotBusy = null;
-      this.updateHud();
-    }
+    await runRestoreAutoSaveToSlotActionFromFeature({
+      slot,
+      isAuthenticated: this.isAuthenticated,
+      hasAutosave: Boolean(this.autosave),
+      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
+      refreshAutoSaveState: () => this.refreshAutoSaveState(),
+      refreshSaveSlotsState: () => this.refreshSaveSlotsState(),
+      setSaveSlotsLoadConfirmSlot: (nextSlot) => {
+        this.saveSlotsLoadConfirmSlot = nextSlot;
+      },
+      setAutosaveRestoreSlotBusy: (nextSlot) => {
+        this.autosaveRestoreSlotBusy = nextSlot;
+      },
+      setAutosaveError: (error) => {
+        this.autosaveError = error;
+      },
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private toggleLoadSaveSlotConfirmation(slot: number): void {
@@ -4900,98 +4896,71 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async captureSaveSlot(slot: number): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.saveSlotsError = 'Login required to capture saves.';
-      this.updateHud();
-      return;
-    }
-
-    this.saveSlotsLoadConfirmSlot = null;
-    this.saveSlotsActionBusyKey = `capture:${slot}`;
-    this.saveSlotsError = null;
-    this.updateHud();
-
-    try {
-      await this.fetchJson(`/saves/${slot}/capture`, {
-        method: 'POST',
-      });
-      await this.refreshSaveSlotsState();
-    } catch (error) {
-      this.saveSlotsError = this.getErrorMessage(error, `Unable to capture slot ${slot}.`);
-    } finally {
-      this.saveSlotsActionBusyKey = null;
-      this.updateHud();
-    }
+    await runCaptureSaveSlotActionFromFeature({
+      slot,
+      isAuthenticated: this.isAuthenticated,
+      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
+      refreshSaveSlotsState: () => this.refreshSaveSlotsState(),
+      setSaveSlotsLoadConfirmSlot: (nextSlot) => {
+        this.saveSlotsLoadConfirmSlot = nextSlot;
+      },
+      setSaveSlotsActionBusyKey: (busyKey) => {
+        this.saveSlotsActionBusyKey = busyKey;
+      },
+      setSaveSlotsError: (error) => {
+        this.saveSlotsError = error;
+      },
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private async loadSaveSlot(slot: number): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.saveSlotsError = 'Login required to load saves.';
-      this.updateHud();
-      return;
-    }
-
-    if (!this.hasExistingSaveSlot(slot)) {
-      this.saveSlotsError = `Slot ${slot} is empty.`;
-      this.saveSlotsLoadConfirmSlot = null;
-      this.updateHud();
-      return;
-    }
-
-    if (this.saveSlotsLoadConfirmSlot !== slot) {
-      this.saveSlotsError = `Confirm load for slot ${slot} first.`;
-      this.saveSlotsLoadConfirmSlot = slot;
-      this.updateHud();
-      return;
-    }
-
-    this.saveSlotsLoadConfirmSlot = null;
-    this.saveSlotsActionBusyKey = `load:${slot}`;
-    this.saveSlotsError = null;
-    this.updateHud();
-
-    try {
-      await this.fetchJson(`/saves/${slot}/load`, {
-        method: 'POST',
-      });
-      await this.refreshGameplayState();
-      await this.refreshCombatState();
-      await this.refreshQuestState();
-      await this.refreshBlacksmithState();
-      await this.refreshVillageMarketState();
-      await this.refreshAutoSaveState();
-      await this.refreshSaveSlotsState();
-    } catch (error) {
-      this.saveSlotsError = this.getErrorMessage(error, `Unable to load slot ${slot}.`);
-    } finally {
-      this.saveSlotsActionBusyKey = null;
-      this.updateHud();
-    }
+    await runLoadSaveSlotActionFromFeature({
+      slot,
+      isAuthenticated: this.isAuthenticated,
+      hasExistingSaveSlot: this.hasExistingSaveSlot(slot),
+      saveSlotsLoadConfirmSlot: this.saveSlotsLoadConfirmSlot,
+      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
+      refreshGameplayState: () => this.refreshGameplayState(),
+      refreshCombatState: () => this.refreshCombatState(),
+      refreshQuestState: () => this.refreshQuestState(),
+      refreshBlacksmithState: () => this.refreshBlacksmithState(),
+      refreshVillageMarketState: () => this.refreshVillageMarketState(),
+      refreshAutoSaveState: () => this.refreshAutoSaveState(),
+      refreshSaveSlotsState: () => this.refreshSaveSlotsState(),
+      setSaveSlotsLoadConfirmSlot: (nextSlot) => {
+        this.saveSlotsLoadConfirmSlot = nextSlot;
+      },
+      setSaveSlotsActionBusyKey: (busyKey) => {
+        this.saveSlotsActionBusyKey = busyKey;
+      },
+      setSaveSlotsError: (error) => {
+        this.saveSlotsError = error;
+      },
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private async deleteSaveSlot(slot: number): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.saveSlotsError = 'Login required to delete saves.';
-      this.updateHud();
-      return;
-    }
-
-    this.saveSlotsLoadConfirmSlot = null;
-    this.saveSlotsActionBusyKey = `delete:${slot}`;
-    this.saveSlotsError = null;
-    this.updateHud();
-
-    try {
-      await this.fetchJson(`/saves/${slot}`, {
-        method: 'DELETE',
-      });
-      await this.refreshSaveSlotsState();
-    } catch (error) {
-      this.saveSlotsError = this.getErrorMessage(error, `Unable to delete slot ${slot}.`);
-    } finally {
-      this.saveSlotsActionBusyKey = null;
-      this.updateHud();
-    }
+    await runDeleteSaveSlotActionFromFeature({
+      slot,
+      isAuthenticated: this.isAuthenticated,
+      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
+      refreshSaveSlotsState: () => this.refreshSaveSlotsState(),
+      setSaveSlotsLoadConfirmSlot: (nextSlot) => {
+        this.saveSlotsLoadConfirmSlot = nextSlot;
+      },
+      setSaveSlotsActionBusyKey: (busyKey) => {
+        this.saveSlotsActionBusyKey = busyKey;
+      },
+      setSaveSlotsError: (error) => {
+        this.saveSlotsError = error;
+      },
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private async saveHeroProfile(): Promise<void> {
