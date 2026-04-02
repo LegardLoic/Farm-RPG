@@ -138,6 +138,11 @@ import {
   renderVillageMarketOffers as renderVillageMarketOffersFromFeature,
 } from './features/shops/shopHudRenderer';
 import {
+  runBuyBlacksmithOfferAction as runBuyBlacksmithOfferActionFromFeature,
+  runBuyVillageSeedOfferAction as runBuyVillageSeedOfferActionFromFeature,
+  runSellVillageCropAction as runSellVillageCropActionFromFeature,
+} from './features/shops/shopActionHandlers';
+import {
   formatVillageNpcStateLabel as formatVillageNpcStateLabelFromLogic,
   formatVillageRelationshipTierLabel as formatVillageRelationshipTierLabelFromLogic,
   getBlacksmithContextDialogue as getBlacksmithContextDialogueFromLogic,
@@ -4584,111 +4589,63 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async buyBlacksmithOffer(offerKey: string): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.blacksmithError = 'Login required to buy items.';
-      this.updateHud();
-      return;
-    }
-
-    if (!this.hudState.blacksmithUnlocked) {
-      this.blacksmithError = 'Blacksmith shop is locked.';
-      this.updateHud();
-      return;
-    }
-
-    this.blacksmithBusy = true;
-    this.blacksmithError = null;
-    this.updateHud();
-
-    try {
-      await this.fetchJson('/shops/blacksmith/buy', {
-        method: 'POST',
-        body: JSON.stringify({
-          offerKey,
-          quantity: 1,
-        }),
-      });
-      await this.refreshGameplayState();
-      await this.refreshBlacksmithState();
-      await this.refreshVillageMarketState();
-    } catch (error) {
-      this.blacksmithError = this.getErrorMessage(error, 'Unable to buy this item.');
-    } finally {
-      this.blacksmithBusy = false;
-      this.updateHud();
-    }
+    await runBuyBlacksmithOfferActionFromFeature({
+      offerKey,
+      isAuthenticated: this.isAuthenticated,
+      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
+      refreshGameplayState: () => this.refreshGameplayState(),
+      refreshBlacksmithState: () => this.refreshBlacksmithState(),
+      refreshVillageMarketState: () => this.refreshVillageMarketState(),
+      setBlacksmithBusy: (busy) => {
+        this.blacksmithBusy = busy;
+      },
+      setBlacksmithError: (error) => {
+        this.blacksmithError = error;
+      },
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private async buyVillageSeedOffer(offerKey: string): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.villageMarketError = 'Login required to buy seeds.';
-      this.updateHud();
-      return;
-    }
-
-    if (!this.villageMarketUnlocked) {
-      this.villageMarketError = 'Village market is locked.';
-      this.updateHud();
-      return;
-    }
-
-    this.villageMarketBusy = true;
-    this.villageMarketError = null;
-    this.updateHud();
-
-    try {
-      await this.fetchJson('/shops/village-market/buy-seed', {
-        method: 'POST',
-        body: JSON.stringify({
-          offerKey,
-          quantity: 1,
-        }),
-      });
-      await this.refreshGameplayState();
-      await this.refreshVillageMarketState();
-      await this.refreshBlacksmithState();
-    } catch (error) {
-      this.villageMarketError = this.getErrorMessage(error, 'Unable to buy this seed offer.');
-    } finally {
-      this.villageMarketBusy = false;
-      this.updateHud();
-    }
+    await runBuyVillageSeedOfferActionFromFeature({
+      offerKey,
+      isAuthenticated: this.isAuthenticated,
+      villageMarketUnlocked: this.villageMarketUnlocked,
+      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
+      refreshGameplayState: () => this.refreshGameplayState(),
+      refreshVillageMarketState: () => this.refreshVillageMarketState(),
+      refreshBlacksmithState: () => this.refreshBlacksmithState(),
+      setVillageMarketBusy: (busy) => {
+        this.villageMarketBusy = busy;
+      },
+      setVillageMarketError: (error) => {
+        this.villageMarketError = error;
+      },
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private async sellVillageCrop(itemKey: string): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.villageMarketError = 'Login required to sell crops.';
-      this.updateHud();
-      return;
-    }
-
-    if (!this.villageMarketUnlocked) {
-      this.villageMarketError = 'Village market is locked.';
-      this.updateHud();
-      return;
-    }
-
-    this.villageMarketBusy = true;
-    this.villageMarketError = null;
-    this.updateHud();
-
-    try {
-      await this.fetchJson('/shops/village-market/sell-crop', {
-        method: 'POST',
-        body: JSON.stringify({
-          itemKey,
-          quantity: 1,
-        }),
-      });
-      await this.refreshGameplayState();
-      await this.refreshVillageMarketState();
-      await this.refreshBlacksmithState();
-    } catch (error) {
-      this.villageMarketError = this.getErrorMessage(error, 'Unable to sell this crop.');
-    } finally {
-      this.villageMarketBusy = false;
-      this.updateHud();
-    }
+    await runSellVillageCropActionFromFeature({
+      itemKey,
+      isAuthenticated: this.isAuthenticated,
+      villageMarketUnlocked: this.villageMarketUnlocked,
+      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
+      refreshGameplayState: () => this.refreshGameplayState(),
+      refreshVillageMarketState: () => this.refreshVillageMarketState(),
+      refreshBlacksmithState: () => this.refreshBlacksmithState(),
+      setVillageMarketBusy: (busy) => {
+        this.villageMarketBusy = busy;
+      },
+      setVillageMarketError: (error) => {
+        this.villageMarketError = error;
+      },
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private async interactVillageNpc(npcKey: VillageNpcKey): Promise<void> {
