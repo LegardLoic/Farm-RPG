@@ -215,6 +215,14 @@ import {
   normalizeGameplayIntroPayload as normalizeGameplayIntroPayloadFromIntro,
 } from './features/intro/introLogic';
 import {
+  runAdvanceIntroNarrativeAction as runAdvanceIntroNarrativeActionFromFeature,
+  runSaveHeroProfileAction as runSaveHeroProfileActionFromFeature,
+} from './features/intro/introActionHandlers';
+import {
+  updateHeroProfileHud as updateHeroProfileHudFromFeature,
+  updateIntroHud as updateIntroHudFromFeature,
+} from './features/intro/introHudRenderer';
+import {
   buildDebugQaMarkdownFilename as buildDebugQaMarkdownFilenameFromDebugQa,
   buildDebugQaMarkdownReport as buildDebugQaMarkdownReportFromDebugQa,
   buildDebugQaTraceFilename as buildDebugQaTraceFilenameFromDebugQa,
@@ -2181,76 +2189,42 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateHeroProfileHud(): void {
-    const disabled = !this.isAuthenticated || this.heroProfileBusy;
-    const trimmedDraftName = this.heroProfileNameDraft.trim();
-
-    if (this.heroProfileSummaryValue) {
-      this.heroProfileSummaryValue.textContent = this.getHeroProfileSummaryLabel();
-    }
-
-    if (this.heroProfileNameInput) {
-      if (this.heroProfileNameInput.value !== this.heroProfileNameDraft) {
-        this.heroProfileNameInput.value = this.heroProfileNameDraft;
-      }
-      this.heroProfileNameInput.disabled = disabled;
-    }
-
-    if (this.heroProfileAppearanceSelect) {
-      if (this.heroProfileAppearanceSelect.value !== this.heroProfileAppearanceDraft) {
-        this.heroProfileAppearanceSelect.value = this.heroProfileAppearanceDraft;
-      }
-      this.heroProfileAppearanceSelect.disabled = disabled;
-    }
-
-    if (this.heroProfileSaveButton) {
-      this.heroProfileSaveButton.disabled = disabled || trimmedDraftName.length < 2;
-      this.heroProfileSaveButton.textContent = this.heroProfileBusy
-        ? 'Sauvegarde...'
-        : this.heroProfile
-          ? 'Mettre a jour profil'
-          : 'Creer profil';
-    }
-
-    if (this.heroProfileMessageValue) {
-      this.heroProfileMessageValue.hidden = !this.heroProfileMessage;
-      this.heroProfileMessageValue.textContent = this.heroProfileMessage ?? '';
-    }
-
-    if (this.heroProfileErrorValue) {
-      this.heroProfileErrorValue.hidden = !this.heroProfileError;
-      this.heroProfileErrorValue.textContent = this.heroProfileError ?? '';
-    }
+    updateHeroProfileHudFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      heroProfileBusy: this.heroProfileBusy,
+      heroProfileNameDraft: this.heroProfileNameDraft,
+      heroProfileAppearanceDraft: this.heroProfileAppearanceDraft,
+      heroProfile: this.heroProfile,
+      heroProfileMessage: this.heroProfileMessage,
+      heroProfileError: this.heroProfileError,
+      heroProfileSummaryLabel: this.getHeroProfileSummaryLabel(),
+      summaryValue: this.heroProfileSummaryValue,
+      nameInput: this.heroProfileNameInput,
+      appearanceSelect: this.heroProfileAppearanceSelect,
+      saveButton: this.heroProfileSaveButton,
+      messageValue: this.heroProfileMessageValue,
+      errorValue: this.heroProfileErrorValue,
+    });
   }
 
   private updateIntroHud(): void {
-    const state = this.introNarrativeState;
-    const disabled = !this.isAuthenticated || this.introNarrativeBusy || Boolean(state?.completed);
-
-    if (this.introSummaryValue) {
-      this.introSummaryValue.textContent = this.getIntroSummaryLabel();
-    }
-
-    if (this.introNarrativeValue) {
-      this.introNarrativeValue.textContent = this.getIntroNarrativeLabel();
-    }
-
-    if (this.introHintValue) {
-      this.introHintValue.textContent = this.getIntroHintLabel();
-    }
-
-    if (this.introProgressValue) {
-      this.introProgressValue.textContent = this.getIntroProgressLabel();
-    }
-
-    if (this.introAdvanceButton) {
-      this.introAdvanceButton.disabled = disabled;
-      this.introAdvanceButton.textContent = this.introNarrativeBusy ? 'Avance...' : this.getIntroAdvanceButtonLabel();
-    }
-
-    if (this.introErrorValue) {
-      this.introErrorValue.hidden = !this.introNarrativeError;
-      this.introErrorValue.textContent = this.introNarrativeError ?? '';
-    }
+    updateIntroHudFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      introNarrativeBusy: this.introNarrativeBusy,
+      introNarrativeState: this.introNarrativeState,
+      introNarrativeError: this.introNarrativeError,
+      introSummaryLabel: this.getIntroSummaryLabel(),
+      introNarrativeLabel: this.getIntroNarrativeLabel(),
+      introHintLabel: this.getIntroHintLabel(),
+      introProgressLabel: this.getIntroProgressLabel(),
+      introAdvanceButtonLabel: this.getIntroAdvanceButtonLabel(),
+      summaryValue: this.introSummaryValue,
+      narrativeValue: this.introNarrativeValue,
+      hintValue: this.introHintValue,
+      progressValue: this.introProgressValue,
+      advanceButton: this.introAdvanceButton,
+      errorValue: this.introErrorValue,
+    });
   }
 
   private updateGamepadInput(): void {
@@ -4776,84 +4750,56 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async saveHeroProfile(): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.heroProfileError = 'Login required to create hero profile.';
-      this.updateHud();
-      return;
-    }
-
-    if (this.heroProfileBusy) {
-      return;
-    }
-
-    const heroName = this.heroProfileNameDraft.trim();
-    if (heroName.length < 2 || heroName.length > 24) {
-      this.heroProfileError = 'Hero name must contain 2-24 characters.';
-      this.updateHud();
-      return;
-    }
-
-    this.heroProfileBusy = true;
-    this.heroProfileError = null;
-    this.heroProfileMessage = null;
-    this.updateHud();
-
-    try {
-      const payload = await this.fetchJson<unknown>('/profile', {
-        method: 'PUT',
-        body: JSON.stringify({
-          heroName,
-          appearanceKey: this.heroProfileAppearanceDraft,
-        }),
-      });
-      const profile = this.normalizeHeroProfilePayload(payload);
-      if (profile) {
+    await runSaveHeroProfileActionFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      heroProfileBusy: this.heroProfileBusy,
+      heroProfileNameDraft: this.heroProfileNameDraft,
+      heroProfileAppearanceDraft: this.heroProfileAppearanceDraft,
+      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
+      normalizeHeroProfilePayload: (payload) => this.normalizeHeroProfilePayload(payload),
+      setHeroProfileBusy: (busy) => {
+        this.heroProfileBusy = busy;
+      },
+      setHeroProfileError: (error) => {
+        this.heroProfileError = error;
+      },
+      setHeroProfileMessage: (message) => {
+        this.heroProfileMessage = message;
+      },
+      setHeroProfile: (profile) => {
         this.heroProfile = profile;
-        this.heroProfileNameDraft = profile.heroName;
-        this.heroProfileAppearanceDraft = profile.appearanceKey;
-        this.heroProfileMessage = 'Profil hero sauvegarde.';
-      } else {
-        this.heroProfileError = 'Profile payload missing in response.';
-      }
-    } catch (error) {
-      this.heroProfileError = this.getErrorMessage(error, 'Unable to save hero profile.');
-    } finally {
-      this.heroProfileBusy = false;
-      this.updateHud();
-    }
+      },
+      setHeroProfileNameDraft: (name) => {
+        this.heroProfileNameDraft = name;
+      },
+      setHeroProfileAppearanceDraft: (appearance) => {
+        this.heroProfileAppearanceDraft = appearance;
+      },
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private async advanceIntroNarrative(): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.introNarrativeError = 'Login required to continue intro.';
-      this.updateHud();
-      return;
-    }
-
-    if (this.introNarrativeBusy || this.introNarrativeState?.completed) {
-      return;
-    }
-
-    this.introNarrativeBusy = true;
-    this.introNarrativeError = null;
-    this.updateHud();
-
-    try {
-      const payload = await this.fetchJson<unknown>('/gameplay/intro/advance', {
-        method: 'POST',
-      });
-      const introState = this.normalizeGameplayIntroPayload(payload);
-      if (introState) {
-        this.introNarrativeState = introState;
-      }
-
-      await this.refreshGameplayState();
-    } catch (error) {
-      this.introNarrativeError = this.getErrorMessage(error, 'Unable to continue intro sequence.');
-    } finally {
-      this.introNarrativeBusy = false;
-      this.updateHud();
-    }
+    await runAdvanceIntroNarrativeActionFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      introNarrativeBusy: this.introNarrativeBusy,
+      introNarrativeCompleted: Boolean(this.introNarrativeState?.completed),
+      fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
+      normalizeGameplayIntroPayload: (payload) => this.normalizeGameplayIntroPayload(payload),
+      refreshGameplayState: () => this.refreshGameplayState(),
+      setIntroNarrativeBusy: (busy) => {
+        this.introNarrativeBusy = busy;
+      },
+      setIntroNarrativeError: (error) => {
+        this.introNarrativeError = error;
+      },
+      setIntroNarrativeState: (state) => {
+        this.introNarrativeState = state;
+      },
+      getErrorMessage: (error, fallback) => this.getErrorMessage(error, fallback),
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private applyGameplaySnapshot(payload: unknown): void {
