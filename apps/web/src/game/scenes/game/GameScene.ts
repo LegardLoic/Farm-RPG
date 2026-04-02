@@ -228,6 +228,11 @@ import {
   updateIntroHud as updateIntroHudFromFeature,
 } from './features/intro/introHudRenderer';
 import {
+  getQuestStatusLabel as getQuestStatusLabelFromFeature,
+  getQuestSummaryLabel as getQuestSummaryLabelFromFeature,
+} from './features/quests/questHudLogic';
+import { renderQuestList as renderQuestListFromFeature } from './features/quests/questHudRenderer';
+import {
   buildDebugQaMarkdownFilename as buildDebugQaMarkdownFilenameFromDebugQa,
   buildDebugQaMarkdownReport as buildDebugQaMarkdownReportFromDebugQa,
   buildDebugQaTraceFilename as buildDebugQaTraceFilenameFromDebugQa,
@@ -2825,88 +2830,21 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.questsRenderSignature = signature;
-
-    this.questsListRoot.replaceChildren();
-
-    if (!this.isAuthenticated) {
-      const item = document.createElement('li');
-      item.classList.add('quest-item', 'empty');
-      item.textContent = 'Connect to see quests.';
-      this.questsListRoot.appendChild(item);
-      return;
-    }
-
-    if (this.quests.length === 0) {
-      const item = document.createElement('li');
-      item.classList.add('quest-item', 'empty');
-      item.textContent = this.questBusy ? 'Loading quests...' : 'No quests available.';
-      this.questsListRoot.appendChild(item);
-      return;
-    }
-
-    for (const quest of this.quests) {
-      const item = document.createElement('li');
-      item.classList.add('quest-item');
-      item.dataset.status = quest.status;
-
-      const header = document.createElement('div');
-      header.classList.add('quest-item-header');
-
-      const title = document.createElement('strong');
-      title.textContent = quest.title;
-      header.appendChild(title);
-
-      const badge = document.createElement('span');
-      badge.classList.add('quest-status');
-      badge.textContent = this.getQuestStatusLabel(quest.status);
-      header.appendChild(badge);
-
-      item.appendChild(header);
-
-      const description = document.createElement('p');
-      description.classList.add('quest-description');
-      description.textContent = quest.description;
-      item.appendChild(description);
-
-      const objectives = document.createElement('ul');
-      objectives.classList.add('quest-objectives');
-      for (const objective of quest.objectives) {
-        const objectiveItem = document.createElement('li');
-        objectiveItem.textContent = `${objective.description}: ${objective.current}/${objective.target}`;
-        if (objective.completed) {
-          objectiveItem.classList.add('completed');
-        }
-        objectives.appendChild(objectiveItem);
-      }
-      item.appendChild(objectives);
-
-      if (quest.canClaim) {
-        const claimButton = document.createElement('button');
-        claimButton.classList.add('hud-quest-claim');
-        claimButton.textContent = 'Claim';
-        claimButton.dataset.questAction = 'claim';
-        claimButton.dataset.questKey = quest.key;
-        claimButton.disabled = this.questBusy;
-        item.appendChild(claimButton);
-      }
-
-      this.questsListRoot.appendChild(item);
-    }
+    renderQuestListFromFeature({
+      root: this.questsListRoot,
+      isAuthenticated: this.isAuthenticated,
+      questBusy: this.questBusy,
+      quests: this.quests,
+      getQuestStatusLabel: (status) => this.getQuestStatusLabel(status),
+    });
   }
 
   private getQuestSummaryLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Login required';
-    }
-
-    if (this.questBusy && this.quests.length === 0) {
-      return 'Loading...';
-    }
-
-    const active = this.quests.filter((quest) => quest.status === 'active').length;
-    const completed = this.quests.filter((quest) => quest.status === 'completed').length;
-    const claimed = this.quests.filter((quest) => quest.status === 'claimed').length;
-    return `Active ${active} | Ready ${completed} | Claimed ${claimed}`;
+    return getQuestSummaryLabelFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      questBusy: this.questBusy,
+      quests: this.quests,
+    });
   }
 
   private getBlacksmithShopSummaryLabel(): string {
@@ -3240,15 +3178,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getQuestStatusLabel(status: QuestStatus): string {
-    if (status === 'active') {
-      return 'Active';
-    }
-
-    if (status === 'completed') {
-      return 'Ready';
-    }
-
-    return 'Claimed';
+    return getQuestStatusLabelFromFeature(status);
   }
 
   private updateCombatButtons(): void {
