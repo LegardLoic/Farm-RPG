@@ -31,6 +31,25 @@ import {
   normalizeBlacksmithPayload as parseBlacksmithPayload,
   normalizeVillageMarketPayload as parseVillageMarketPayload,
 } from './game/shopNormalizers';
+import {
+  formatVillageNpcStateLabel as formatVillageNpcStateLabelFromLogic,
+  formatVillageRelationshipTierLabel as formatVillageRelationshipTierLabelFromLogic,
+  getBlacksmithContextDialogue as getBlacksmithContextDialogueFromLogic,
+  getMayorContextDialogue as getMayorContextDialogueFromLogic,
+  getMerchantContextDialogue as getMerchantContextDialogueFromLogic,
+  getVillageInteractionFeedbackLabel as getVillageInteractionFeedbackLabelFromLogic,
+  getVillageNpcCooldownDialogue as getVillageNpcCooldownDialogueFromLogic,
+  getVillageNpcDialogueLabel as getVillageNpcDialogueLabelFromLogic,
+  getVillageNpcDisplayName as getVillageNpcDisplayNameFromLogic,
+  getVillageNpcEntryLabel as getVillageNpcEntryLabelFromLogic,
+  getVillageNpcSummaryLabel as getVillageNpcSummaryLabelFromLogic,
+  getVillageNpcUnavailableDialogue as getVillageNpcUnavailableDialogueFromLogic,
+  getVillageObjectiveLabel as getVillageObjectiveLabelFromLogic,
+  getVillageSecondaryDialogue as getVillageSecondaryDialogueFromLogic,
+  getVillageZoneInteractionState as getVillageZoneInteractionStateFromLogic,
+  getVillageZoneStateColor as getVillageZoneStateColorFromLogic,
+  getVillageZoneStateLabel as getVillageZoneStateLabelFromLogic,
+} from './game/villageLogic';
 
 type HudState = {
   day: number;
@@ -3362,22 +3381,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getVillageObjectiveLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Connecte-toi pour activer les interactions de hub.';
-    }
-    if (this.frontSceneMode !== 'village') {
-      return 'Sortir de la ferme pour rejoindre le village.';
-    }
-    if (this.hudState.blacksmithUnlocked && this.villageMarketUnlocked) {
-      return 'Le hub est stabilise: parle aux PNJ puis vise la Tour.';
-    }
-    if (!this.hudState.blacksmithUnlocked) {
-      return 'Observe la forge et les retours du Maire apres tes progres.';
-    }
-    if (!this.villageMarketUnlocked) {
-      return 'Le marche se relance: parle a la Marchande pour suivre le rythme local.';
-    }
-    return 'Repere Maire, Marche, Forge, zone calme et sorties.';
+    return getVillageObjectiveLabelFromLogic({
+      isAuthenticated: this.isAuthenticated,
+      frontSceneMode: this.frontSceneMode,
+      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+      villageMarketUnlocked: this.villageMarketUnlocked,
+    });
   }
 
   private updateVillageContextPanel(): void {
@@ -3417,24 +3426,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getVillageInteractionFeedbackLabel(): string {
-    if (this.villageNpcError) {
-      return this.villageNpcError;
-    }
-    if (this.villageFeedbackMessage) {
-      return this.villageFeedbackMessage;
-    }
-    if (this.frontSceneMode !== 'village') {
-      return 'Sortie village disponible depuis la ferme.';
-    }
-    if (!this.isAuthenticated) {
-      return 'Connexion requise pour parler aux PNJ et changer de zone.';
-    }
-    if (this.villageShopPanelOpen) {
-      return this.villageShopType === 'market'
-        ? 'Marche ouvert: selectionne une offre puis valide.'
-        : 'Forge ouverte: compare les categories avant achat.';
-    }
-    return 'Approche une zone, puis E pour interagir. R pour changer de cible.';
+    return getVillageInteractionFeedbackLabelFromLogic({
+      villageNpcError: this.villageNpcError,
+      villageFeedbackMessage: this.villageFeedbackMessage,
+      frontSceneMode: this.frontSceneMode,
+      isAuthenticated: this.isAuthenticated,
+      villageShopPanelOpen: this.villageShopPanelOpen,
+      villageShopType: this.villageShopType,
+    });
   }
 
   private updateFarmCraftingHud(): void {
@@ -9263,230 +9262,63 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getVillageNpcSummaryLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Connexion requise';
-    }
-
-    const availableCount =
-      Number(this.villageNpcState.mayor.available) +
-      Number(this.villageNpcState.blacksmith.available) +
-      Number(this.villageNpcState.merchant.available);
-    const friendshipTotal =
-      this.villageNpcRelationships.mayor.friendship +
-      this.villageNpcRelationships.blacksmith.friendship +
-      this.villageNpcRelationships.merchant.friendship;
-    return `${availableCount}/3 accessibles | Amitie ${friendshipTotal}`;
+    return getVillageNpcSummaryLabelFromLogic({
+      isAuthenticated: this.isAuthenticated,
+      villageNpcState: this.villageNpcState,
+      villageNpcRelationships: this.villageNpcRelationships,
+    });
   }
 
   private getVillageNpcEntryLabel(npcKey: VillageNpcKey): string {
-    const entry = this.villageNpcState[npcKey];
-    const availability = entry.available ? 'Disponible' : 'Indisponible';
-    const relationship = this.villageNpcRelationships[npcKey];
-    return `${this.formatVillageNpcStateLabel(entry.stateKey)} | ${availability} | Amitie ${relationship.friendship} (${this.formatVillageRelationshipTierLabel(relationship.tier)})`;
+    return getVillageNpcEntryLabelFromLogic({
+      npcKey,
+      villageNpcState: this.villageNpcState,
+      villageNpcRelationships: this.villageNpcRelationships,
+    });
   }
 
   private getVillageNpcDialogueLabel(npcKey: VillageNpcKey): string {
-    if (!this.isAuthenticated) {
-      return 'Connecte-toi pour ecouter les echos du village.';
-    }
-
-    const npc = this.villageNpcState[npcKey];
-    const relationship = this.villageNpcRelationships[npcKey];
-
-    if (!npc.available) {
-      return this.getVillageNpcUnavailableDialogue(npcKey, npc.stateKey);
-    }
-
-    if (!relationship.canTalkToday) {
-      return this.getVillageNpcCooldownDialogue(npcKey, relationship.tier);
-    }
-
-    if (npcKey === 'mayor') {
-      return this.getMayorContextDialogue(relationship.tier, npc.stateKey);
-    }
-
-    if (npcKey === 'blacksmith') {
-      return this.getBlacksmithContextDialogue(relationship.tier, npc.stateKey);
-    }
-
-    return this.getMerchantContextDialogue(relationship.tier, npc.stateKey);
+    return getVillageNpcDialogueLabelFromLogic({
+      isAuthenticated: this.isAuthenticated,
+      npcKey,
+      villageNpcState: this.villageNpcState,
+      villageNpcRelationships: this.villageNpcRelationships,
+    });
   }
 
   private getVillageNpcUnavailableDialogue(npcKey: VillageNpcKey, stateKey: string): string {
-    if (npcKey === 'mayor') {
-      if (stateKey === 'offscreen') {
-        return 'Le maire est en tournee, laisse un rapport au tableau.';
-      }
-      if (stateKey === 'awaiting_meeting') {
-        return 'Le maire attend encore ton premier compte-rendu.';
-      }
-    }
-
-    if (npcKey === 'blacksmith') {
-      if (stateKey === 'cursed') {
-        return 'La forge grince sous la malediction, la lame devra attendre.';
-      }
-      if (stateKey === 'recovering') {
-        return 'Le forgeron reprend son souffle; reviens apres une nouvelle expedition.';
-      }
-    }
-
-    if (npcKey === 'merchant') {
-      if (stateKey === 'absent') {
-        return 'Le marchand est encore sur les routes, sans etal aujourd hui.';
-      }
-      if (stateKey === 'setting_stall') {
-        return 'Le marchand installe ses caisses, le marche ouvre bientot.';
-      }
-    }
-
-    return `${this.getVillageNpcDisplayName(npcKey)} n est pas disponible pour parler.`;
+    return getVillageNpcUnavailableDialogueFromLogic(npcKey, stateKey);
   }
 
   private getVillageNpcCooldownDialogue(
     npcKey: VillageNpcKey,
     tier: VillageNpcRelationshipTier,
   ): string {
-    if (tier === 'ally') {
-      return `${this.getVillageNpcDisplayName(npcKey)} a deja partage les infos du jour.`;
-    }
-    if (tier === 'trusted') {
-      return `${this.getVillageNpcDisplayName(npcKey)} t a deja briefe pour cette journee.`;
-    }
-    if (tier === 'familiar') {
-      return `${this.getVillageNpcDisplayName(npcKey)} te reconnait, mais rien de neuf aujourd hui.`;
-    }
-
-    return `${this.getVillageNpcDisplayName(npcKey)} reste reserve pour le reste de la journee.`;
+    return getVillageNpcCooldownDialogueFromLogic(npcKey, tier);
   }
 
   private getMayorContextDialogue(tier: VillageNpcRelationshipTier, stateKey: string): string {
-    if (stateKey === 'tower_strategist') {
-      if (tier === 'ally') {
-        return 'Maire: \"Ton rapport fixe notre plan. On coordonne ferme et tour ensemble.\"';
-      }
-      if (tier === 'trusted') {
-        return 'Maire: \"Priorite au palier suivant. Ravitaille le village avant la montee.\"';
-      }
-      return 'Maire: \"Observe les mouvements en tour et reviens avec des details.\"';
-    }
-
-    if (tier === 'ally') {
-      return 'Maire: \"Bon retour. La population suit ton rythme, continue ainsi.\"';
-    }
-    if (tier === 'trusted') {
-      return 'Maire: \"Tes decisions stabilisent le village, on peut viser plus haut.\"';
-    }
-    if (tier === 'familiar') {
-      return 'Maire: \"Tu prends ta place dans la garde. Un rapport chaque soir.\"';
-    }
-
-    return 'Maire: \"Bienvenue. Commence par securiser des ressources de base.\"';
+    return getMayorContextDialogueFromLogic(tier, stateKey);
   }
 
   private getBlacksmithContextDialogue(tier: VillageNpcRelationshipTier, stateKey: string): string {
-    if (stateKey === 'masterwork_ready') {
-      if (tier === 'ally') {
-        return 'Forgeron: \"La maitrise est prete. On forge pour les boss maintenant.\"';
-      }
-      if (tier === 'trusted') {
-        return 'Forgeron: \"Apporte des composants rares, je pousse ton equipement plus loin.\"';
-      }
-      return 'Forgeron: \"La forge tourne a plein regime, choisis bien ton prochain achat.\"';
-    }
-
-    if (tier === 'ally') {
-      return 'Forgeron: \"Ta progression est propre. Je peux anticiper ton prochain set.\"';
-    }
-    if (tier === 'trusted') {
-      return 'Forgeron: \"Bon timing. Plus de minerai = meilleures options en boutique.\"';
-    }
-    if (tier === 'familiar') {
-      return 'Forgeron: \"Je note tes besoins. Reviens apres quelques combats.\"';
-    }
-
-    return 'Forgeron: \"Une lame solide avant tout. Le reste viendra.\"';
+    return getBlacksmithContextDialogueFromLogic(tier, stateKey);
   }
 
   private getMerchantContextDialogue(tier: VillageNpcRelationshipTier, stateKey: string): string {
-    if (stateKey === 'traveling_buyer') {
-      if (tier === 'ally') {
-        return 'Marchand: \"Je couvre les routes longues. Ta ferme garantit nos stocks.\"';
-      }
-      if (tier === 'trusted') {
-        return 'Marchand: \"On optimise les trajets: livre regulierement et je maintiens les prix.\"';
-      }
-      return 'Marchand: \"Les routes sont ouvertes, garde un flux constant de recoltes.\"';
-    }
-
-    if (tier === 'ally') {
-      return 'Marchand: \"Transactions nettes. Tes livraisons donnent du souffle au village.\"';
-    }
-    if (tier === 'trusted') {
-      return 'Marchand: \"Bon partenariat. Plus de volume, meilleure marge collective.\"';
-    }
-    if (tier === 'familiar') {
-      return 'Marchand: \"Je peux reprendre tes recoltes, commence petit et regulier.\"';
-    }
-
-    return 'Marchand: \"Montre-moi ce que ta ferme peut fournir, puis on negocie.\"';
+    return getMerchantContextDialogueFromLogic(tier, stateKey);
   }
 
   private formatVillageNpcStateLabel(stateKey: string): string {
-    switch (stateKey) {
-      case 'offscreen':
-        return 'Hors village';
-      case 'awaiting_meeting':
-        return 'Attend rencontre';
-      case 'briefing':
-        return 'Briefing';
-      case 'village_overseer':
-        return 'Supervision village';
-      case 'tower_strategist':
-        return 'Strategie tour';
-      case 'cursed':
-        return 'Maudit';
-      case 'recovering':
-        return 'Recuperation';
-      case 'open':
-        return 'Ouvert';
-      case 'masterwork_ready':
-        return 'Maitrise';
-      case 'absent':
-        return 'Absent';
-      case 'setting_stall':
-        return 'Installe etal';
-      case 'traveling_buyer':
-        return 'Achat itinerant';
-      default:
-        return stateKey.replace(/_/g, ' ');
-    }
+    return formatVillageNpcStateLabelFromLogic(stateKey);
   }
 
   private formatVillageRelationshipTierLabel(tier: VillageNpcRelationshipTier): string {
-    switch (tier) {
-      case 'stranger':
-        return 'Inconnu';
-      case 'familiar':
-        return 'Connu';
-      case 'trusted':
-        return 'Confiant';
-      case 'ally':
-        return 'Allie';
-      default:
-        return tier;
-    }
+    return formatVillageRelationshipTierLabelFromLogic(tier);
   }
 
   private getVillageNpcDisplayName(npcKey: VillageNpcKey): string {
-    if (npcKey === 'mayor') {
-      return 'Mayor';
-    }
-    if (npcKey === 'blacksmith') {
-      return 'Blacksmith';
-    }
-
-    return 'Merchant';
+    return getVillageNpcDisplayNameFromLogic(npcKey);
   }
 
   private getIntroSummaryLabel(): string {
@@ -11386,115 +11218,39 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getVillageZoneStateLabel(zone: VillageSceneZoneConfig): string {
-    if (zone.key === 'market') {
-      if (!this.isAuthenticated) {
-        return 'Connexion requise';
-      }
-      if (!this.villageMarketUnlocked) {
-        return 'Marche limite';
-      }
-      return `${this.villageMarketSeedOffers.length} graines visibles`;
-    }
-
-    if (zone.key === 'forge') {
-      if (!this.isAuthenticated) {
-        return 'Connexion requise';
-      }
-      if (this.hudState.blacksmithUnlocked) {
-        return 'Forge active';
-      }
-      return this.hudState.blacksmithCurseLifted ? 'Reprise fragile' : 'Forge entravee';
-    }
-
-    if (zone.npcKey) {
-      if (!this.isAuthenticated) {
-        return 'Connexion requise';
-      }
-      const npc = this.villageNpcState[zone.npcKey];
-      const relation = this.villageNpcRelationships[zone.npcKey];
-      if (!npc.available) {
-        return this.formatVillageNpcStateLabel(npc.stateKey);
-      }
-      if (!relation.canTalkToday) {
-        return 'Deja parle aujourd hui';
-      }
-      return 'Disponible';
-    }
-
-    if (zone.key === 'calm') {
-      return this.isAuthenticated ? 'Coin vivant' : 'Connexion requise';
-    }
-
-    if (zone.key === 'farm_exit') {
-      return this.isAuthenticated ? 'Retour possible' : 'Connexion requise';
-    }
-
-    return this.isAuthenticated ? 'Menace active' : 'Connexion requise';
+    return getVillageZoneStateLabelFromLogic({
+      isAuthenticated: this.isAuthenticated,
+      zone,
+      villageMarketUnlocked: this.villageMarketUnlocked,
+      villageMarketSeedOffersCount: this.villageMarketSeedOffers.length,
+      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+      blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+      villageNpcState: this.villageNpcState,
+      villageNpcRelationships: this.villageNpcRelationships,
+    });
   }
 
   private getVillageZoneStateColor(zone: VillageSceneZoneConfig): string {
-    if (zone.key === 'tower_exit') {
-      return '#f0c5d6';
-    }
-    if (zone.key === 'market' && !this.villageMarketUnlocked) {
-      return '#f2d5a8';
-    }
-    if (zone.key === 'forge' && !this.hudState.blacksmithUnlocked) {
-      return '#f2bead';
-    }
     const interactionState = this.getVillageZoneInteractionState(zone);
-    if (interactionState.enabled) {
-      return '#c8f2da';
-    }
-    if (!this.isAuthenticated) {
-      return '#f2c9a7';
-    }
-    return '#f2b8b8';
+    return getVillageZoneStateColorFromLogic({
+      isAuthenticated: this.isAuthenticated,
+      zone,
+      villageMarketUnlocked: this.villageMarketUnlocked,
+      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+      interactionState,
+    });
   }
 
   private getVillageZoneInteractionState(zone: VillageSceneZoneConfig): { enabled: boolean; reason: string } {
-    if (!this.isAuthenticated) {
-      return { enabled: false, reason: 'Connexion requise pour interagir dans le village.' };
-    }
-
-    if (zone.key === 'market') {
-      return {
-        enabled: true,
-        reason: this.villageMarketUnlocked
-          ? 'Marche pret: achete des graines ou vends tes recoltes.'
-          : 'Marche encore limite. Les premiers paliers du monde debloquent les echanges.',
-      };
-    }
-
-    if (zone.key === 'forge') {
-      return {
-        enabled: true,
-        reason: this.hudState.blacksmithUnlocked
-          ? 'Forge active: compare les paliers puis equipe-toi.'
-          : this.hudState.blacksmithCurseLifted
-            ? 'Forge en reprise: catalogue encore fragile.'
-            : 'Forge entravee: avance dans la Tour pour la relancer.',
-      };
-    }
-
-    if (zone.npcKey) {
-      const npc = this.villageNpcState[zone.npcKey];
-      const relation = this.villageNpcRelationships[zone.npcKey];
-      if (!npc.available) {
-        return {
-          enabled: false,
-          reason: `${this.getVillageNpcDisplayName(zone.npcKey)} indisponible (${this.formatVillageNpcStateLabel(npc.stateKey)}).`,
-        };
-      }
-      if (!relation.canTalkToday) {
-        return {
-          enabled: false,
-          reason: `${this.getVillageNpcDisplayName(zone.npcKey)} a deja partage ses infos du jour.`,
-        };
-      }
-    }
-
-    return { enabled: true, reason: '' };
+    return getVillageZoneInteractionStateFromLogic({
+      isAuthenticated: this.isAuthenticated,
+      zone,
+      villageMarketUnlocked: this.villageMarketUnlocked,
+      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+      blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+      villageNpcState: this.villageNpcState,
+      villageNpcRelationships: this.villageNpcRelationships,
+    });
   }
 
   private getFarmSceneSlots(): FarmScenePlotSlot[] {
@@ -11918,13 +11674,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getVillageSecondaryDialogue(): string {
-    if (!this.isAuthenticated) {
-      return 'Connexion requise pour discuter avec les habitants.';
-    }
-    if (this.hudState.towerHighestFloor >= 5) {
-      return 'Habitante: "Le village respire un peu mieux depuis tes retours de la Tour."';
-    }
-    return 'Habitante: "On tient encore. Merci de revenir nous parler entre deux expeditions."';
+    return getVillageSecondaryDialogueFromLogic({
+      isAuthenticated: this.isAuthenticated,
+      towerHighestFloor: this.hudState.towerHighestFloor,
+    });
   }
 
   private handleFarmHotkeys(): void {
