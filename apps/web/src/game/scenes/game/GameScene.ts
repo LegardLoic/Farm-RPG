@@ -109,6 +109,13 @@ import {
   validateCombatActionRequest as validateCombatActionRequestFromFeature,
 } from './features/combat/combatActionLogic';
 import {
+  getCombatEnemySpritePath as getCombatEnemySpritePathFromFeature,
+  resolvePortraitEntryPath as resolvePortraitEntryPathFromFeature,
+  resolveSpriteAssetPath as resolveSpriteAssetPathFromFeature,
+  resolveSpriteManifest as resolveSpriteManifestFromFeature,
+  toPortraitStateKey as toPortraitStateKeyFromFeature,
+} from './features/combat/spriteManifestLogic';
+import {
   buildVillageShopEntries as buildVillageShopEntriesFromLogic,
   computeVillageShopRenderSignature as computeVillageShopRenderSignatureFromLogic,
   getForgeCategoryLabel as getForgeCategoryLabelFromLogic,
@@ -4895,60 +4902,27 @@ export class GameScene extends Phaser.Scene {
     entry: string | SpriteManifestPortraitEntry | undefined,
     animation: StripAnimationName,
   ): string | null {
-    if (typeof entry === 'string') {
-      return entry.trim().length > 0 ? this.resolveSpriteAssetPath(entry.trim()) : null;
-    }
-
-    if (!entry || typeof entry !== 'object') {
-      return null;
-    }
-
-    const stateKey = this.toPortraitStateKey(animation);
-    const statePath = this.asString(entry.states?.[stateKey]);
-    if (typeof statePath === 'string' && statePath.trim().length > 0) {
-      return this.resolveSpriteAssetPath(statePath.trim());
-    }
-
-    const directPath = this.asString(entry.path);
-    if (typeof directPath === 'string' && directPath.trim().length > 0) {
-      return this.resolveSpriteAssetPath(directPath.trim());
-    }
-
-    return null;
+    return resolvePortraitEntryPathFromFeature({
+      entry,
+      animation,
+      asString: (value) => this.asString(value),
+    });
   }
 
   private toPortraitStateKey(animation: StripAnimationName): SpriteManifestPortraitState {
-    if (animation === 'hit' || animation === 'cast') {
-      return animation;
-    }
-    return 'normal';
+    return toPortraitStateKeyFromFeature(animation);
   }
 
   private getCombatEnemySpritePath(enemyKey: string): string | null {
-    const manifest = this.getSpriteManifest();
-    const directEntry = manifest.sprites[enemyKey];
-    if (directEntry?.path) {
-      return this.resolveSpriteAssetPath(directEntry.path);
-    }
-
-    for (const entry of Object.values(manifest.sprites)) {
-      if (entry.key === enemyKey && entry.path) {
-        return this.resolveSpriteAssetPath(entry.path);
-      }
-    }
-
-    if (enemyKey.length > 0 && this.textures.exists(enemyKey)) {
-      return `/assets/sprites/characters/${enemyKey}.svg`;
-    }
-
-    return null;
+    return getCombatEnemySpritePathFromFeature({
+      enemyKey,
+      manifest: this.getSpriteManifest(),
+      textureExists: (key) => this.textures.exists(key),
+    });
   }
 
   private resolveSpriteAssetPath(path: string): string {
-    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('/')) {
-      return path;
-    }
-    return `/assets/sprites/${path}`;
+    return resolveSpriteAssetPathFromFeature(path);
   }
 
   private getSpriteManifest(): SpriteManifest {
@@ -4956,27 +4930,9 @@ export class GameScene extends Phaser.Scene {
       return this.spriteManifest;
     }
 
-    const manifest = this.cache.json.get('sprite-manifest') as SpriteManifest | undefined;
-    if (manifest && manifest.sprites && manifest.sprites['player-hero']) {
-      this.spriteManifest = manifest;
-      return manifest;
-    }
-
-    const fallbackManifest: SpriteManifest = {
-      frameSize: { width: 64, height: 64 },
-      origin: { x: 0.5, y: 0.84 },
-      sprites: {
-        'player-hero': {
-          key: 'player-hero',
-          path: '/assets/sprites/characters/player-hero.svg',
-          scale: { x: 0.28125, y: 0.40625 },
-          origin: { x: 0.5, y: 0.84 },
-          physics: { width: 14, height: 22, offsetX: 2, offsetY: 2 },
-        },
-      },
-    };
-    this.spriteManifest = fallbackManifest;
-    return fallbackManifest;
+    const manifest = resolveSpriteManifestFromFeature(this.cache.json.get('sprite-manifest'));
+    this.spriteManifest = manifest;
+    return manifest;
   }
 
   private async bootstrapSessionState(): Promise<void> {
