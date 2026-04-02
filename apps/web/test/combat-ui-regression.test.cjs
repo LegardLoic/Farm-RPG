@@ -17,10 +17,15 @@ const farmActionHandlersPath = join(
   'farm',
   'farmActionHandlers.ts',
 );
+const hudTemplatePath = join(__dirname, '..', 'src', 'game', 'scenes', 'game', 'hud', 'hudTemplate.ts');
 const bootScenePath = join(__dirname, '..', 'src', 'game', 'scenes', 'BootScene.ts');
 const stylesPath = join(__dirname, '..', 'src', 'styles.css');
 
-const gameSceneSource = [readFileSync(gameScenePath, 'utf8'), readFileSync(farmActionHandlersPath, 'utf8')].join('\n');
+const gameSceneSource = [
+  readFileSync(gameScenePath, 'utf8'),
+  readFileSync(farmActionHandlersPath, 'utf8'),
+  readFileSync(hudTemplatePath, 'utf8'),
+].join('\n');
 const bootSceneSource = readFileSync(bootScenePath, 'utf8');
 const stylesSource = readFileSync(stylesPath, 'utf8');
 
