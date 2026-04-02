@@ -420,3 +420,136 @@ export function readDebugQaFlagList(input: HTMLTextAreaElement | null): string[]
   return [...new Set(values)];
 }
 
+export function buildDebugQaMarkdownReport(params: {
+  timestamp: string;
+  mode: string;
+  url: string;
+  recapOutcomeFilter: DebugQaRecapOutcomeFilter;
+  recapEnemyFilter: string;
+  scriptEnemyFilter: string;
+  scriptIntentFilter: string;
+  combatState: CombatEncounterState | null;
+  combatLogs: string[];
+  debugQaScriptedIntentsReference: CombatDebugReference | null;
+}): string {
+  const lines: string[] = [];
+  const recapEnemyFilter = params.recapEnemyFilter.trim();
+  const scriptEnemyFilter = params.scriptEnemyFilter.trim();
+  const scriptIntentFilter = params.scriptIntentFilter.trim();
+  const recapMatchesFilters = doesCombatStateMatchRecapFilters(
+    params.combatState,
+    params.recapOutcomeFilter,
+    params.recapEnemyFilter,
+  );
+
+  lines.push('# Farm RPG QA Recap');
+  lines.push('');
+  lines.push(`Generated at: ${params.timestamp}`);
+  lines.push(`Mode: ${params.mode}`);
+  lines.push(`URL: ${params.url}`);
+  lines.push('');
+  lines.push('## Active Filters');
+  lines.push(`- Recap outcome: ${params.recapOutcomeFilter}`);
+  lines.push(`- Recap enemy query: ${recapEnemyFilter || '(none)'}`);
+  lines.push(`- Script enemy query: ${scriptEnemyFilter || '(none)'}`);
+  lines.push(`- Script intent query: ${scriptIntentFilter || '(none)'}`);
+  lines.push('');
+  lines.push('## Combat Recap');
+
+  if (!params.combatState) {
+    lines.push('- No encounter available in HUD.');
+  } else if (!recapMatchesFilters) {
+    lines.push('- Current encounter is filtered out by recap filters.');
+    lines.push(`- Current enemy: ${params.combatState.enemy.name} [${params.combatState.enemy.key}]`);
+    lines.push(`- Current status: ${params.combatState.status}`);
+  } else {
+    lines.push(`- Encounter: ${params.combatState.id}`);
+    lines.push(`- Enemy: ${params.combatState.enemy.name} [${params.combatState.enemy.key}]`);
+    lines.push(`- Outcome: ${params.combatState.status}`);
+    lines.push(`- Round: ${params.combatState.round}`);
+
+    if (params.combatState.recap) {
+      const recap = params.combatState.recap;
+      lines.push(`- Damage dealt/taken: ${recap.damageDealt}/${recap.damageTaken}`);
+      lines.push(`- Healing done: ${recap.healingDone}`);
+      lines.push(`- MP spent/recovered: ${recap.mpSpent}/${recap.mpRecovered}`);
+      lines.push(
+        `- Status applied: Poison ${recap.poisonApplied}, Cecite ${recap.ceciteApplied}, Obscurite ${recap.obscuriteApplied}`,
+      );
+      lines.push(`- Debuffs cleansed: ${recap.debuffsCleansed}`);
+      lines.push(`- Blind misses: ${recap.blindMisses}`);
+      lines.push(
+        `- Rewards: XP ${recap.rewards.experience}, Gold ${recap.rewards.gold}, Loot items ${recap.rewards.lootItems}`,
+      );
+      lines.push(`- Penalties: Gold lost ${recap.penalties.goldLost}, Items lost ${recap.penalties.itemsLost}`);
+    } else {
+      lines.push('- Recap payload unavailable (encounter still active or recap pending).');
+    }
+  }
+
+  lines.push('');
+  lines.push('### Combat Logs (last 20)');
+  if (params.combatLogs.length === 0) {
+    lines.push('- No logs captured.');
+  } else {
+    for (const logLine of params.combatLogs.slice(-20)) {
+      lines.push(`- ${logLine}`);
+    }
+  }
+
+  lines.push('');
+  lines.push('## Combat Scripted Intents');
+  if (!params.debugQaScriptedIntentsReference) {
+    lines.push('- Scripted intents reference is not loaded yet.');
+    lines.push('- Use "Load reference" in Debug QA then export again for detailed scripted intents.');
+    return lines.join('\n');
+  }
+
+  const filteredReference = filterCombatDebugReference(
+    params.debugQaScriptedIntentsReference,
+    params.scriptEnemyFilter,
+    params.scriptIntentFilter,
+  );
+  lines.push(
+    `- Filtered scripted profiles: ${filteredReference.scriptedIntents.length}/${params.debugQaScriptedIntentsReference.scriptedIntents.length}`,
+  );
+  lines.push('');
+  lines.push('```text');
+  lines.push(formatCombatDebugScriptedIntentsReference(filteredReference));
+  lines.push('```');
+  return lines.join('\n');
+}
+
+export function buildDebugQaTraceFilename(timestamp: string): string {
+  const safeTimestamp = timestamp.replace(/[:.]/g, '-');
+  return `farm-rpg-qa-trace-${safeTimestamp}.json`;
+}
+
+export function buildDebugQaMarkdownFilename(timestamp: string): string {
+  const safeTimestamp = timestamp.replace(/[:.]/g, '-');
+  return `farm-rpg-qa-recap-${safeTimestamp}.md`;
+}
+
+export function downloadJsonFile(filename: string, payload: unknown): void {
+  downloadTextFile(filename, JSON.stringify(payload, null, 2), 'application/json;charset=utf-8');
+}
+
+export function downloadTextFile(
+  filename: string,
+  contents: string,
+  contentType = 'text/plain;charset=utf-8',
+): void {
+  const blob = new Blob([contents], { type: contentType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.rel = 'noopener';
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 0);
+}

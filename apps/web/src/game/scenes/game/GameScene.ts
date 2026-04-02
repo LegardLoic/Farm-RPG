@@ -55,6 +55,21 @@ import {
   parseSaveSlotsPayload as parseSaveSlotsPayloadFromService,
 } from './services/gameplayPayloadParsers';
 import {
+  fetchJson as fetchJsonFromApi,
+  formatRequestError as formatRequestErrorFromApi,
+} from './services/apiClient';
+import {
+  asCombatStatus as asCombatStatusFromParser,
+  asCombatTurn as asCombatTurnFromParser,
+  asCombatUiStatus as asCombatUiStatusFromParser,
+  asNumber as asNumberFromParser,
+  asQuestStatus as asQuestStatusFromParser,
+  asRecord as asRecordFromParser,
+  asString as asStringFromParser,
+  asStringArray as asStringArrayFromParser,
+  isRecord as isRecordFromParser,
+} from './services/valueParsers';
+import {
   formatFarmLabel as formatFarmLabelFromLogic,
   getFarmCraftingSummaryLabel as getFarmCraftingSummaryLabelFromLogic,
   getFarmFeedbackLabel as getFarmFeedbackLabelFromLogic,
@@ -124,7 +139,12 @@ import {
   normalizeGameplayIntroPayload as normalizeGameplayIntroPayloadFromIntro,
 } from './features/intro/introLogic';
 import {
+  buildDebugQaMarkdownFilename as buildDebugQaMarkdownFilenameFromDebugQa,
+  buildDebugQaMarkdownReport as buildDebugQaMarkdownReportFromDebugQa,
+  buildDebugQaTraceFilename as buildDebugQaTraceFilenameFromDebugQa,
   doesCombatStateMatchRecapFilters as doesCombatStateMatchRecapFiltersFromDebugQa,
+  downloadJsonFile as downloadJsonFileFromDebugQa,
+  downloadTextFile as downloadTextFileFromDebugQa,
   filterCombatDebugReference as filterCombatDebugReferenceFromDebugQa,
   formatApplyStatePresetSuccess as formatApplyStatePresetSuccessFromDebugQa,
   formatCombatDebugScriptedIntentsReference as formatCombatDebugScriptedIntentsReferenceFromDebugQa,
@@ -7964,114 +7984,34 @@ export class GameScene extends Phaser.Scene {
   }
 
   private buildDebugQaMarkdownReport(timestamp: string): string {
-    const lines: string[] = [];
-    const recapEnemyFilter = this.debugQaRecapEnemyFilter.trim();
-    const scriptEnemyFilter = this.debugQaScriptEnemyFilter.trim();
-    const scriptIntentFilter = this.debugQaScriptIntentFilter.trim();
-    const recapMatchesFilters = this.doesCombatStateMatchRecapFilters(this.combatState);
-
-    lines.push('# Farm RPG QA Recap');
-    lines.push('');
-    lines.push(`Generated at: ${timestamp}`);
-    lines.push(`Mode: ${import.meta.env.MODE}`);
-    lines.push(`URL: ${window.location.href}`);
-    lines.push('');
-    lines.push('## Active Filters');
-    lines.push(`- Recap outcome: ${this.debugQaRecapOutcomeFilter}`);
-    lines.push(`- Recap enemy query: ${recapEnemyFilter || '(none)'}`);
-    lines.push(`- Script enemy query: ${scriptEnemyFilter || '(none)'}`);
-    lines.push(`- Script intent query: ${scriptIntentFilter || '(none)'}`);
-    lines.push('');
-    lines.push('## Combat Recap');
-
-    if (!this.combatState) {
-      lines.push('- No encounter available in HUD.');
-    } else if (!recapMatchesFilters) {
-      lines.push('- Current encounter is filtered out by recap filters.');
-      lines.push(`- Current enemy: ${this.combatState.enemy.name} [${this.combatState.enemy.key}]`);
-      lines.push(`- Current status: ${this.combatState.status}`);
-    } else {
-      lines.push(`- Encounter: ${this.combatState.id}`);
-      lines.push(`- Enemy: ${this.combatState.enemy.name} [${this.combatState.enemy.key}]`);
-      lines.push(`- Outcome: ${this.combatState.status}`);
-      lines.push(`- Round: ${this.combatState.round}`);
-
-      if (this.combatState.recap) {
-        const recap = this.combatState.recap;
-        lines.push(`- Damage dealt/taken: ${recap.damageDealt}/${recap.damageTaken}`);
-        lines.push(`- Healing done: ${recap.healingDone}`);
-        lines.push(`- MP spent/recovered: ${recap.mpSpent}/${recap.mpRecovered}`);
-        lines.push(
-          `- Status applied: Poison ${recap.poisonApplied}, Cecite ${recap.ceciteApplied}, Obscurite ${recap.obscuriteApplied}`,
-        );
-        lines.push(`- Debuffs cleansed: ${recap.debuffsCleansed}`);
-        lines.push(`- Blind misses: ${recap.blindMisses}`);
-        lines.push(
-          `- Rewards: XP ${recap.rewards.experience}, Gold ${recap.rewards.gold}, Loot items ${recap.rewards.lootItems}`,
-        );
-        lines.push(`- Penalties: Gold lost ${recap.penalties.goldLost}, Items lost ${recap.penalties.itemsLost}`);
-      } else {
-        lines.push('- Recap payload unavailable (encounter still active or recap pending).');
-      }
-    }
-
-    lines.push('');
-    lines.push('### Combat Logs (last 20)');
-    if (this.combatLogs.length === 0) {
-      lines.push('- No logs captured.');
-    } else {
-      for (const logLine of this.combatLogs.slice(-20)) {
-        lines.push(`- ${logLine}`);
-      }
-    }
-
-    lines.push('');
-    lines.push('## Combat Scripted Intents');
-    if (!this.debugQaScriptedIntentsReference) {
-      lines.push('- Scripted intents reference is not loaded yet.');
-      lines.push('- Use "Load reference" in Debug QA then export again for detailed scripted intents.');
-      return lines.join('\n');
-    }
-
-    const filteredReference = this.filterCombatDebugReference(this.debugQaScriptedIntentsReference);
-    lines.push(
-      `- Filtered scripted profiles: ${filteredReference.scriptedIntents.length}/${this.debugQaScriptedIntentsReference.scriptedIntents.length}`,
-    );
-    lines.push('');
-    lines.push('```text');
-    lines.push(this.formatCombatDebugScriptedIntentsReference(filteredReference));
-    lines.push('```');
-    return lines.join('\n');
+    return buildDebugQaMarkdownReportFromDebugQa({
+      timestamp,
+      mode: import.meta.env.MODE,
+      url: window.location.href,
+      recapOutcomeFilter: this.debugQaRecapOutcomeFilter,
+      recapEnemyFilter: this.debugQaRecapEnemyFilter,
+      scriptEnemyFilter: this.debugQaScriptEnemyFilter,
+      scriptIntentFilter: this.debugQaScriptIntentFilter,
+      combatState: this.combatState,
+      combatLogs: this.combatLogs,
+      debugQaScriptedIntentsReference: this.debugQaScriptedIntentsReference,
+    });
   }
 
   private buildDebugQaTraceFilename(timestamp: string): string {
-    const safeTimestamp = timestamp.replace(/[:.]/g, '-');
-    return `farm-rpg-qa-trace-${safeTimestamp}.json`;
+    return buildDebugQaTraceFilenameFromDebugQa(timestamp);
   }
 
   private buildDebugQaMarkdownFilename(timestamp: string): string {
-    const safeTimestamp = timestamp.replace(/[:.]/g, '-');
-    return `farm-rpg-qa-recap-${safeTimestamp}.md`;
+    return buildDebugQaMarkdownFilenameFromDebugQa(timestamp);
   }
 
   private downloadJsonFile(filename: string, payload: unknown): void {
-    this.downloadTextFile(filename, JSON.stringify(payload, null, 2), 'application/json;charset=utf-8');
+    downloadJsonFileFromDebugQa(filename, payload);
   }
 
   private downloadTextFile(filename: string, contents: string, contentType = 'text/plain;charset=utf-8'): void {
-    const blob = new Blob([contents], { type: contentType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.rel = 'noopener';
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 0);
+    downloadTextFileFromDebugQa(filename, contents, contentType);
   }
 
   private async handleDebugQaAction(action: DebugQaActionName): Promise<void> {
@@ -8565,79 +8505,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async fetchJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const headers = new Headers(init.headers);
-    headers.set('Accept', 'application/json');
-
-    if (init.body !== undefined && !headers.has('Content-Type')) {
-      headers.set('Content-Type', 'application/json');
-    }
-
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      ...init,
-      headers,
-      credentials: 'include',
-    });
-
-    const rawBody = await response.text();
-    const payload = rawBody.length > 0 ? this.safeParseJson(rawBody) : null;
-
-    if (!response.ok) {
-      const message = this.getPayloadMessage(payload) ?? `Request failed (${response.status})`;
-      throw new Error(message);
-    }
-
-    return payload as T;
-  }
-
-  private safeParseJson(rawBody: string): unknown {
-    try {
-      return JSON.parse(rawBody) as unknown;
-    } catch {
-      return rawBody;
-    }
-  }
-
-  private getPayloadMessage(payload: unknown): string | null {
-    if (typeof payload === 'string' && payload.trim().length > 0) {
-      return payload.trim();
-    }
-
-    if (!this.isRecord(payload)) {
-      return null;
-    }
-
-    const message = payload.message;
-    if (typeof message === 'string' && message.trim().length > 0) {
-      return message.trim();
-    }
-
-    if (Array.isArray(message)) {
-      const parts = message
-        .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
-        .map((entry) => entry.trim());
-      if (parts.length > 0) {
-        return parts.join(', ');
-      }
-    }
-
-    const error = payload.error;
-    if (typeof error === 'string' && error.trim().length > 0) {
-      return error.trim();
-    }
-
-    return null;
+    return fetchJsonFromApi<T>(path, init);
   }
 
   private getErrorMessage(error: unknown, fallback: string): string {
-    if (error instanceof Error && error.message.trim().length > 0) {
-      return error.message;
-    }
-
-    if (typeof error === 'string' && error.trim().length > 0) {
-      return error.trim();
-    }
-
-    return fallback;
+    return formatRequestErrorFromApi(error, fallback);
   }
 
   private getGameplayPayloadParsers(): GameplayPayloadParsers<CombatStatus, CombatTurn, QuestStatus> {
@@ -8706,61 +8578,39 @@ export class GameScene extends Phaser.Scene {
   }
 
   private asRecord(value: unknown): Record<string, unknown> | null {
-    return this.isRecord(value) ? value : null;
+    return asRecordFromParser(value);
   }
 
   private isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null;
+    return isRecordFromParser(value);
   }
 
   private asString(value: unknown): string | null {
-    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+    return asStringFromParser(value);
   }
 
   private asStringArray(value: unknown): string[] {
-    if (!Array.isArray(value)) {
-      return [];
-    }
-
-    return value
-      .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
-      .map((entry) => entry.trim());
+    return asStringArrayFromParser(value);
   }
 
   private asNumber(value: unknown): number | null {
-    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+    return asNumberFromParser(value);
   }
 
   private asCombatUiStatus(value: unknown): CombatUiStatus | null {
-    if (value === 'idle' || value === 'loading' || value === 'error') {
-      return value;
-    }
-
-    return this.asCombatStatus(value);
+    return asCombatUiStatusFromParser(value);
   }
 
   private asCombatStatus(value: unknown): CombatStatus | null {
-    if (value === 'active' || value === 'won' || value === 'lost' || value === 'fled') {
-      return value;
-    }
-
-    return null;
+    return asCombatStatusFromParser(value);
   }
 
   private asQuestStatus(value: unknown): QuestStatus | null {
-    if (value === 'active' || value === 'completed' || value === 'claimed') {
-      return value;
-    }
-
-    return null;
+    return asQuestStatusFromParser(value);
   }
 
   private asCombatTurn(value: unknown): CombatTurn | null {
-    if (value === 'player' || value === 'enemy') {
-      return value;
-    }
-
-    return null;
+    return asCombatTurnFromParser(value);
   }
 
   private formatIsoForHud(value: string): string {
