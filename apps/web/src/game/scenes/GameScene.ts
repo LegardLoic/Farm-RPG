@@ -1,16 +1,10 @@
 ﻿import Phaser from 'phaser';
 import { API_BASE_URL } from '../../config/env';
 import {
-  FARM_LABEL_OVERRIDES,
-  FARM_PLOT_LAYOUT_FALLBACK,
-  FARM_SCENE_COL_STEP,
-  FARM_SCENE_ORIGIN_X,
-  FARM_SCENE_ORIGIN_Y,
   FARM_SCENE_PLAYER_SPAWN,
-  FARM_SCENE_ROW_STEP,
   VILLAGE_SCENE_PLAYER_SPAWN,
   VILLAGE_SCENE_ZONES,
-} from './game/frontSceneConfig';
+} from './game/gameScene.constants';
 import type {
   BlacksmithOfferState,
   ForgeShopCategoryKey,
@@ -24,11 +18,52 @@ import type {
   VillageShopTabKey,
   VillageShopTabOption,
   VillageShopType,
-} from './game/frontSceneConfig';
+} from './game/gameScene.types';
 import {
+  type FarmCraftIngredientState,
+  type FarmCraftRecipeState,
+  type FarmCraftingState,
+  type FarmCropCatalogEntryState,
+  type FarmPlotState,
+  type FarmState,
+  type FarmStoryEventState,
+  type FarmStoryState,
+  type GameplayLoopState,
+  type TowerStoryEventState,
+  type TowerStoryState,
   normalizeBlacksmithPayload as parseBlacksmithPayload,
+  normalizeFarmCraftIngredientState as parseFarmCraftIngredientState,
+  normalizeFarmCraftRecipeState as parseFarmCraftRecipeState,
+  normalizeFarmCropCatalogEntry as parseFarmCropCatalogEntry,
+  normalizeFarmPlotState as parseFarmPlotState,
+  normalizeFarmStoryEventEntry as parseFarmStoryEventEntry,
+  normalizeGameplayCraftingPayload as parseGameplayCraftingPayload,
+  normalizeGameplayFarmPayload as parseGameplayFarmPayload,
+  normalizeGameplayFarmStoryPayload as parseGameplayFarmStoryPayload,
+  normalizeGameplayLoopPayload as parseGameplayLoopPayload,
+  normalizeGameplayTowerStoryPayload as parseGameplayTowerStoryPayload,
+  normalizeTowerStoryEventEntry as parseTowerStoryEventEntry,
   normalizeVillageMarketPayload as parseVillageMarketPayload,
-} from './game/shopNormalizers';
+} from './game/services/payloadNormalizers';
+import {
+  formatFarmLabel as formatFarmLabelFromLogic,
+  getFarmCraftingSummaryLabel as getFarmCraftingSummaryLabelFromLogic,
+  getFarmFeedbackLabel as getFarmFeedbackLabelFromLogic,
+  getFarmPlotByKey as getFarmPlotByKeyFromLogic,
+  getFarmPlotPhase as getFarmPlotPhaseFromLogic,
+  getFarmPlotPhaseLabel as getFarmPlotPhaseLabelFromLogic,
+  getFarmPlotStatusLabel as getFarmPlotStatusLabelFromLogic,
+  getFarmReadyPlotsLabel as getFarmReadyPlotsLabelFromLogic,
+  getFarmScenePlotPalette as getFarmScenePlotPaletteFromLogic,
+  getFarmScenePlotPosition as getFarmScenePlotPositionFromLogic,
+  getFarmSceneSlots as getFarmSceneSlotsFromLogic,
+  getFarmSlotByKey as getFarmSlotByKeyFromLogic,
+  getFarmStoryNarrativeLabel as getFarmStoryNarrativeLabelFromLogic,
+  getFarmStorySummaryLabel as getFarmStorySummaryLabelFromLogic,
+  getFarmSummaryLabel as getFarmSummaryLabelFromLogic,
+  getSelectedSeedLabel as getSelectedSeedLabelFromLogic,
+  resolveSelectedFarmPlotKey as resolveSelectedFarmPlotKeyFromLogic,
+} from './game/features/farm/farmLogic';
 import {
   buildVillageShopEntries as buildVillageShopEntriesFromLogic,
   computeVillageShopRenderSignature as computeVillageShopRenderSignatureFromLogic,
@@ -42,7 +77,7 @@ import {
   getVillageShopTabs as getVillageShopTabsFromLogic,
   getVillageShopTalkButtonLabel as getVillageShopTalkButtonLabelFromLogic,
   selectVillageShopEntry as selectVillageShopEntryFromLogic,
-} from './game/villageShopLogic';
+} from './game/features/shops/villageShopLogic';
 import {
   formatVillageNpcStateLabel as formatVillageNpcStateLabelFromLogic,
   formatVillageRelationshipTierLabel as formatVillageRelationshipTierLabelFromLogic,
@@ -61,7 +96,7 @@ import {
   getVillageZoneInteractionState as getVillageZoneInteractionStateFromLogic,
   getVillageZoneStateColor as getVillageZoneStateColorFromLogic,
   getVillageZoneStateLabel as getVillageZoneStateLabelFromLogic,
-} from './game/villageLogic';
+} from './game/features/village/villageLogic';
 
 type HudState = {
   day: number;
@@ -362,38 +397,6 @@ type QuestState = {
   objectives: QuestObjectiveState[];
 };
 
-type FarmCropCatalogEntryState = {
-  cropKey: string;
-  seedItemKey: string;
-  harvestItemKey: string;
-  growthDays: number;
-  requiredFlags: string[];
-  unlocked: boolean;
-};
-
-type FarmPlotState = {
-  plotKey: string;
-  row: number;
-  col: number;
-  cropKey: string | null;
-  plantedDay: number | null;
-  growthDays: number | null;
-  wateredToday: boolean;
-  growthProgressDays: number;
-  daysToMaturity: number | null;
-  readyToHarvest: boolean;
-};
-
-type FarmState = {
-  unlocked: boolean;
-  totalPlots: number;
-  plantedPlots: number;
-  wateredPlots: number;
-  readyPlots: number;
-  cropCatalog: FarmCropCatalogEntryState[];
-  plots: FarmPlotState[];
-};
-
 type FarmPlotPhase = 'empty' | 'planted' | 'watered' | 'ready';
 
 type FarmScenePlotSlot = {
@@ -410,100 +413,6 @@ type FarmScenePlotVisual = {
   crop: Phaser.GameObjects.Rectangle;
   badge: Phaser.GameObjects.Text;
   label: Phaser.GameObjects.Text;
-};
-
-type FarmStoryTriggerType = 'day' | 'harvest_total';
-
-type FarmStoryEventState = {
-  key: string;
-  flagKey: string;
-  triggerType: FarmStoryTriggerType;
-  target: number;
-  progress: number;
-  unlocked: boolean;
-  title: string;
-  narrative: string;
-};
-
-type FarmStoryState = {
-  farmUnlocked: boolean;
-  day: number;
-  harvestTotal: number;
-  unlockedEvents: number;
-  totalEvents: number;
-  activeEventKey: string | null;
-  activeEventTitle: string;
-  activeEventNarrative: string;
-  events: FarmStoryEventState[];
-};
-
-type TowerStoryEventState = {
-  key: string;
-  milestoneFloor: number;
-  milestoneFlagKey: string;
-  reportFlagKey: string;
-  reached: boolean;
-  reported: boolean;
-  title: string;
-  narrative: string;
-};
-
-type TowerStoryState = {
-  highestFloor: number;
-  reachedEvents: number;
-  reportedEvents: number;
-  totalEvents: number;
-  activeEventKey: string | null;
-  activeEventTitle: string;
-  activeEventNarrative: string;
-  events: TowerStoryEventState[];
-};
-
-type FarmCraftIngredientState = {
-  itemKey: string;
-  requiredQuantity: number;
-  ownedQuantity: number;
-};
-
-type FarmCraftRecipeState = {
-  recipeKey: string;
-  name: string;
-  description: string;
-  outputItemKey: string;
-  outputQuantity: number;
-  requiredFlags: string[];
-  unlocked: boolean;
-  ingredients: FarmCraftIngredientState[];
-  maxCraftable: number;
-};
-
-type FarmCraftingState = {
-  unlocked: boolean;
-  recipes: FarmCraftRecipeState[];
-  craftableRecipes: number;
-};
-
-type LoopPreparationState = {
-  active: boolean;
-  hpBoostActive: boolean;
-  mpBoostActive: boolean;
-  attackBoostActive: boolean;
-  ready: boolean;
-  blockers: string[];
-  nextStep: string;
-};
-
-type GameplayLoopState = {
-  stageKey: 'tower_bootstrap' | 'village_sync' | 'farm_scale' | 'combat_mastery';
-  stageLabel: string;
-  farmUnlocked: boolean;
-  villageMarketUnlocked: boolean;
-  supplies: {
-    healingHerb: number;
-    manaTonic: number;
-  };
-  relationshipAverage: number;
-  preparation: LoopPreparationState;
 };
 
 type AutoSaveState = {
@@ -4722,76 +4631,35 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getFarmSummaryLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Connexion requise';
-    }
-
-    if (this.farmBusy && !this.farmState) {
-      return 'Chargement...';
-    }
-
-    if (!this.farmState) {
-      return 'Aucune donnee';
-    }
-
-    if (!this.farmState.unlocked) {
-      return this.farmBusy ? 'Verification debloquage...' : 'Verrouillee';
-    }
-
-    return this.farmBusy
-      ? 'Mise a jour...'
-      : `Pretes ${this.farmState.readyPlots} | Plantees ${this.farmState.plantedPlots}/${this.farmState.totalPlots}`;
+    return getFarmSummaryLabelFromLogic({
+      isAuthenticated: this.isAuthenticated,
+      farmBusy: this.farmBusy,
+      farmState: this.farmState,
+    });
   }
 
   private getFarmStorySummaryLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Scenario ferme: connexion requise';
-    }
-
-    if (!this.farmStoryState) {
-      return this.farmBusy ? 'Scenario ferme: chargement...' : 'Scenario ferme: aucune donnee';
-    }
-
-    const story = this.farmStoryState;
-    const progressLabel = `${story.unlockedEvents}/${story.totalEvents} etapes`;
-    return `Scenario ferme | ${progressLabel} | Jour ${story.day} | Recoltes ${story.harvestTotal}`;
+    return getFarmStorySummaryLabelFromLogic({
+      isAuthenticated: this.isAuthenticated,
+      farmBusy: this.farmBusy,
+      farmStoryState: this.farmStoryState,
+    });
   }
 
   private getFarmStoryNarrativeLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Connecte toi pour suivre les beats narratifs lies au rythme de ferme.';
-    }
-
-    if (!this.farmStoryState) {
-      return this.farmBusy
-        ? 'Synchronisation du scenario ferme en cours...'
-        : 'Aucun beat narratif ferme charge.';
-    }
-
-    return `${this.farmStoryState.activeEventTitle}: ${this.farmStoryState.activeEventNarrative}`;
+    return getFarmStoryNarrativeLabelFromLogic({
+      isAuthenticated: this.isAuthenticated,
+      farmBusy: this.farmBusy,
+      farmStoryState: this.farmStoryState,
+    });
   }
 
   private getFarmCraftingSummaryLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Connexion requise';
-    }
-
-    if (this.farmCraftingBusy && !this.farmCraftingState) {
-      return 'Chargement...';
-    }
-
-    if (!this.farmCraftingState) {
-      return 'Aucune donnee';
-    }
-
-    if (!this.farmCraftingState.unlocked) {
-      return this.farmCraftingBusy ? 'Verification debloquage...' : 'Verrouille';
-    }
-
-    const unlockedRecipes = this.farmCraftingState.recipes.filter((recipe) => recipe.unlocked).length;
-    return this.farmCraftingBusy
-      ? 'Mise a jour...'
-      : `${this.farmCraftingState.craftableRecipes} craftables | ${unlockedRecipes} recettes`;
+    return getFarmCraftingSummaryLabelFromLogic({
+      isAuthenticated: this.isAuthenticated,
+      farmCraftingBusy: this.farmCraftingBusy,
+      farmCraftingState: this.farmCraftingState,
+    });
   }
 
   private getLoopSummaryLabel(): string {
@@ -4884,36 +4752,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getFarmPlotStatusLabel(plot: FarmPlotState): string {
-    if (!plot.cropKey) {
-      return 'Parcelle vide. Selectionne une graine puis plante.';
-    }
-
-    const cropLabel = this.formatFarmLabel(plot.cropKey);
-    const progress = `${Math.max(0, plot.growthProgressDays)}/${Math.max(1, plot.growthDays ?? 1)}j`;
-    const waterLabel = plot.wateredToday ? 'Arrosee aujourd hui' : 'A arroser';
-    const maturityLabel = plot.readyToHarvest
-      ? 'Prete a recolter'
-      : `Maturite: ${Math.max(0, plot.daysToMaturity ?? 0)}j`;
-
-    return `${cropLabel} | Croissance ${progress} | ${waterLabel} | ${maturityLabel}`;
+    return getFarmPlotStatusLabelFromLogic(plot);
   }
 
   private formatFarmLabel(raw: string): string {
-    const value = raw.trim().toLowerCase();
-    if (value.length === 0) {
-      return '-';
-    }
-
-    const override = FARM_LABEL_OVERRIDES[value];
-    if (override) {
-      return override;
-    }
-
-    return value
-      .split('_')
-      .filter((part) => part.length > 0)
-      .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
-      .join(' ');
+    return formatFarmLabelFromLogic(raw);
   }
 
   private getAutoSaveSummaryLabel(): string {
@@ -9387,427 +9230,91 @@ export class GameScene extends Phaser.Scene {
   }
 
   private normalizeGameplayFarmStoryPayload(payload: unknown): FarmStoryState | null {
-    const root = this.asRecord(payload);
-    if (!root) {
-      return null;
-    }
-
-    const storyRecord = this.asRecord(root.farmStory) ?? this.asRecord(root.farm_story) ?? null;
-    if (!storyRecord) {
-      return null;
-    }
-
-    const day = this.asNumber(storyRecord.day);
-    const harvestTotal = this.asNumber(storyRecord.harvestTotal);
-    const unlockedEvents = this.asNumber(storyRecord.unlockedEvents);
-    const totalEvents = this.asNumber(storyRecord.totalEvents);
-    const activeEventKeyRaw = this.asString(storyRecord.activeEventKey);
-    const activeEventTitle = this.asString(storyRecord.activeEventTitle);
-    const activeEventNarrative = this.asString(storyRecord.activeEventNarrative);
-    const eventsRaw = Array.isArray(storyRecord.events) ? storyRecord.events : null;
-
-    if (
-      day === null ||
-      harvestTotal === null ||
-      unlockedEvents === null ||
-      totalEvents === null ||
-      !activeEventTitle ||
-      !activeEventNarrative ||
-      !eventsRaw
-    ) {
-      return null;
-    }
-
-    const events = eventsRaw
-      .map((entry) => this.normalizeFarmStoryEventEntry(entry))
-      .filter((entry): entry is FarmStoryEventState => entry !== null);
-
-    return {
-      farmUnlocked: Boolean(storyRecord.farmUnlocked),
-      day: Math.max(1, Math.round(day)),
-      harvestTotal: Math.max(0, Math.round(harvestTotal)),
-      unlockedEvents: Math.max(0, Math.round(unlockedEvents)),
-      totalEvents: Math.max(0, Math.round(totalEvents)),
-      activeEventKey: activeEventKeyRaw ? activeEventKeyRaw : null,
-      activeEventTitle,
-      activeEventNarrative,
-      events,
-    };
+    return parseGameplayFarmStoryPayload(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asNumber: (value) => this.asNumber(value),
+    }) as FarmStoryState | null;
   }
 
   private normalizeFarmStoryEventEntry(payload: unknown): FarmStoryEventState | null {
-    const record = this.asRecord(payload);
-    if (!record) {
-      return null;
-    }
-
-    const key = this.asString(record.key);
-    const flagKey = this.asString(record.flagKey);
-    const triggerTypeRaw = this.asString(record.triggerType)?.trim().toLowerCase();
-    const target = this.asNumber(record.target);
-    const progress = this.asNumber(record.progress);
-    const title = this.asString(record.title);
-    const narrative = this.asString(record.narrative);
-
-    if (
-      !key ||
-      !flagKey ||
-      !triggerTypeRaw ||
-      (triggerTypeRaw !== 'day' && triggerTypeRaw !== 'harvest_total') ||
-      target === null ||
-      progress === null ||
-      !title ||
-      !narrative
-    ) {
-      return null;
-    }
-
-    return {
-      key,
-      flagKey,
-      triggerType: triggerTypeRaw,
-      target: Math.max(1, Math.round(target)),
-      progress: Math.max(0, Math.round(progress)),
-      unlocked: Boolean(record.unlocked),
-      title,
-      narrative,
-    };
+    return parseFarmStoryEventEntry(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asNumber: (value) => this.asNumber(value),
+    }) as FarmStoryEventState | null;
   }
 
   private normalizeGameplayTowerStoryPayload(payload: unknown): TowerStoryState | null {
-    const root = this.asRecord(payload);
-    if (!root) {
-      return null;
-    }
-
-    const storyRecord = this.asRecord(root.towerStory) ?? this.asRecord(root.tower_story) ?? null;
-    if (!storyRecord) {
-      return null;
-    }
-
-    const highestFloor = this.asNumber(storyRecord.highestFloor);
-    const reachedEvents = this.asNumber(storyRecord.reachedEvents);
-    const reportedEvents = this.asNumber(storyRecord.reportedEvents);
-    const totalEvents = this.asNumber(storyRecord.totalEvents);
-    const activeEventKeyRaw = this.asString(storyRecord.activeEventKey);
-    const activeEventTitle = this.asString(storyRecord.activeEventTitle);
-    const activeEventNarrative = this.asString(storyRecord.activeEventNarrative);
-    const eventsRaw = Array.isArray(storyRecord.events) ? storyRecord.events : null;
-    if (
-      highestFloor === null ||
-      reachedEvents === null ||
-      reportedEvents === null ||
-      totalEvents === null ||
-      !activeEventTitle ||
-      !activeEventNarrative ||
-      !eventsRaw
-    ) {
-      return null;
-    }
-
-    const events = eventsRaw
-      .map((entry) => this.normalizeTowerStoryEventEntry(entry))
-      .filter((entry): entry is TowerStoryEventState => entry !== null);
-
-    return {
-      highestFloor: Math.max(1, Math.round(highestFloor)),
-      reachedEvents: Math.max(0, Math.round(reachedEvents)),
-      reportedEvents: Math.max(0, Math.round(reportedEvents)),
-      totalEvents: Math.max(0, Math.round(totalEvents)),
-      activeEventKey: activeEventKeyRaw ? activeEventKeyRaw : null,
-      activeEventTitle,
-      activeEventNarrative,
-      events,
-    };
+    return parseGameplayTowerStoryPayload(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asNumber: (value) => this.asNumber(value),
+    }) as TowerStoryState | null;
   }
 
   private normalizeTowerStoryEventEntry(payload: unknown): TowerStoryEventState | null {
-    const record = this.asRecord(payload);
-    if (!record) {
-      return null;
-    }
-
-    const key = this.asString(record.key);
-    const milestoneFloor = this.asNumber(record.milestoneFloor);
-    const milestoneFlagKey = this.asString(record.milestoneFlagKey);
-    const reportFlagKey = this.asString(record.reportFlagKey);
-    const title = this.asString(record.title);
-    const narrative = this.asString(record.narrative);
-    if (!key || milestoneFloor === null || !milestoneFlagKey || !reportFlagKey || !title || !narrative) {
-      return null;
-    }
-
-    return {
-      key,
-      milestoneFloor: Math.max(1, Math.round(milestoneFloor)),
-      milestoneFlagKey,
-      reportFlagKey,
-      reached: Boolean(record.reached),
-      reported: Boolean(record.reported),
-      title,
-      narrative,
-    };
+    return parseTowerStoryEventEntry(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asNumber: (value) => this.asNumber(value),
+    }) as TowerStoryEventState | null;
   }
 
   private normalizeGameplayFarmPayload(payload: unknown): FarmState | null {
-    const root = this.asRecord(payload);
-    if (!root) {
-      return null;
-    }
-
-    const farmRecord = this.asRecord(root.farm) ?? root;
-    const totalPlots = this.asNumber(farmRecord.totalPlots);
-    const plantedPlots = this.asNumber(farmRecord.plantedPlots);
-    const wateredPlots = this.asNumber(farmRecord.wateredPlots);
-    const readyPlots = this.asNumber(farmRecord.readyPlots);
-    const cropCatalogRaw = Array.isArray(farmRecord.cropCatalog) ? farmRecord.cropCatalog : null;
-    const plotsRaw = Array.isArray(farmRecord.plots) ? farmRecord.plots : null;
-
-    if (
-      totalPlots === null ||
-      plantedPlots === null ||
-      wateredPlots === null ||
-      readyPlots === null ||
-      !cropCatalogRaw ||
-      !plotsRaw
-    ) {
-      return null;
-    }
-
-    const cropCatalog = cropCatalogRaw
-      .map((entry) => this.normalizeFarmCropCatalogEntry(entry))
-      .filter((entry): entry is FarmCropCatalogEntryState => entry !== null);
-    const plots = plotsRaw
-      .map((entry) => this.normalizeFarmPlotState(entry))
-      .filter((entry): entry is FarmPlotState => entry !== null)
-      .sort((left, right) => left.row - right.row || left.col - right.col || left.plotKey.localeCompare(right.plotKey));
-
-    return {
-      unlocked: Boolean(farmRecord.unlocked),
-      totalPlots: Math.max(0, Math.round(totalPlots)),
-      plantedPlots: Math.max(0, Math.round(plantedPlots)),
-      wateredPlots: Math.max(0, Math.round(wateredPlots)),
-      readyPlots: Math.max(0, Math.round(readyPlots)),
-      cropCatalog,
-      plots,
-    };
+    return parseGameplayFarmPayload(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asNumber: (value) => this.asNumber(value),
+    }) as FarmState | null;
   }
 
   private normalizeGameplayCraftingPayload(payload: unknown): FarmCraftingState | null {
-    const root = this.asRecord(payload);
-    if (!root) {
-      return null;
-    }
-
-    const craftingRecord = this.asRecord(root.crafting) ?? root;
-    const recipesRaw = Array.isArray(craftingRecord.recipes) ? craftingRecord.recipes : null;
-    const craftableRecipes = this.asNumber(craftingRecord.craftableRecipes);
-    if (!recipesRaw || craftableRecipes === null) {
-      return null;
-    }
-
-    const recipes = recipesRaw
-      .map((entry) => this.normalizeFarmCraftRecipeState(entry))
-      .filter((entry): entry is FarmCraftRecipeState => entry !== null);
-
-    return {
-      unlocked: Boolean(craftingRecord.unlocked),
-      craftableRecipes: Math.max(0, Math.round(craftableRecipes)),
-      recipes,
-    };
+    return parseGameplayCraftingPayload(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asNumber: (value) => this.asNumber(value),
+    }) as FarmCraftingState | null;
   }
 
   private normalizeGameplayLoopPayload(payload: unknown): GameplayLoopState | null {
-    const root = this.asRecord(payload);
-    if (!root) {
-      return null;
-    }
-
-    const loopRecord = this.asRecord(root.loop) ?? root;
-    const stageKeyRaw = this.asString(loopRecord.stageKey)?.trim().toLowerCase();
-    const stageLabel = this.asString(loopRecord.stageLabel)?.trim();
-    const relationshipAverageRaw = this.asNumber(loopRecord.relationshipAverage);
-    const supplies = this.asRecord(loopRecord.supplies);
-    const preparation = this.asRecord(loopRecord.preparation);
-
-    if (
-      !stageKeyRaw ||
-      (stageKeyRaw !== 'tower_bootstrap' &&
-        stageKeyRaw !== 'village_sync' &&
-        stageKeyRaw !== 'farm_scale' &&
-        stageKeyRaw !== 'combat_mastery') ||
-      !stageLabel ||
-      relationshipAverageRaw === null ||
-      !supplies ||
-      !preparation
-    ) {
-      return null;
-    }
-
-    const healingHerb = this.asNumber(supplies.healingHerb);
-    const manaTonic = this.asNumber(supplies.manaTonic);
-    const nextStep = this.asString(preparation.nextStep)?.trim();
-    if (healingHerb === null || manaTonic === null || !nextStep) {
-      return null;
-    }
-
-    const blockers = Array.isArray(preparation.blockers)
-      ? preparation.blockers
-          .map((entry) => this.asString(entry)?.trim() ?? '')
-          .filter((entry) => entry.length > 0)
-      : [];
-
-    return {
-      stageKey: stageKeyRaw,
-      stageLabel,
-      farmUnlocked: Boolean(loopRecord.farmUnlocked),
-      villageMarketUnlocked: Boolean(loopRecord.villageMarketUnlocked),
-      relationshipAverage: Number(relationshipAverageRaw.toFixed(2)),
-      supplies: {
-        healingHerb: Math.max(0, Math.round(healingHerb)),
-        manaTonic: Math.max(0, Math.round(manaTonic)),
-      },
-      preparation: {
-        active: Boolean(preparation.active),
-        hpBoostActive: Boolean(preparation.hpBoostActive),
-        mpBoostActive: Boolean(preparation.mpBoostActive),
-        attackBoostActive: Boolean(preparation.attackBoostActive),
-        ready: Boolean(preparation.ready),
-        blockers,
-        nextStep,
-      },
-    };
+    return parseGameplayLoopPayload(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asNumber: (value) => this.asNumber(value),
+    }) as GameplayLoopState | null;
   }
 
   private normalizeFarmCraftRecipeState(payload: unknown): FarmCraftRecipeState | null {
-    const record = this.asRecord(payload);
-    if (!record) {
-      return null;
-    }
-
-    const recipeKey = this.asString(record.recipeKey);
-    const name = this.asString(record.name);
-    const description = this.asString(record.description);
-    const outputItemKey = this.asString(record.outputItemKey);
-    const outputQuantity = this.asNumber(record.outputQuantity);
-    const maxCraftable = this.asNumber(record.maxCraftable);
-    const requiredFlags = Array.isArray(record.requiredFlags)
-      ? record.requiredFlags
-          .map((entry) => this.asString(entry))
-          .filter((entry): entry is string => entry !== null)
-      : [];
-    const ingredientsRaw = Array.isArray(record.ingredients) ? record.ingredients : null;
-
-    if (
-      !recipeKey ||
-      !name ||
-      !description ||
-      !outputItemKey ||
-      outputQuantity === null ||
-      maxCraftable === null ||
-      !ingredientsRaw
-    ) {
-      return null;
-    }
-
-    const ingredients = ingredientsRaw
-      .map((entry) => this.normalizeFarmCraftIngredientState(entry))
-      .filter((entry): entry is FarmCraftIngredientState => entry !== null);
-
-    return {
-      recipeKey,
-      name,
-      description,
-      outputItemKey,
-      outputQuantity: Math.max(1, Math.round(outputQuantity)),
-      requiredFlags,
-      unlocked: Boolean(record.unlocked),
-      ingredients,
-      maxCraftable: Math.max(0, Math.round(maxCraftable)),
-    };
+    return parseFarmCraftRecipeState(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asNumber: (value) => this.asNumber(value),
+    }) as FarmCraftRecipeState | null;
   }
 
   private normalizeFarmCraftIngredientState(payload: unknown): FarmCraftIngredientState | null {
-    const record = this.asRecord(payload);
-    if (!record) {
-      return null;
-    }
-
-    const itemKey = this.asString(record.itemKey);
-    const requiredQuantity = this.asNumber(record.requiredQuantity);
-    const ownedQuantity = this.asNumber(record.ownedQuantity);
-    if (!itemKey || requiredQuantity === null || ownedQuantity === null) {
-      return null;
-    }
-
-    return {
-      itemKey,
-      requiredQuantity: Math.max(1, Math.round(requiredQuantity)),
-      ownedQuantity: Math.max(0, Math.round(ownedQuantity)),
-    };
+    return parseFarmCraftIngredientState(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asNumber: (value) => this.asNumber(value),
+    }) as FarmCraftIngredientState | null;
   }
 
   private normalizeFarmCropCatalogEntry(payload: unknown): FarmCropCatalogEntryState | null {
-    const record = this.asRecord(payload);
-    if (!record) {
-      return null;
-    }
-
-    const cropKey = this.asString(record.cropKey);
-    const seedItemKey = this.asString(record.seedItemKey);
-    const harvestItemKey = this.asString(record.harvestItemKey);
-    const growthDays = this.asNumber(record.growthDays);
-    const requiredFlags = Array.isArray(record.requiredFlags)
-      ? record.requiredFlags
-          .map((entry) => this.asString(entry))
-          .filter((entry): entry is string => entry !== null)
-      : [];
-
-    if (!cropKey || !seedItemKey || !harvestItemKey || growthDays === null) {
-      return null;
-    }
-
-    return {
-      cropKey,
-      seedItemKey,
-      harvestItemKey,
-      growthDays: Math.max(1, Math.round(growthDays)),
-      requiredFlags,
-      unlocked: Boolean(record.unlocked),
-    };
+    return parseFarmCropCatalogEntry(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asNumber: (value) => this.asNumber(value),
+    }) as FarmCropCatalogEntryState | null;
   }
 
   private normalizeFarmPlotState(payload: unknown): FarmPlotState | null {
-    const record = this.asRecord(payload);
-    if (!record) {
-      return null;
-    }
-
-    const plotKey = this.asString(record.plotKey);
-    const row = this.asNumber(record.row);
-    const col = this.asNumber(record.col);
-    const cropKey = this.asString(record.cropKey);
-    const plantedDay = this.asNumber(record.plantedDay);
-    const growthDays = this.asNumber(record.growthDays);
-    const growthProgressDays = this.asNumber(record.growthProgressDays);
-    const daysToMaturity = this.asNumber(record.daysToMaturity);
-
-    if (!plotKey || row === null || col === null || growthProgressDays === null) {
-      return null;
-    }
-
-    return {
-      plotKey,
-      row: Math.max(1, Math.round(row)),
-      col: Math.max(1, Math.round(col)),
-      cropKey: cropKey ?? null,
-      plantedDay: plantedDay === null ? null : Math.max(1, Math.round(plantedDay)),
-      growthDays: growthDays === null ? null : Math.max(1, Math.round(growthDays)),
-      wateredToday: Boolean(record.wateredToday),
-      growthProgressDays: Math.max(0, Math.round(growthProgressDays)),
-      daysToMaturity: daysToMaturity === null ? null : Math.max(0, Math.round(daysToMaturity)),
-      readyToHarvest: Boolean(record.readyToHarvest),
-    };
+    return parseFarmPlotState(payload, {
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asNumber: (value) => this.asNumber(value),
+    }) as FarmPlotState | null;
   }
 
   private async fetchJson<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -11142,104 +10649,27 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getFarmSceneSlots(): FarmScenePlotSlot[] {
-    const farm = this.farmState;
-    const byPlotKey = new Map<string, FarmPlotState>();
-    if (farm) {
-      for (const plot of farm.plots) {
-        byPlotKey.set(plot.plotKey, plot);
-      }
-    }
-
-    const slots = FARM_PLOT_LAYOUT_FALLBACK.map<FarmScenePlotSlot>((entry) => ({
-      plotKey: entry.plotKey,
-      row: entry.row,
-      col: entry.col,
-      plot: byPlotKey.get(entry.plotKey) ?? null,
-    }));
-
-    if (farm && farm.plots.length > 0) {
-      for (const plot of farm.plots) {
-        if (!slots.some((entry) => entry.plotKey === plot.plotKey)) {
-          slots.push({
-            plotKey: plot.plotKey,
-            row: plot.row,
-            col: plot.col,
-            plot,
-          });
-        }
-      }
-    }
-
-    slots.sort((left, right) => left.row - right.row || left.col - right.col || left.plotKey.localeCompare(right.plotKey));
-    return slots;
+    return getFarmSceneSlotsFromLogic(this.farmState) as FarmScenePlotSlot[];
   }
 
   private getFarmScenePlotPosition(slot: FarmScenePlotSlot): { x: number; y: number } {
-    return {
-      x: FARM_SCENE_ORIGIN_X + (slot.col - 1) * FARM_SCENE_COL_STEP,
-      y: FARM_SCENE_ORIGIN_Y + (slot.row - 1) * FARM_SCENE_ROW_STEP,
-    };
+    return getFarmScenePlotPositionFromLogic(slot);
   }
 
   private getFarmScenePlotPalette(
     phase: FarmPlotPhase,
     selected: boolean,
   ): { frame: number; bed: number; crop: number; badge: string } {
-    if (phase === 'ready') {
-      return {
-        frame: selected ? 0x7f6b2f : 0x6d5a2a,
-        bed: 0x78602f,
-        crop: 0xd8c37a,
-        badge: '#ffeab6',
-      };
-    }
-
-    if (phase === 'watered') {
-      return {
-        frame: selected ? 0x375f71 : 0x2f4f5d,
-        bed: 0x4d5f4f,
-        crop: 0x6eb0d4,
-        badge: '#cdeeff',
-      };
-    }
-
-    if (phase === 'planted') {
-      return {
-        frame: selected ? 0x44602f : 0x3b532a,
-        bed: 0x5f4f2f,
-        crop: 0x73ad57,
-        badge: '#d2efc2',
-      };
-    }
-
-    return {
-      frame: selected ? 0x5e4a31 : 0x493824,
-      bed: 0x6c5234,
-      crop: 0x503c29,
-      badge: '#c5d0de',
-    };
+    return getFarmScenePlotPaletteFromLogic(phase, selected);
   }
 
   private ensureSelectedFarmPlot(): void {
     const slots = this.getFarmSceneSlots();
-    if (slots.length === 0) {
-      this.farmSelectedPlotKey = null;
-      return;
-    }
-
-    if (this.farmSelectedPlotKey && slots.some((slot) => slot.plotKey === this.farmSelectedPlotKey)) {
-      return;
-    }
-
-    const preferred =
-      slots.find((slot) => slot.plot?.readyToHarvest) ??
-      slots.find((slot) => slot.plot && !slot.plot.cropKey) ??
-      slots[0];
-    this.farmSelectedPlotKey = preferred ? preferred.plotKey : null;
+    this.farmSelectedPlotKey = resolveSelectedFarmPlotKeyFromLogic(slots, this.farmSelectedPlotKey);
   }
 
   private setSelectedFarmPlot(plotKey: string, announceSelection: boolean): void {
-    const slot = this.getFarmSceneSlots().find((entry) => entry.plotKey === plotKey);
+    const slot = getFarmSlotByKeyFromLogic(this.getFarmSceneSlots(), plotKey);
     if (!slot) {
       return;
     }
@@ -11253,58 +10683,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getFarmPlotByKey(plotKey: string | null): FarmPlotState | null {
-    if (!plotKey || !this.farmState) {
-      return null;
-    }
-
-    return this.farmState.plots.find((plot) => plot.plotKey === plotKey) ?? null;
+    return getFarmPlotByKeyFromLogic(plotKey, this.farmState) as FarmPlotState | null;
   }
 
   private getFarmPlotPhase(plot: FarmPlotState | null): FarmPlotPhase {
-    if (!plot || !plot.cropKey) {
-      return 'empty';
-    }
-
-    if (plot.readyToHarvest) {
-      return 'ready';
-    }
-
-    if (plot.wateredToday) {
-      return 'watered';
-    }
-
-    return 'planted';
+    return getFarmPlotPhaseFromLogic(plot);
   }
 
   private getFarmPlotPhaseLabel(plot: FarmPlotState | null): string {
-    const phase = this.getFarmPlotPhase(plot);
-    if (phase === 'ready') {
-      return 'Prete';
-    }
-    if (phase === 'watered') {
-      return 'Arrosee';
-    }
-    if (phase === 'planted') {
-      return 'Plantee';
-    }
-    return 'Vide';
+    return getFarmPlotPhaseLabelFromLogic(plot);
   }
 
   private getSelectedSeedLabel(): string {
-    if (!this.farmSelectedSeedItemKey) {
-      return 'Aucune';
-    }
-
-    return this.formatFarmLabel(this.farmSelectedSeedItemKey);
+    return getSelectedSeedLabelFromLogic(this.farmSelectedSeedItemKey);
   }
 
   private getFarmReadyPlotsLabel(): string {
-    const farm = this.farmState;
-    if (!farm || !farm.unlocked) {
-      return 'Ferme verrouillee';
-    }
-
-    return `${farm.readyPlots} pretes / ${farm.totalPlots}`;
+    return getFarmReadyPlotsLabelFromLogic(this.farmState);
   }
 
   private updateFarmContextPanel(): void {
@@ -11376,28 +10771,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getFarmFeedbackLabel(): string {
-    if (this.farmError) {
-      return this.farmError;
-    }
-    if (this.farmCraftingError) {
-      return this.farmCraftingError;
-    }
-    if (this.farmBusy) {
-      return 'Action en cours sur la ferme...';
-    }
-    if (this.farmCraftingBusy) {
-      return 'Craft en cours...';
-    }
-    if (this.farmFeedbackMessage) {
-      return this.farmFeedbackMessage;
-    }
-    if (!this.isAuthenticated) {
-      return 'Connecte-toi pour activer la ferme.';
-    }
-    if (!this.farmState?.unlocked) {
-      return 'Passe l intro avec le maire pour debloquer la ferme.';
-    }
-    return 'Clique une parcelle, puis choisis Planter, Arroser ou Recolter.';
+    return getFarmFeedbackLabelFromLogic({
+      farmError: this.farmError,
+      farmCraftingError: this.farmCraftingError,
+      farmBusy: this.farmBusy,
+      farmCraftingBusy: this.farmCraftingBusy,
+      farmFeedbackMessage: this.farmFeedbackMessage,
+      isAuthenticated: this.isAuthenticated,
+      farmUnlocked: Boolean(this.farmState?.unlocked),
+    });
   }
 
   private toggleFarmCraftingPanel(): void {

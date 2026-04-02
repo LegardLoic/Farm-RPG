@@ -1,7 +1,7 @@
 ﻿import {
   VILLAGE_FORGE_SHOP_TABS,
   VILLAGE_MARKET_SHOP_TABS,
-} from './frontSceneConfig';
+} from '../../gameScene.constants';
 import type {
   BlacksmithOfferState,
   ForgeShopCategoryKey,
@@ -12,7 +12,7 @@ import type {
   VillageShopTabKey,
   VillageShopTabOption,
   VillageShopType,
-} from './frontSceneConfig';
+} from '../../gameScene.types';
 
 export function getVillageShopTabs(shopType: VillageShopType): VillageShopTabOption[] {
   return shopType === 'market' ? VILLAGE_MARKET_SHOP_TABS : VILLAGE_FORGE_SHOP_TABS;
@@ -290,3 +290,4 @@ export function computeVillageShopRenderSignature(input: {
     entryParts.join(';'),
   ].join('|');
 }
+

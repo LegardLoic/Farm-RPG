@@ -1,4 +1,4 @@
-import type { FrontSceneMode, VillageSceneZoneConfig, VillageShopType } from './frontSceneConfig';
+﻿import type { FrontSceneMode, VillageSceneZoneConfig, VillageShopType } from '../../gameScene.types';
 
 export type VillageNpcKey = 'mayor' | 'blacksmith' | 'merchant';
 export type VillageNpcRelationshipTier = 'stranger' | 'familiar' | 'trusted' | 'ally';
@@ -470,3 +470,4 @@ export function getVillageSecondaryDialogue(input: { isAuthenticated: boolean; t
 
   return 'Habitante: "On tient encore. Merci de revenir nous parler entre deux expeditions."';
 }
+
