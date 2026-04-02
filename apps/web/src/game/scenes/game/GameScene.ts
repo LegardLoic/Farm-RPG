@@ -187,6 +187,8 @@ import {
 import {
   renderAutoSaveActions as renderAutoSaveActionsFromFeature,
   renderSaveSlotsList as renderSaveSlotsListFromFeature,
+  updateAutoSaveHud as updateAutoSaveHudFromFeature,
+  updateSaveSlotsHud as updateSaveSlotsHudFromFeature,
 } from './features/saves/saveHudRenderer';
 import {
   computeAutoSaveRenderSignature as computeAutoSaveRenderSignatureFromFeature,
@@ -2116,32 +2118,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateAutoSaveHud(): void {
-    if (this.autosaveSummaryValue) {
-      this.autosaveSummaryValue.textContent = this.getAutoSaveSummaryLabel();
-    }
-
-    if (this.autosaveMetaValue) {
-      this.autosaveMetaValue.textContent = this.getAutoSaveMetaLabel();
-    }
-
-    if (this.autosaveErrorValue) {
-      this.autosaveErrorValue.hidden = !this.autosaveError;
-      this.autosaveErrorValue.textContent = this.autosaveError ?? '';
-    }
-
+    updateAutoSaveHudFromFeature({
+      summaryLabel: this.getAutoSaveSummaryLabel(),
+      metaLabel: this.getAutoSaveMetaLabel(),
+      autosaveError: this.autosaveError,
+      summaryValue: this.autosaveSummaryValue,
+      metaValue: this.autosaveMetaValue,
+      errorValue: this.autosaveErrorValue,
+    });
     this.renderAutoSaveActions();
   }
 
   private updateSaveSlotsHud(): void {
-    if (this.saveSlotsSummaryValue) {
-      this.saveSlotsSummaryValue.textContent = this.getSaveSlotsSummaryLabel();
-    }
-
-    if (this.saveSlotsErrorValue) {
-      this.saveSlotsErrorValue.hidden = !this.saveSlotsError;
-      this.saveSlotsErrorValue.textContent = this.saveSlotsError ?? '';
-    }
-
+    updateSaveSlotsHudFromFeature({
+      summaryLabel: this.getSaveSlotsSummaryLabel(),
+      saveSlotsError: this.saveSlotsError,
+      summaryValue: this.saveSlotsSummaryValue,
+      errorValue: this.saveSlotsErrorValue,
+    });
     this.renderSaveSlotsList();
   }
 

@@ -1,5 +1,43 @@
 import type { SaveSlotState } from '../../gameScene.stateTypes';
 
+export function updateAutoSaveHud(params: {
+  summaryLabel: string;
+  metaLabel: string;
+  autosaveError: string | null;
+  summaryValue: HTMLElement | null;
+  metaValue: HTMLElement | null;
+  errorValue: HTMLElement | null;
+}): void {
+  if (params.summaryValue) {
+    params.summaryValue.textContent = params.summaryLabel;
+  }
+
+  if (params.metaValue) {
+    params.metaValue.textContent = params.metaLabel;
+  }
+
+  if (params.errorValue) {
+    params.errorValue.hidden = !params.autosaveError;
+    params.errorValue.textContent = params.autosaveError ?? '';
+  }
+}
+
+export function updateSaveSlotsHud(params: {
+  summaryLabel: string;
+  saveSlotsError: string | null;
+  summaryValue: HTMLElement | null;
+  errorValue: HTMLElement | null;
+}): void {
+  if (params.summaryValue) {
+    params.summaryValue.textContent = params.summaryLabel;
+  }
+
+  if (params.errorValue) {
+    params.errorValue.hidden = !params.saveSlotsError;
+    params.errorValue.textContent = params.saveSlotsError ?? '';
+  }
+}
+
 export function renderAutoSaveActions(params: {
   root: HTMLElement;
   isAuthenticated: boolean;
