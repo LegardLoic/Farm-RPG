@@ -8,8 +8,6 @@ import {
   FARM_SCENE_ORIGIN_Y,
   FARM_SCENE_PLAYER_SPAWN,
   FARM_SCENE_ROW_STEP,
-  VILLAGE_FORGE_SHOP_TABS,
-  VILLAGE_MARKET_SHOP_TABS,
   VILLAGE_SCENE_PLAYER_SPAWN,
   VILLAGE_SCENE_ZONES,
 } from './game/frontSceneConfig';
@@ -31,6 +29,20 @@ import {
   normalizeBlacksmithPayload as parseBlacksmithPayload,
   normalizeVillageMarketPayload as parseVillageMarketPayload,
 } from './game/shopNormalizers';
+import {
+  buildVillageShopEntries as buildVillageShopEntriesFromLogic,
+  computeVillageShopRenderSignature as computeVillageShopRenderSignatureFromLogic,
+  getForgeCategoryLabel as getForgeCategoryLabelFromLogic,
+  getForgeComparisonLabel as getForgeComparisonLabelFromLogic,
+  getForgeOfferCategory as getForgeOfferCategoryFromLogic,
+  getForgeRecommendedTier as getForgeRecommendedTierFromLogic,
+  getForgeTierLabel as getForgeTierLabelFromLogic,
+  getVillageShopActiveError as getVillageShopActiveErrorFromLogic,
+  getVillageShopSummaryLabel as getVillageShopSummaryLabelFromLogic,
+  getVillageShopTabs as getVillageShopTabsFromLogic,
+  getVillageShopTalkButtonLabel as getVillageShopTalkButtonLabelFromLogic,
+  selectVillageShopEntry as selectVillageShopEntryFromLogic,
+} from './game/villageShopLogic';
 import {
   formatVillageNpcStateLabel as formatVillageNpcStateLabelFromLogic,
   formatVillageRelationshipTierLabel as formatVillageRelationshipTierLabelFromLogic,
@@ -2934,101 +2946,29 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getVillageShopTabs(): VillageShopTabOption[] {
-    return this.villageShopType === 'market' ? VILLAGE_MARKET_SHOP_TABS : VILLAGE_FORGE_SHOP_TABS;
+    return getVillageShopTabsFromLogic(this.villageShopType);
   }
 
   private getVillageShopEntries(): VillageShopPanelEntry[] {
-    if (this.villageShopType === 'market') {
-      if (this.villageShopTab === 'sell') {
-        return this.villageMarketBuybackOffers.map((offer) => ({
-          entryKey: `market-sell:${offer.itemKey}`,
-          source: 'market-sell',
-          name: offer.name,
-          description: offer.description,
-          priceValue: offer.goldValue,
-          priceLabel: `+${offer.goldValue} po`,
-          actionLabel: `Vendre x1 (+${offer.goldValue} po)`,
-          canTransact: this.villageMarketUnlocked && !this.villageMarketBusy && offer.ownedQuantity > 0,
-          offerKey: null,
-          itemKey: offer.itemKey,
-          ownedQuantity: offer.ownedQuantity,
-          usageLabel: 'Recolte vendable au comptoir du village.',
-          detailMeta: `Recolte • Stock ${offer.ownedQuantity} • Vente ${offer.goldValue} po`,
-          comparisonLabel: offer.ownedQuantity > 0
-            ? 'Transaction immediate: conversion en or sans menu supplementaire.'
-            : 'Stock vide: retourne a la ferme pour recolter.',
-          badgeLabel: `Stock ${offer.ownedQuantity}`,
-        }));
-      }
-
-      return this.villageMarketSeedOffers.map((offer) => ({
-        entryKey: `market-buy:${offer.offerKey}`,
-        source: 'market-buy',
-        name: offer.name,
-        description: offer.description,
-        priceValue: offer.goldPrice,
-        priceLabel: `${offer.goldPrice} po`,
-        actionLabel: `Acheter x1 (${offer.goldPrice} po)`,
-        canTransact: this.villageMarketUnlocked && !this.villageMarketBusy && this.hudState.gold >= offer.goldPrice,
-        offerKey: offer.offerKey,
-        itemKey: offer.itemKey,
-        ownedQuantity: null,
-        usageLabel: 'Graine a planter sur une parcelle de ferme.',
-        detailMeta: `Graine • Cout ${offer.goldPrice} po`,
-        comparisonLabel: this.hudState.gold >= offer.goldPrice
-          ? 'Accessible maintenant: achat direct puis retour a la ferme.'
-          : 'Or insuffisant: vends des recoltes ou progresse en Tour.',
-        badgeLabel: this.hudState.gold >= offer.goldPrice ? 'Disponible' : 'Hors budget',
-      }));
-    }
-
-    const category = this.villageShopTab === 'armors' || this.villageShopTab === 'accessories'
-      ? this.villageShopTab
-      : 'weapons';
-    const recommendedTier = this.getForgeRecommendedTier();
-
-    return this.blacksmithOffers
-      .filter((offer) => this.getForgeOfferCategory(offer) === category)
-      .sort((left, right) => left.tier - right.tier || left.goldPrice - right.goldPrice || left.name.localeCompare(right.name))
-      .map((offer) => ({
-        entryKey: `forge:${offer.offerKey}`,
-        source: 'forge',
-        name: offer.name,
-        description: offer.description,
-        priceValue: offer.goldPrice,
-        priceLabel: `${offer.goldPrice} po`,
-        actionLabel: `Acheter (${offer.goldPrice} po)`,
-        canTransact: this.hudState.blacksmithUnlocked && !this.blacksmithBusy && this.hudState.gold >= offer.goldPrice,
-        offerKey: offer.offerKey,
-        itemKey: offer.itemKey,
-        ownedQuantity: null,
-        usageLabel: `${this.getForgeCategoryLabel(category)} de ${this.getForgeTierLabel(offer.tier)}.`,
-        detailMeta: `${this.getForgeCategoryLabel(category)} • ${this.getForgeTierLabel(offer.tier)} • ${offer.goldPrice} po`,
-        comparisonLabel: this.getForgeComparisonLabel(offer),
-        badgeLabel: offer.tier > recommendedTier
-          ? `${this.getForgeTierLabel(offer.tier)} • Exigeant`
-          : offer.tier < recommendedTier
-            ? `${this.getForgeTierLabel(offer.tier)} • Stable`
-            : `${this.getForgeTierLabel(offer.tier)} • Aligne`,
-      }));
+    return buildVillageShopEntriesFromLogic({
+      villageShopType: this.villageShopType,
+      villageShopTab: this.villageShopTab,
+      villageMarketBuybackOffers: this.villageMarketBuybackOffers,
+      villageMarketSeedOffers: this.villageMarketSeedOffers,
+      villageMarketUnlocked: this.villageMarketUnlocked,
+      villageMarketBusy: this.villageMarketBusy,
+      hudGold: this.hudState.gold,
+      blacksmithOffers: this.blacksmithOffers,
+      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+      blacksmithBusy: this.blacksmithBusy,
+      towerHighestFloor: this.hudState.towerHighestFloor,
+    });
   }
 
   private getVillageShopSelectedEntry(entries: VillageShopPanelEntry[]): VillageShopPanelEntry | null {
-    if (entries.length === 0) {
-      this.villageShopSelectedEntryKey = null;
-      return null;
-    }
-
-    const selected = this.villageShopSelectedEntryKey
-      ? entries.find((entry) => entry.entryKey === this.villageShopSelectedEntryKey) ?? null
-      : null;
-    if (selected) {
-      return selected;
-    }
-
-    const first = entries[0] ?? null;
-    this.villageShopSelectedEntryKey = first?.entryKey ?? null;
-    return first;
+    const result = selectVillageShopEntryFromLogic(entries, this.villageShopSelectedEntryKey);
+    this.villageShopSelectedEntryKey = result.selectedEntryKey;
+    return result.selectedEntry;
   }
 
   private computeVillageShopRenderSignature(
@@ -3036,27 +2976,22 @@ export class GameScene extends Phaser.Scene {
     entries: VillageShopPanelEntry[],
     selectedEntry: VillageShopPanelEntry | null,
   ): string {
-    const tabParts = tabs.map((tab) => `${tab.key}:${tab.label}`);
-    const entryParts = entries.map((entry) => (
-      `${entry.entryKey}:${entry.priceValue}:${entry.canTransact ? '1' : '0'}:${entry.ownedQuantity ?? '-'}:${entry.badgeLabel}`
-    ));
-
-    return [
-      this.frontSceneMode,
-      this.villageShopPanelOpen ? '1' : '0',
-      this.villageShopType,
-      this.villageShopTab,
-      this.villageShopSelectedEntryKey ?? '',
-      this.isAuthenticated ? '1' : '0',
-      this.hudState.gold,
-      this.blacksmithBusy ? '1' : '0',
-      this.villageMarketBusy ? '1' : '0',
-      this.villageNpcBusy ? '1' : '0',
-      this.getVillageShopActiveError() ?? '',
-      selectedEntry?.entryKey ?? '',
-      tabParts.join(','),
-      entryParts.join(';'),
-    ].join('|');
+    return computeVillageShopRenderSignatureFromLogic({
+      frontSceneMode: this.frontSceneMode,
+      villageShopPanelOpen: this.villageShopPanelOpen,
+      villageShopType: this.villageShopType,
+      villageShopTab: this.villageShopTab,
+      villageShopSelectedEntryKey: this.villageShopSelectedEntryKey,
+      isAuthenticated: this.isAuthenticated,
+      hudGold: this.hudState.gold,
+      blacksmithBusy: this.blacksmithBusy,
+      villageMarketBusy: this.villageMarketBusy,
+      villageNpcBusy: this.villageNpcBusy,
+      activeError: this.getVillageShopActiveError(),
+      selectedEntryKey: selectedEntry?.entryKey ?? null,
+      tabs,
+      entries,
+    });
   }
 
   private renderVillageShopTabs(tabs: VillageShopTabOption[]): void {
@@ -3213,100 +3148,53 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getVillageShopSummaryLabel(): string {
-    if (!this.isAuthenticated) {
-      return 'Connexion requise pour utiliser ce shop.';
-    }
-
-    if (this.villageShopType === 'market') {
-      if (!this.villageMarketUnlocked) {
-        return 'Marche en reprise: quelques echanges restent verrouilles.';
-      }
-      if (this.villageMarketBusy) {
-        return 'Synchronisation des etals en cours...';
-      }
-      return `${this.villageMarketSeedOffers.length} graines a l achat • ${this.villageMarketBuybackOffers.length} recoltes en rachat`;
-    }
-
-    if (!this.hudState.blacksmithUnlocked) {
-      return this.hudState.blacksmithCurseLifted
-        ? 'Forge en reprise: catalogue limite.'
-        : 'Forge entravee: progression de Tour requise.';
-    }
-    if (this.blacksmithBusy) {
-      return 'Forgeron en train de trier les offres...';
-    }
-    return `${this.blacksmithOffers.length} offres de forge • lecture par categories`;
+    return getVillageShopSummaryLabelFromLogic({
+      isAuthenticated: this.isAuthenticated,
+      villageShopType: this.villageShopType,
+      villageMarketUnlocked: this.villageMarketUnlocked,
+      villageMarketBusy: this.villageMarketBusy,
+      villageMarketSeedOffersCount: this.villageMarketSeedOffers.length,
+      villageMarketBuybackOffersCount: this.villageMarketBuybackOffers.length,
+      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+      blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+      blacksmithBusy: this.blacksmithBusy,
+      blacksmithOffersCount: this.blacksmithOffers.length,
+    });
   }
 
   private getVillageShopActiveError(): string | null {
-    return this.villageShopType === 'market' ? this.villageMarketError : this.blacksmithError;
+    return getVillageShopActiveErrorFromLogic(this.villageShopType, this.villageMarketError, this.blacksmithError);
   }
 
   private getVillageShopTalkButtonLabel(npcKey: VillageNpcKey): string {
-    if (this.villageNpcBusy) {
-      return 'Parler...';
-    }
-    if (!this.isAuthenticated) {
-      return 'Connexion requise';
-    }
     const npc = this.villageNpcState[npcKey];
-    if (!npc.available) {
-      return 'Indispo';
-    }
     const relation = this.villageNpcRelationships[npcKey];
-    return relation.canTalkToday ? 'Parler' : 'Deja vu';
+    return getVillageShopTalkButtonLabelFromLogic({
+      villageNpcBusy: this.villageNpcBusy,
+      isAuthenticated: this.isAuthenticated,
+      npcAvailable: npc.available,
+      canTalkToday: relation.canTalkToday,
+    });
   }
 
   private getForgeOfferCategory(offer: BlacksmithOfferState): ForgeShopCategoryKey {
-    const key = `${offer.offerKey} ${offer.itemKey}`.toLowerCase();
-    if (/(sword|dagger|hammer|shield|blade|staff|axe|bow|spear|lance|focus)/.test(key)) {
-      return 'weapons';
-    }
-    if (/(armor|armour|chest|helm|helmet|leg|boot|glove|gauntlet|plate|leather)/.test(key)) {
-      return 'armors';
-    }
-    return 'accessories';
+    return getForgeOfferCategoryFromLogic(offer);
   }
 
   private getForgeCategoryLabel(category: ForgeShopCategoryKey): string {
-    if (category === 'weapons') {
-      return 'Arme';
-    }
-    if (category === 'armors') {
-      return 'Armure';
-    }
-    return 'Accessoire';
+    return getForgeCategoryLabelFromLogic(category);
   }
 
   private getForgeTierLabel(tier: number): string {
-    if (tier >= 3) {
-      return 'Palier III';
-    }
-    if (tier === 2) {
-      return 'Palier II';
-    }
-    return 'Palier I';
+    return getForgeTierLabelFromLogic(tier);
   }
 
   private getForgeRecommendedTier(): 1 | 2 | 3 {
-    if (this.hudState.towerHighestFloor >= 8) {
-      return 3;
-    }
-    if (this.hudState.towerHighestFloor >= 5) {
-      return 2;
-    }
-    return 1;
+    return getForgeRecommendedTierFromLogic(this.hudState.towerHighestFloor);
   }
 
   private getForgeComparisonLabel(offer: BlacksmithOfferState): string {
-    const recommended = this.getForgeRecommendedTier();
-    if (offer.tier > recommended) {
-      return `Comparaison simple: ${this.getForgeTierLabel(offer.tier)} au-dessus du palier conseille (${this.getForgeTierLabel(recommended)}).`;
-    }
-    if (offer.tier < recommended) {
-      return `Comparaison simple: ${this.getForgeTierLabel(offer.tier)} plus conservateur que ton palier conseille (${this.getForgeTierLabel(recommended)}).`;
-    }
-    return `Comparaison simple: ${this.getForgeTierLabel(offer.tier)} aligne avec ton palier conseille actuel.`;
+    return getForgeComparisonLabelFromLogic(offer, this.hudState.towerHighestFloor);
   }
 
   private async handleVillageShopPrimaryAction(): Promise<void> {
