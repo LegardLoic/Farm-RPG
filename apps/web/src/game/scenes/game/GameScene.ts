@@ -1,10 +1,10 @@
 ﻿import Phaser from 'phaser';
-import { API_BASE_URL } from '../../config/env';
+import { API_BASE_URL } from '../../../config/env';
 import {
   FARM_SCENE_PLAYER_SPAWN,
   VILLAGE_SCENE_PLAYER_SPAWN,
   VILLAGE_SCENE_ZONES,
-} from './game/gameScene.constants';
+} from './gameScene.constants';
 import type {
   BlacksmithOfferState,
   ForgeShopCategoryKey,
@@ -18,7 +18,7 @@ import type {
   VillageShopTabKey,
   VillageShopTabOption,
   VillageShopType,
-} from './game/gameScene.types';
+} from './gameScene.types';
 import {
   type FarmCraftIngredientState,
   type FarmCraftRecipeState,
@@ -44,7 +44,16 @@ import {
   normalizeGameplayTowerStoryPayload as parseGameplayTowerStoryPayload,
   normalizeTowerStoryEventEntry as parseTowerStoryEventEntry,
   normalizeVillageMarketPayload as parseVillageMarketPayload,
-} from './game/services/payloadNormalizers';
+} from './services/payloadNormalizers';
+import {
+  type GameplayPayloadParsers,
+  parseAutoSavePayload as parseAutoSavePayloadFromService,
+  parseCombatPayload as parseCombatPayloadFromService,
+  parseHeroProfilePayload as parseHeroProfilePayloadFromService,
+  parseQuestsPayload as parseQuestsPayloadFromService,
+  parseSaveSlotPreviewPayload as parseSaveSlotPreviewPayloadFromService,
+  parseSaveSlotsPayload as parseSaveSlotsPayloadFromService,
+} from './services/gameplayPayloadParsers';
 import {
   formatFarmLabel as formatFarmLabelFromLogic,
   getFarmCraftingSummaryLabel as getFarmCraftingSummaryLabelFromLogic,
@@ -63,7 +72,7 @@ import {
   getFarmSummaryLabel as getFarmSummaryLabelFromLogic,
   getSelectedSeedLabel as getSelectedSeedLabelFromLogic,
   resolveSelectedFarmPlotKey as resolveSelectedFarmPlotKeyFromLogic,
-} from './game/features/farm/farmLogic';
+} from './features/farm/farmLogic';
 import {
   buildVillageShopEntries as buildVillageShopEntriesFromLogic,
   computeVillageShopRenderSignature as computeVillageShopRenderSignatureFromLogic,
@@ -77,7 +86,7 @@ import {
   getVillageShopTabs as getVillageShopTabsFromLogic,
   getVillageShopTalkButtonLabel as getVillageShopTalkButtonLabelFromLogic,
   selectVillageShopEntry as selectVillageShopEntryFromLogic,
-} from './game/features/shops/villageShopLogic';
+} from './features/shops/villageShopLogic';
 import {
   formatVillageNpcStateLabel as formatVillageNpcStateLabelFromLogic,
   formatVillageRelationshipTierLabel as formatVillageRelationshipTierLabelFromLogic,
@@ -96,130 +105,55 @@ import {
   getVillageZoneInteractionState as getVillageZoneInteractionStateFromLogic,
   getVillageZoneStateColor as getVillageZoneStateColorFromLogic,
   getVillageZoneStateLabel as getVillageZoneStateLabelFromLogic,
-} from './game/features/village/villageLogic';
+} from './features/village/villageLogic';
+import type {
+  AutoSaveState,
+  CombatActionName,
+  CombatDebugReference,
+  CombatEffectChip,
+  CombatEncounterState,
+  CombatStatus,
+  CombatTurn,
+  CombatUiStatus,
+  DebugLoadoutPresetKey,
+  DebugQaActionName,
+  DebugQaPresetOption,
+  DebugQaRecapOutcomeFilter,
+  DebugQaReplayAutoPlaySpeedKey,
+  DebugQaReplayBaseline,
+  DebugQaStatus,
+  DebugQaStepReplayState,
+  DebugQaTracePayload,
+  DebugStatePresetKey,
+  FarmPlotPhase,
+  FarmScenePlotSlot,
+  FarmScenePlotVisual,
+  HeroAppearanceKey,
+  HeroProfileState,
+  HudState,
+  HudStripPlaybackState,
+  ImportedDebugQaTrace,
+  IntroNarrativeState,
+  IntroNarrativeStepKey,
+  QuestState,
+  QuestStatus,
+  SaveSlotPreview,
+  SaveSlotState,
+  SpriteManifest,
+  SpriteManifestPortraitEntry,
+  SpriteManifestPortraitState,
+  SpriteManifestStripEntry,
+  StripAnimationName,
+  StripCalibrationPreset,
+  StripCalibrationPresetKey,
+  VillageNpcHudEntry,
+  VillageNpcHudState,
+  VillageNpcKey,
+  VillageNpcRelationshipHudEntry,
+  VillageNpcRelationshipHudState,
+  VillageNpcRelationshipTier,
+} from './gameScene.stateTypes';
 
-type HudState = {
-  day: number;
-  gold: number;
-  level: number;
-  xp: number;
-  xpToNext: number;
-  towerCurrentFloor: number;
-  towerHighestFloor: number;
-  towerBossFloor10Defeated: boolean;
-  blacksmithUnlocked: boolean;
-  blacksmithCurseLifted: boolean;
-  hp: number;
-  maxHp: number;
-  mp: number;
-  maxMp: number;
-  stamina: number;
-  area: string;
-};
-
-type VillageNpcHudEntry = {
-  stateKey: string;
-  available: boolean;
-};
-
-type VillageNpcRelationshipTier = 'stranger' | 'familiar' | 'trusted' | 'ally';
-type VillageNpcKey = 'mayor' | 'blacksmith' | 'merchant';
-
-type VillageNpcRelationshipHudEntry = {
-  friendship: number;
-  tier: VillageNpcRelationshipTier;
-  lastInteractionDay: number | null;
-  canTalkToday: boolean;
-};
-
-type VillageNpcHudState = {
-  mayor: VillageNpcHudEntry;
-  blacksmith: VillageNpcHudEntry;
-  merchant: VillageNpcHudEntry;
-};
-
-type VillageNpcRelationshipHudState = {
-  mayor: VillageNpcRelationshipHudEntry;
-  blacksmith: VillageNpcRelationshipHudEntry;
-  merchant: VillageNpcRelationshipHudEntry;
-};
-
-type CombatStatus = 'active' | 'won' | 'lost' | 'fled';
-type CombatTurn = 'player' | 'enemy';
-type CombatUiStatus = CombatStatus | 'idle' | 'loading' | 'error';
-type CombatActionName =
-  | 'attack'
-  | 'defend'
-  | 'fireball'
-  | 'rally'
-  | 'sunder'
-  | 'mend'
-  | 'cleanse'
-  | 'interrupt';
-type QuestStatus = 'active' | 'completed' | 'claimed';
-type DebugQaActionName =
-  | 'grant-resources'
-  | 'set-tower-floor'
-  | 'apply-state-preset'
-  | 'apply-loadout-preset'
-  | 'complete-quests'
-  | 'set-world-flags'
-  | 'set-quest-status';
-type DebugLoadoutPresetKey = 'starter' | 'tower_mid' | 'boss_trial';
-type DebugStatePresetKey = 'village_open' | 'mid_tower' | 'act1_done';
-type DebugQaStatus = 'idle' | 'loading' | 'success' | 'error';
-type DebugQaRecapOutcomeFilter = 'all' | CombatStatus;
-type CombatEffectTone = 'neutral' | 'calm' | 'warning' | 'danger' | 'utility';
-type DebugQaReplayAutoPlaySpeedKey = 'slow' | 'normal' | 'fast';
-type StripCalibrationPresetKey = 'manifest' | 'snappy' | 'cinematic';
-
-type CombatDebugPlayerSkillSummary = {
-  key: CombatActionName;
-  label: string;
-  manaCost: number;
-  blockedBySilence: boolean;
-  description: string;
-};
-
-type CombatDebugEnemySummary = {
-  key: string;
-  name: string;
-  hp: number;
-  mp: number;
-  attack: number;
-  defense: number;
-  magicAttack: number;
-  speed: number;
-  scriptedFloor: number | null;
-  scriptedBossEncounter: boolean;
-};
-
-type CombatDebugEnemyIntentSummary = {
-  key: string;
-  label: string;
-  interruptible: boolean;
-  trigger: string;
-};
-
-type CombatDebugEnemyScriptSummary = {
-  enemyKey: string;
-  enemyName: string;
-  scriptedFloor: number | null;
-  scriptedBossEncounter: boolean;
-  intents: CombatDebugEnemyIntentSummary[];
-};
-
-type CombatDebugReference = {
-  playerSkills: CombatDebugPlayerSkillSummary[];
-  enemies: CombatDebugEnemySummary[];
-  scriptedFloors: Array<{
-    floor: number;
-    enemyKey: string;
-    enemyName: string;
-    scriptedBossEncounter: boolean;
-  }>;
-  scriptedIntents: CombatDebugEnemyScriptSummary[];
-};
 
 const FIREBALL_MANA_COST = 5;
 const RALLY_MANA_COST = 3;
@@ -227,364 +161,6 @@ const SUNDER_MANA_COST = 4;
 const MEND_MANA_COST = 3;
 const CLEANSE_MANA_COST = 3;
 const INTERRUPT_MANA_COST = 4;
-
-
-type CombatUnitState = {
-  hp: number;
-  maxHp: number;
-  mp: number;
-  maxMp: number;
-  attack: number;
-  defense: number;
-  magicAttack: number;
-  speed: number;
-  defending: boolean;
-};
-
-type CombatEnemyState = {
-  key: string;
-  name: string;
-  hp: number;
-  mp: number;
-  currentHp: number;
-  currentMp: number;
-  attack: number;
-  defense: number;
-  magicAttack: number;
-  speed: number;
-};
-
-type CombatRewardItem = {
-  itemKey: string;
-  quantity: number;
-  rarity: string;
-  source: string;
-};
-
-type CombatRewardSummary = {
-  experience: number;
-  gold: number;
-  items: CombatRewardItem[];
-  levelBefore: number;
-  levelAfter: number;
-};
-
-type CombatDefeatPenaltySummary = {
-  goldLossPercent: number;
-  goldLost: number;
-  itemsLost: Array<{ itemKey: string; quantity: number }>;
-  respawnZone: string;
-  respawnDay: number;
-  playerHpAfterDefeat: number;
-};
-
-type CombatEncounterRecap = {
-  outcome: CombatStatus;
-  rounds: number;
-  damageDealt: number;
-  damageTaken: number;
-  healingDone: number;
-  mpSpent: number;
-  mpRecovered: number;
-  poisonApplied: number;
-  ceciteApplied: number;
-  obscuriteApplied: number;
-  debuffsCleansed: number;
-  blindMisses: number;
-  rewards: {
-    experience: number;
-    gold: number;
-    lootItems: number;
-  };
-  penalties: {
-    goldLost: number;
-    itemsLost: number;
-  };
-};
-
-type CombatEncounterState = {
-  id: string;
-  status: CombatStatus;
-  turn: CombatTurn;
-  round: number;
-  logs: string[];
-  scriptState?: Record<string, boolean | number | string>;
-  player: CombatUnitState;
-  enemy: CombatEnemyState;
-  lastAction: string | null;
-  rewards?: CombatRewardSummary | null;
-  defeatPenalty?: CombatDefeatPenaltySummary | null;
-  recap?: CombatEncounterRecap | null;
-  createdAt: string | undefined;
-  updatedAt: string | undefined;
-  endedAt: string | null | undefined;
-};
-
-type CombatEffectChip = {
-  label: string;
-  tone: CombatEffectTone;
-};
-
-type SpriteManifest = {
-  frameSize: { width: number; height: number };
-  origin: { x: number; y: number };
-  sprites: Record<string, SpriteManifestSpriteEntry>;
-  strips?: Record<string, SpriteManifestStripEntry>;
-  portraits?: {
-    frameSize?: { width: number; height: number };
-    byEnemyKey?: Record<string, string | SpriteManifestPortraitEntry>;
-    fallback?: string | SpriteManifestPortraitEntry;
-  };
-};
-
-type SpriteManifestPortraitState = 'normal' | 'hit' | 'cast';
-
-type SpriteManifestPortraitEntry = {
-  key?: string;
-  path?: string;
-  states?: Partial<Record<SpriteManifestPortraitState, string>>;
-};
-
-type SpriteManifestSpriteEntry = {
-  key: string;
-  path: string;
-  scale: { x: number; y: number };
-  origin: { x: number; y: number };
-  physics: { width: number; height: number; offsetX: number; offsetY: number };
-};
-
-type SpriteManifestStripEntry = {
-  key: string;
-  path: string;
-  frameSize: { width: number; height: number };
-  frameCount: number;
-  animations?: Record<string, number[]>;
-  timings?: {
-    player?: {
-      idleFps?: number;
-      hitFps?: number;
-      castFps?: number;
-      hitDurationMs?: number;
-      castDurationMs?: number;
-    };
-    hud?: {
-      idleIntervalMs?: number;
-      hitIntervalMs?: number;
-      castIntervalMs?: number;
-      hitDurationMs?: number;
-      castDurationMs?: number;
-    };
-  };
-  scale?: { x: number; y: number };
-  origin?: { x: number; y: number };
-  physics?: { width: number; height: number; offsetX: number; offsetY: number };
-};
-
-type QuestObjectiveState = {
-  key: string;
-  description: string;
-  current: number;
-  target: number;
-  completed: boolean;
-};
-
-type QuestState = {
-  key: string;
-  title: string;
-  description: string;
-  status: QuestStatus;
-  canClaim: boolean;
-  objectives: QuestObjectiveState[];
-};
-
-type FarmPlotPhase = 'empty' | 'planted' | 'watered' | 'ready';
-
-type FarmScenePlotSlot = {
-  plotKey: string;
-  row: number;
-  col: number;
-  plot: FarmPlotState | null;
-};
-
-type FarmScenePlotVisual = {
-  slot: FarmScenePlotSlot;
-  frame: Phaser.GameObjects.Rectangle;
-  bed: Phaser.GameObjects.Rectangle;
-  crop: Phaser.GameObjects.Rectangle;
-  badge: Phaser.GameObjects.Text;
-  label: Phaser.GameObjects.Text;
-};
-
-type AutoSaveState = {
-  version: number;
-  reason: string;
-  updatedAt: string;
-};
-
-type SaveSlotState = {
-  slot: number;
-  exists: boolean;
-  version: number | null;
-  label: string | null;
-  updatedAt: string | null;
-  preview: SaveSlotPreview | null;
-};
-
-type SaveSlotPreview = {
-  playerLevel: number | null;
-  gold: number | null;
-  towerCurrentFloor: number | null;
-  towerHighestFloor: number | null;
-  inventoryTop: Array<{ itemKey: string; quantity: number }>;
-  equipmentTop: Array<{ slot: string; itemKey: string }>;
-  equippedCount: number;
-};
-
-type HeroAppearanceKey = 'default' | 'ember' | 'forest' | 'night';
-
-type HeroProfileState = {
-  heroName: string;
-  appearanceKey: HeroAppearanceKey;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type IntroNarrativeStepKey =
-  | 'arrive_village'
-  | 'meet_mayor'
-  | 'farm_assignment'
-  | 'completed';
-
-type IntroNarrativeState = {
-  currentStep: IntroNarrativeStepKey;
-  completed: boolean;
-  steps: {
-    arriveVillage: boolean;
-    metMayor: boolean;
-    farmAssigned: boolean;
-  };
-};
-
-type DebugQaPresetOption = {
-  key: string;
-  label: string;
-};
-
-type DebugQaTracePayload = {
-  timestamp: string;
-  frontend: {
-    mode: string;
-    dev: boolean;
-    prod: boolean;
-    apiBaseUrl: string;
-    locationHref: string;
-    userAgent: string;
-    viewport: {
-      width: number;
-      height: number;
-    };
-  };
-  auth: {
-    authenticated: boolean;
-    status: string;
-  };
-  hud: {
-    state: HudState;
-    summaries: {
-      combat: string;
-      quests: string;
-      blacksmith: string;
-      autosave: string;
-      saveSlots: string;
-    };
-  };
-  combat: {
-    encounterId: string | null;
-    status: CombatUiStatus;
-    message: string;
-    error: string | null;
-    telemetry: string;
-    logs: string[];
-    state: CombatEncounterState | null;
-  };
-  debugQa: {
-    enabled: boolean;
-    status: DebugQaStatus;
-    busyAction: DebugQaActionName | null;
-    message: string | null;
-    error: string | null;
-    filters: {
-      recapOutcome: DebugQaRecapOutcomeFilter;
-      recapEnemyQuery: string;
-      scriptedEnemyQuery: string;
-      scriptedIntentQuery: string;
-    };
-    scriptedIntentsReference: {
-      loaded: boolean;
-      enemyProfiles: number;
-    };
-    replayAutoPlay: {
-      active: boolean;
-      speed: DebugQaReplayAutoPlaySpeedKey;
-      intervalMs: number;
-    };
-    stripCalibrationPreset: StripCalibrationPresetKey;
-  };
-};
-
-type ImportedDebugQaTrace = {
-  sourceFile: string;
-  timestamp: string;
-  authAuthenticated: boolean | null;
-  authStatus: string | null;
-  hudState: Partial<HudState>;
-  combatEncounterId: string | null;
-  combatStatus: CombatUiStatus | null;
-  combatMessage: string | null;
-  combatError: string | null;
-  combatLogs: string[];
-  combatState: CombatEncounterState | null;
-};
-
-type StripAnimationName = 'idle' | 'hit' | 'cast';
-
-type HudStripPlaybackState = {
-  enemyKey: string;
-  stripKey: string;
-  animation: StripAnimationName;
-  frames: number[];
-  frameCount: number;
-  frameCursor: number;
-};
-
-type DebugQaReplayBaseline = {
-  isAuthenticated: boolean;
-  authStatus: string;
-  hudState: HudState;
-  combatEncounterId: string | null;
-  combatStatus: CombatUiStatus;
-  combatState: CombatEncounterState | null;
-  combatLogs: string[];
-  combatMessage: string;
-  combatError: string | null;
-};
-
-type DebugQaStepReplayState = {
-  logs: string[];
-  stepIndex: number;
-  totalSteps: number;
-  finalTrace: ImportedDebugQaTrace;
-  baseline: DebugQaReplayBaseline;
-};
-
-type StripCalibrationPreset = {
-  key: StripCalibrationPresetKey;
-  label: string;
-  playerFpsMultiplier: number;
-  playerActionDurationMultiplier: number;
-  hudIntervalMultiplier: number;
-  hudActionDurationMultiplier: number;
-};
 
 const DEBUG_QA_PRESET_OPTIONS: DebugQaPresetOption[] = [
   { key: 'starter', label: 'Starter' },
@@ -9393,19 +8969,21 @@ export class GameScene extends Phaser.Scene {
     return fallback;
   }
 
+  private getGameplayPayloadParsers(): GameplayPayloadParsers<CombatStatus, CombatTurn, QuestStatus> {
+    return {
+      isRecord: (value): value is Record<string, unknown> => this.isRecord(value),
+      asRecord: (value) => this.asRecord(value),
+      asString: (value) => this.asString(value),
+      asStringArray: (value) => this.asStringArray(value),
+      asNumber: (value) => this.asNumber(value),
+      asCombatStatus: (value) => this.asCombatStatus(value),
+      asQuestStatus: (value) => this.asQuestStatus(value),
+      asCombatTurn: (value) => this.asCombatTurn(value),
+    };
+  }
+
   private normalizeQuestsPayload(payload: unknown): QuestState[] {
-    if (!this.isRecord(payload)) {
-      return [];
-    }
-
-    const rawQuests = payload.quests;
-    if (!Array.isArray(rawQuests)) {
-      return [];
-    }
-
-    return rawQuests
-      .map((entry) => this.normalizeQuestState(entry))
-      .filter((entry): entry is QuestState => entry !== null);
+    return parseQuestsPayloadFromService(payload, this.getGameplayPayloadParsers());
   }
 
   private normalizeBlacksmithPayload(payload: unknown): { offers: BlacksmithOfferState[] } {
@@ -9429,507 +9007,31 @@ export class GameScene extends Phaser.Scene {
   }
 
   private normalizeSaveSlotsPayload(payload: unknown): SaveSlotState[] {
-    if (!this.isRecord(payload)) {
-      return [];
-    }
-
-    const rawSlots = payload.slots;
-    if (!Array.isArray(rawSlots)) {
-      return [];
-    }
-
-    return rawSlots
-      .map((entry) => this.normalizeSaveSlot(entry))
-      .filter((entry): entry is SaveSlotState => entry !== null)
-      .sort((left, right) => left.slot - right.slot);
+    return parseSaveSlotsPayloadFromService(payload, this.getGameplayPayloadParsers());
   }
 
   private normalizeAutoSavePayload(payload: unknown): AutoSaveState | null {
-    if (!this.isRecord(payload)) {
-      return null;
-    }
-
-    const autosave = this.asRecord(payload.autosave);
-    if (!autosave) {
-      return null;
-    }
-
-    const version = this.asNumber(autosave.version);
-    const reason = this.asString(autosave.reason);
-    const updatedAt = this.asString(autosave.updatedAt);
-
-    if (version === null || !reason || !updatedAt) {
-      return null;
-    }
-
-    return {
-      version: Math.max(1, Math.round(version)),
-      reason,
-      updatedAt,
-    };
+    return parseAutoSavePayloadFromService(payload, this.getGameplayPayloadParsers());
   }
 
   private normalizeHeroProfilePayload(payload: unknown): HeroProfileState | null {
-    if (!this.isRecord(payload)) {
-      return null;
-    }
-
-    const profile = this.asRecord(payload.profile);
-    if (!profile) {
-      return null;
-    }
-
-    const heroName = this.asString(profile.heroName);
-    const appearanceValue = this.asString(profile.appearanceKey);
-    const createdAt = this.asString(profile.createdAt);
-    const updatedAt = this.asString(profile.updatedAt);
-
-    if (!heroName || !appearanceValue || !createdAt || !updatedAt || !isHeroAppearanceKey(appearanceValue)) {
-      return null;
-    }
-
-    return {
-      heroName,
-      appearanceKey: appearanceValue,
-      createdAt,
-      updatedAt,
-    };
-  }
-
-  private normalizeSaveSlot(value: unknown): SaveSlotState | null {
-    if (!this.isRecord(value)) {
-      return null;
-    }
-
-    const slotValue = this.asNumber(value.slot);
-    if (slotValue === null) {
-      return null;
-    }
-
-    const slot = Math.round(slotValue);
-    if (slot < 1 || slot > 3) {
-      return null;
-    }
-
-    const exists = Boolean(value.exists);
-    const versionValue = this.asNumber(value.version);
-    const version = exists && versionValue !== null ? Math.max(1, Math.round(versionValue)) : null;
-    const label = this.asString(value.label);
-    const updatedAt = this.asString(value.updatedAt);
-
-    return {
-      slot,
-      exists,
-      version,
-      label,
-      updatedAt,
-      preview: null,
-    };
+    return parseHeroProfilePayloadFromService(
+      payload,
+      this.getGameplayPayloadParsers(),
+      isHeroAppearanceKey,
+    );
   }
 
   private normalizeSaveSlotPreviewPayload(payload: unknown): SaveSlotPreview | null {
-    if (!this.isRecord(payload)) {
-      return null;
-    }
-
-    const save = this.asRecord(payload.save);
-    if (!save) {
-      return null;
-    }
-
-    const snapshot = this.asRecord(save.snapshot);
-    if (!snapshot) {
-      return null;
-    }
-
-    return this.normalizeSaveSlotPreview(snapshot);
-  }
-
-  private normalizeSaveSlotPreview(snapshot: Record<string, unknown>): SaveSlotPreview | null {
-    const player = this.asRecord(snapshot.player);
-    const tower = this.asRecord(snapshot.tower);
-
-    if (!player && !tower && !Array.isArray(snapshot.inventory) && !Array.isArray(snapshot.equipment)) {
-      return null;
-    }
-
-    const levelValue = player ? this.asNumber(player.level) : null;
-    const goldValue = player ? this.asNumber(player.gold) : null;
-    const floorCurrentValue = tower ? this.asNumber(tower.currentFloor) : null;
-    const floorHighestValue = tower ? this.asNumber(tower.highestFloor) : null;
-
-    const rawInventory = Array.isArray(snapshot.inventory) ? snapshot.inventory : [];
-    const inventory = rawInventory
-      .map((entry) => this.normalizeSaveSlotPreviewInventoryItem(entry))
-      .filter((entry): entry is { itemKey: string; quantity: number } => entry !== null)
-      .sort((left, right) => right.quantity - left.quantity || left.itemKey.localeCompare(right.itemKey));
-
-    const rawEquipment = Array.isArray(snapshot.equipment) ? snapshot.equipment : [];
-    const equipment = rawEquipment
-      .map((entry) => this.normalizeSaveSlotPreviewEquipmentItem(entry))
-      .filter((entry): entry is { slot: string; itemKey: string } => entry !== null)
-      .sort((left, right) => left.slot.localeCompare(right.slot));
-
-    return {
-      playerLevel: levelValue !== null ? Math.max(1, Math.round(levelValue)) : null,
-      gold: goldValue !== null ? Math.max(0, Math.round(goldValue)) : null,
-      towerCurrentFloor: floorCurrentValue !== null ? Math.max(1, Math.round(floorCurrentValue)) : null,
-      towerHighestFloor: floorHighestValue !== null ? Math.max(1, Math.round(floorHighestValue)) : null,
-      inventoryTop: inventory.slice(0, 3),
-      equipmentTop: equipment.slice(0, 3),
-      equippedCount: equipment.length,
-    };
-  }
-
-  private normalizeSaveSlotPreviewInventoryItem(value: unknown): { itemKey: string; quantity: number } | null {
-    if (!this.isRecord(value)) {
-      return null;
-    }
-
-    const itemKey = this.asString(value.itemKey);
-    const quantity = this.asNumber(value.quantity);
-    if (!itemKey || quantity === null) {
-      return null;
-    }
-
-    const roundedQuantity = Math.round(quantity);
-    if (roundedQuantity <= 0) {
-      return null;
-    }
-
-    return {
-      itemKey,
-      quantity: roundedQuantity,
-    };
-  }
-
-  private normalizeSaveSlotPreviewEquipmentItem(value: unknown): { slot: string; itemKey: string } | null {
-    if (!this.isRecord(value)) {
-      return null;
-    }
-
-    const slot = this.asString(value.slot);
-    const itemKey = this.asString(value.itemKey);
-    if (!slot || !itemKey) {
-      return null;
-    }
-
-    return {
-      slot,
-      itemKey,
-    };
-  }
-
-  private normalizeQuestState(value: unknown): QuestState | null {
-    if (!this.isRecord(value)) {
-      return null;
-    }
-
-    const key = this.asString(value.key);
-    const title = this.asString(value.title);
-    const description = this.asString(value.description);
-    const status = this.asQuestStatus(value.status);
-    const rawObjectives = value.objectives;
-
-    if (!key || !title || !description || !status || !Array.isArray(rawObjectives)) {
-      return null;
-    }
-
-    const objectives = rawObjectives
-      .map((objective) => this.normalizeQuestObjective(objective))
-      .filter((objective): objective is QuestObjectiveState => objective !== null);
-
-    return {
-      key,
-      title,
-      description,
-      status,
-      canClaim: Boolean(value.canClaim),
-      objectives,
-    };
-  }
-
-  private normalizeQuestObjective(value: unknown): QuestObjectiveState | null {
-    if (!this.isRecord(value)) {
-      return null;
-    }
-
-    const key = this.asString(value.key);
-    const description = this.asString(value.description);
-    const current = this.asNumber(value.current);
-    const target = this.asNumber(value.target);
-
-    if (!key || !description || current === null || target === null) {
-      return null;
-    }
-
-    return {
-      key,
-      description,
-      current: Math.max(0, Math.round(current)),
-      target: Math.max(1, Math.round(target)),
-      completed: Boolean(value.completed),
-    };
+    return parseSaveSlotPreviewPayloadFromService(payload, this.getGameplayPayloadParsers());
   }
 
   private normalizeCombatPayload(payload: unknown): CombatEncounterState | null {
-    if (!this.isRecord(payload)) {
-      return null;
-    }
-
-    const directEncounter = this.extractCombatStateCandidate(payload.encounter);
-    if (directEncounter) {
-      return directEncounter;
-    }
-
-    const nestedState = this.extractCombatStateCandidate(payload.state);
-    if (nestedState) {
-      return nestedState;
-    }
-
-    const dataState = this.extractCombatStateCandidate(payload.data);
-    if (dataState) {
-      return dataState;
-    }
-
-    return this.normalizeCombatState(payload);
-  }
-
-  private extractCombatStateCandidate(value: unknown): CombatEncounterState | null {
-    if (!this.isRecord(value)) {
-      return null;
-    }
-
-    if (this.isRecord(value.encounter)) {
-      const fromEncounter = this.normalizeCombatState(value.encounter);
-      if (fromEncounter) {
-        return fromEncounter;
-      }
-    }
-
-    if (this.isRecord(value.state)) {
-      const fromState = this.normalizeCombatState(value.state);
-      if (fromState) {
-        return fromState;
-      }
-    }
-
-    if (this.isRecord(value.data)) {
-      const fromData = this.normalizeCombatState(value.data);
-      if (fromData) {
-        return fromData;
-      }
-    }
-
-    return this.normalizeCombatState(value);
-  }
-
-  private normalizeCombatState(value: unknown): CombatEncounterState | null {
-    if (!this.isRecord(value)) {
-      return null;
-    }
-
-    const id = this.asString(value.id);
-    const status = this.asCombatStatus(value.status);
-    const turn = this.asCombatTurn(value.turn) ?? 'player';
-    const round = this.asNumber(value.round) ?? 1;
-    const playerRecord = this.asRecord(value.player);
-    const enemyRecord = this.asRecord(value.enemy);
-
-    if (!id || !status || !playerRecord || !enemyRecord) {
-      return null;
-    }
-
-    const player = this.normalizePlayerState(playerRecord);
-    const enemy = this.normalizeEnemyState(enemyRecord);
-
-    if (!player || !enemy) {
-      return null;
-    }
-
-    return {
-      id,
-      status,
-      turn,
-      round,
-      logs: this.asStringArray(value.logs).slice(-20),
-      scriptState: this.normalizeCombatScriptState(value.scriptState),
-      player,
-      enemy,
-      lastAction: this.asString(value.lastAction),
-      rewards: this.normalizeCombatRewardSummary(value.rewards),
-      defeatPenalty: this.normalizeCombatDefeatPenalty(value.defeatPenalty),
-      recap: this.normalizeCombatRecap(value.recap),
-      createdAt: this.asString(value.createdAt) ?? undefined,
-      updatedAt: this.asString(value.updatedAt) ?? undefined,
-      endedAt: this.asString(value.endedAt) ?? null,
-    };
-  }
-
-  private normalizeCombatScriptState(value: unknown): Record<string, boolean | number | string> {
-    if (!this.isRecord(value)) {
-      return {};
-    }
-
-    const normalized: Record<string, boolean | number | string> = {};
-    for (const [key, entryValue] of Object.entries(value)) {
-      if (
-        typeof entryValue === 'boolean' ||
-        typeof entryValue === 'number' ||
-        typeof entryValue === 'string'
-      ) {
-        normalized[key] = entryValue;
-      }
-    }
-
-    return normalized;
-  }
-
-  private normalizePlayerState(value: Record<string, unknown>): CombatUnitState | null {
-    const hp = this.asNumber(value.hp);
-    const maxHp = this.asNumber(value.maxHp) ?? hp;
-    const mp = this.asNumber(value.mp);
-    const maxMp = this.asNumber(value.maxMp) ?? mp;
-
-    if (hp === null || maxHp === null || mp === null || maxMp === null) {
-      return null;
-    }
-
-    return {
-      hp,
-      maxHp,
-      mp,
-      maxMp,
-      attack: this.asNumber(value.attack) ?? 0,
-      defense: this.asNumber(value.defense) ?? 0,
-      magicAttack: this.asNumber(value.magicAttack) ?? 0,
-      speed: this.asNumber(value.speed) ?? 0,
-      defending: Boolean(value.defending),
-    };
-  }
-
-  private normalizeEnemyState(value: Record<string, unknown>): CombatEnemyState | null {
-    const baseHp = this.asNumber(value.hp);
-    const baseMp = this.asNumber(value.mp);
-    const currentHp = this.asNumber(value.currentHp) ?? baseHp;
-    const currentMp = this.asNumber(value.currentMp) ?? baseMp;
-
-    if (baseHp === null || baseMp === null || currentHp === null || currentMp === null) {
-      return null;
-    }
-
-    return {
-      key: this.asString(value.key) ?? 'enemy',
-      name: this.asString(value.name) ?? 'Enemy',
-      hp: baseHp,
-      mp: baseMp,
-      currentHp,
-      currentMp,
-      attack: this.asNumber(value.attack) ?? 0,
-      defense: this.asNumber(value.defense) ?? 0,
-      magicAttack: this.asNumber(value.magicAttack) ?? 0,
-      speed: this.asNumber(value.speed) ?? 0,
-    };
-  }
-
-  private normalizeCombatRewardSummary(value: unknown): CombatRewardSummary | null {
-    if (!this.isRecord(value)) {
-      return null;
-    }
-
-    return {
-      experience: Math.max(0, Math.round(this.asNumber(value.experience) ?? 0)),
-      gold: Math.max(0, Math.round(this.asNumber(value.gold) ?? 0)),
-      items: this.normalizeCombatRewardItems(value.items),
-      levelBefore: Math.max(1, Math.round(this.asNumber(value.levelBefore) ?? 1)),
-      levelAfter: Math.max(1, Math.round(this.asNumber(value.levelAfter) ?? 1)),
-    };
-  }
-
-  private normalizeCombatRewardItems(value: unknown): CombatRewardItem[] {
-    if (!Array.isArray(value)) {
-      return [];
-    }
-
-    const items: CombatRewardItem[] = [];
-    for (const entry of value) {
-      if (!this.isRecord(entry)) {
-        continue;
-      }
-
-      const itemKey = this.asString(entry.itemKey);
-      const quantity = this.asNumber(entry.quantity);
-      if (!itemKey || quantity === null) {
-        continue;
-      }
-
-      items.push({
-        itemKey,
-        quantity: Math.max(0, Math.round(quantity)),
-        rarity: this.asString(entry.rarity) ?? 'common',
-        source: this.asString(entry.source) ?? 'enemy',
-      });
-    }
-
-    return items;
-  }
-
-  private normalizeCombatDefeatPenalty(value: unknown): CombatDefeatPenaltySummary | null {
-    if (!this.isRecord(value)) {
-      return null;
-    }
-
-    const itemsLost = Array.isArray(value.itemsLost)
-      ? value.itemsLost
-          .filter((entry): entry is Record<string, unknown> => this.isRecord(entry))
-          .map((entry) => ({
-            itemKey: this.asString(entry.itemKey) ?? 'item',
-            quantity: Math.max(0, Math.round(this.asNumber(entry.quantity) ?? 0)),
-          }))
-      : [];
-
-    return {
-      goldLossPercent: Math.max(0, Math.round(this.asNumber(value.goldLossPercent) ?? 0)),
-      goldLost: Math.max(0, Math.round(this.asNumber(value.goldLost) ?? 0)),
-      itemsLost,
-      respawnZone: this.asString(value.respawnZone) ?? 'Ferme',
-      respawnDay: Math.max(1, Math.round(this.asNumber(value.respawnDay) ?? 1)),
-      playerHpAfterDefeat: Math.max(0, Math.round(this.asNumber(value.playerHpAfterDefeat) ?? 1)),
-    };
-  }
-
-  private normalizeCombatRecap(value: unknown): CombatEncounterRecap | null {
-    if (!this.isRecord(value)) {
-      return null;
-    }
-
-    const rewardsRecord = this.asRecord(value.rewards);
-    const penaltiesRecord = this.asRecord(value.penalties);
-    const outcome = this.asCombatStatus(value.outcome) ?? this.combatState?.status ?? 'active';
-
-    return {
-      outcome,
-      rounds: Math.max(1, Math.round(this.asNumber(value.rounds) ?? 1)),
-      damageDealt: Math.max(0, Math.round(this.asNumber(value.damageDealt) ?? 0)),
-      damageTaken: Math.max(0, Math.round(this.asNumber(value.damageTaken) ?? 0)),
-      healingDone: Math.max(0, Math.round(this.asNumber(value.healingDone) ?? 0)),
-      mpSpent: Math.max(0, Math.round(this.asNumber(value.mpSpent) ?? 0)),
-      mpRecovered: Math.max(0, Math.round(this.asNumber(value.mpRecovered) ?? 0)),
-      poisonApplied: Math.max(0, Math.round(this.asNumber(value.poisonApplied) ?? 0)),
-      ceciteApplied: Math.max(0, Math.round(this.asNumber(value.ceciteApplied) ?? 0)),
-      obscuriteApplied: Math.max(0, Math.round(this.asNumber(value.obscuriteApplied) ?? 0)),
-      debuffsCleansed: Math.max(0, Math.round(this.asNumber(value.debuffsCleansed) ?? 0)),
-      blindMisses: Math.max(0, Math.round(this.asNumber(value.blindMisses) ?? 0)),
-      rewards: {
-        experience: Math.max(0, Math.round(this.asNumber(rewardsRecord?.experience) ?? 0)),
-        gold: Math.max(0, Math.round(this.asNumber(rewardsRecord?.gold) ?? 0)),
-        lootItems: Math.max(0, Math.round(this.asNumber(rewardsRecord?.lootItems) ?? 0)),
-      },
-      penalties: {
-        goldLost: Math.max(0, Math.round(this.asNumber(penaltiesRecord?.goldLost) ?? 0)),
-        itemsLost: Math.max(0, Math.round(this.asNumber(penaltiesRecord?.itemsLost) ?? 0)),
-      },
-    };
+    return parseCombatPayloadFromService(
+      payload,
+      this.getGameplayPayloadParsers(),
+      this.combatState?.status ?? 'active',
+    );
   }
 
   private asRecord(value: unknown): Record<string, unknown> | null {
@@ -11038,5 +10140,7 @@ export class GameScene extends Phaser.Scene {
     return obstacle;
   }
 }
+
+
 
 

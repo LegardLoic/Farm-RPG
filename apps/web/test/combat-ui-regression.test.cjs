@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 
-const gameScenePath = join(__dirname, '..', 'src', 'game', 'scenes', 'GameScene.ts');
+const gameScenePath = join(__dirname, '..', 'src', 'game', 'scenes', 'game', 'GameScene.ts');
 const bootScenePath = join(__dirname, '..', 'src', 'game', 'scenes', 'BootScene.ts');
 const stylesPath = join(__dirname, '..', 'src', 'styles.css');
 
