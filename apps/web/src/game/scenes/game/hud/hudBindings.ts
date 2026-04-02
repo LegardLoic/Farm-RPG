@@ -162,3 +162,10 @@ export function bindHudElements(target: HudBindingTarget, root: ParentNode): voi
     mutableTarget[binding.field] = root.querySelector(binding.selector);
   }
 }
+
+export function clearHudElementBindings(target: HudBindingTarget): void {
+  const mutableTarget = target as Record<string, null>;
+  for (const binding of HUD_BINDING_SELECTORS) {
+    mutableTarget[binding.field] = null;
+  }
+}
