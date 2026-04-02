@@ -7,16 +7,13 @@ import {
 } from './gameScene.constants';
 import type {
   BlacksmithOfferState,
-  ForgeShopCategoryKey,
   FrontSceneMode,
   VillageCropBuybackOfferState,
   VillageSceneZoneConfig,
   VillageSceneZoneKey,
   VillageSceneZoneVisual,
   VillageSeedOfferState,
-  VillageShopPanelEntry,
   VillageShopTabKey,
-  VillageShopTabOption,
   VillageShopType,
 } from './gameScene.types';
 import {
@@ -138,19 +135,15 @@ import {
   toPortraitStateKey as toPortraitStateKeyFromFeature,
 } from './features/combat/spriteManifestLogic';
 import {
-  buildVillageShopEntries as buildVillageShopEntriesFromLogic,
-  computeVillageShopRenderSignature as computeVillageShopRenderSignatureFromLogic,
-  getForgeCategoryLabel as getForgeCategoryLabelFromLogic,
-  getForgeComparisonLabel as getForgeComparisonLabelFromLogic,
-  getForgeOfferCategory as getForgeOfferCategoryFromLogic,
-  getForgeRecommendedTier as getForgeRecommendedTierFromLogic,
-  getForgeTierLabel as getForgeTierLabelFromLogic,
-  getVillageShopActiveError as getVillageShopActiveErrorFromLogic,
-  getVillageShopSummaryLabel as getVillageShopSummaryLabelFromLogic,
-  getVillageShopTabs as getVillageShopTabsFromLogic,
-  getVillageShopTalkButtonLabel as getVillageShopTalkButtonLabelFromLogic,
-  selectVillageShopEntry as selectVillageShopEntryFromLogic,
-} from './features/shops/villageShopLogic';
+  closeVillageShopControllerPanel as closeVillageShopControllerPanelFromFeature,
+  createVillageShopControllerState as createVillageShopControllerStateFromFeature,
+  openVillageShopControllerPanel as openVillageShopControllerPanelFromFeature,
+  resolveVillageShopController as resolveVillageShopControllerFromFeature,
+  selectVillageShopControllerEntry as selectVillageShopControllerEntryFromFeature,
+  setVillageShopControllerTab as setVillageShopControllerTabFromFeature,
+  type VillageShopControllerResolution,
+  type VillageShopControllerState,
+} from './features/shops/villageShopController';
 import {
   renderBlacksmithOffers as renderBlacksmithOffersFromFeature,
   renderVillageMarketOffers as renderVillageMarketOffersFromFeature,
@@ -342,7 +335,6 @@ import type {
   DebugQaStepReplayState,
   DebugQaTracePayload,
   DebugStatePresetKey,
-  FarmPlotPhase,
   FarmScenePlotSlot,
   FarmScenePlotVisual,
   HeroAppearanceKey,
@@ -661,11 +653,7 @@ export class GameScene extends Phaser.Scene {
   private villageMarketBusy = false;
   private villageMarketError: string | null = null;
   private villageMarketRenderSignature = '';
-  private villageShopPanelOpen = false;
-  private villageShopType: VillageShopType = 'market';
-  private villageShopTab: VillageShopTabKey = 'buy';
-  private villageShopSelectedEntryKey: string | null = null;
-  private villageShopRenderSignature = '';
+  private villageShopControllerState: VillageShopControllerState = createVillageShopControllerStateFromFeature();
   private farmState: FarmState | null = null;
   private farmStoryState: FarmStoryState | null = null;
   private farmBusy = false;
@@ -1508,7 +1496,13 @@ export class GameScene extends Phaser.Scene {
     this.setHudText('xp', `${this.hudState.xp} / ${this.hudState.xpToNext}`);
     this.setHudText('towerFloor', `${this.hudState.towerCurrentFloor} (best ${this.hudState.towerHighestFloor})`);
     this.setHudText('towerBoss10', this.hudState.towerBossFloor10Defeated ? 'Defeated' : 'Pending');
-    this.setHudText('blacksmithStatus', this.getBlacksmithStatusLabel());
+    this.setHudText(
+      'blacksmithStatus',
+      getBlacksmithStatusLabelFromVillageHud({
+        blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+        blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+      }),
+    );
     this.setHudText('hp', `${this.formatValue(this.hudState.hp)} / ${this.formatValue(this.hudState.maxHp)}`);
     this.setHudText('mp', `${this.formatValue(this.hudState.mp)} / ${this.formatValue(this.hudState.maxMp)}`);
     this.setHudText('stamina', `${Math.max(0, Math.round(this.hudState.stamina))} / 8`);
@@ -1542,22 +1536,22 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateCombatHud(): void {
-    this.setHudText('combatName', this.getCombatName());
-    this.setHudText('combatStatus', this.getCombatStatusLabel());
+    this.setHudText('combatName', getCombatNameFromLogic(this.combatState, this.isAuthenticated));
+    this.setHudText('combatStatus', getCombatStatusLabelFromLogic(this.combatStatus));
     this.setHudText('combatEncounterId', this.combatEncounterId ?? '-');
-    this.setHudText('combatTurn', this.getCombatTurnLabel());
+    this.setHudText('combatTurn', getCombatTurnLabelFromLogic(this.combatState));
     this.setHudText('combatRound', this.combatState ? `${this.combatState.round}` : '-');
     this.setHudText('combatResult', this.combatMessage);
-    this.setHudText('combatRecap', this.getCombatRecapLabel());
-    this.setHudText('combatPlayerHp', this.getCombatUnitValue(this.hudState.hp, this.hudState.maxHp));
-    this.setHudText('combatPlayerMp', this.getCombatUnitValue(this.hudState.mp, this.hudState.maxMp));
-    this.renderCombatEffectChips('combatPlayerEffects', this.getCombatPlayerEffectChips());
+    this.setHudText('combatRecap', getCombatRecapLabelFromLogic(this.combatState));
+    this.setHudText('combatPlayerHp', getCombatUnitValueFromLogic(this.hudState.hp, this.hudState.maxHp));
+    this.setHudText('combatPlayerMp', getCombatUnitValueFromLogic(this.hudState.mp, this.hudState.maxMp));
+    this.renderCombatEffectChips('combatPlayerEffects', getCombatPlayerEffectChipsFromLogic(this.combatState));
     this.setHudText('combatEnemyName', this.combatState ? this.combatState.enemy.name : '-');
     this.renderCombatEnemySprite();
-    this.setHudText('combatEnemyHp', this.getCombatEnemyValue('hp'));
-    this.setHudText('combatEnemyMp', this.getCombatEnemyValue('mp'));
-    this.renderCombatEffectChips('combatEnemyEffects', this.getCombatEnemyEffectChips());
-    this.setHudText('combatTelemetry', this.getCombatTelemetryLabel());
+    this.setHudText('combatEnemyHp', getCombatEnemyValueFromLogic(this.combatState, 'hp'));
+    this.setHudText('combatEnemyMp', getCombatEnemyValueFromLogic(this.combatState, 'mp'));
+    this.renderCombatEffectChips('combatEnemyEffects', getCombatEnemyEffectChipsFromLogic(this.combatState));
+    this.setHudText('combatTelemetry', getCombatTelemetryLabelFromLogic(this.combatState));
     this.renderCombatEnemyTelegraphs();
 
     if (this.combatStatusBadge) {
@@ -1575,7 +1569,11 @@ export class GameScene extends Phaser.Scene {
 
   private updateQuestHud(): void {
     if (this.questsSummaryValue) {
-      this.questsSummaryValue.textContent = this.getQuestSummaryLabel();
+      this.questsSummaryValue.textContent = getQuestSummaryLabelFromFeature({
+        isAuthenticated: this.isAuthenticated,
+        questBusy: this.questBusy,
+        quests: this.quests,
+      });
     }
 
     if (this.questsErrorValue) {
@@ -1588,19 +1586,35 @@ export class GameScene extends Phaser.Scene {
 
   private updateVillageNpcHud(): void {
     if (this.villageNpcSummaryValue) {
-      this.villageNpcSummaryValue.textContent = this.getVillageNpcSummaryLabel();
+      this.villageNpcSummaryValue.textContent = getVillageNpcSummaryLabelFromLogic({
+        isAuthenticated: this.isAuthenticated,
+        villageNpcState: this.villageNpcState,
+        villageNpcRelationships: this.villageNpcRelationships,
+      });
     }
 
     if (this.villageNpcMayorValue) {
-      this.villageNpcMayorValue.textContent = this.getVillageNpcEntryLabel('mayor');
+      this.villageNpcMayorValue.textContent = getVillageNpcEntryLabelFromLogic({
+        npcKey: 'mayor',
+        villageNpcState: this.villageNpcState,
+        villageNpcRelationships: this.villageNpcRelationships,
+      });
     }
 
     if (this.villageNpcBlacksmithValue) {
-      this.villageNpcBlacksmithValue.textContent = this.getVillageNpcEntryLabel('blacksmith');
+      this.villageNpcBlacksmithValue.textContent = getVillageNpcEntryLabelFromLogic({
+        npcKey: 'blacksmith',
+        villageNpcState: this.villageNpcState,
+        villageNpcRelationships: this.villageNpcRelationships,
+      });
     }
 
     if (this.villageNpcMerchantValue) {
-      this.villageNpcMerchantValue.textContent = this.getVillageNpcEntryLabel('merchant');
+      this.villageNpcMerchantValue.textContent = getVillageNpcEntryLabelFromLogic({
+        npcKey: 'merchant',
+        villageNpcState: this.villageNpcState,
+        villageNpcRelationships: this.villageNpcRelationships,
+      });
     }
 
     if (this.villageNpcMayorDialogueValue) {
@@ -1654,7 +1668,14 @@ export class GameScene extends Phaser.Scene {
 
   private updateBlacksmithHud(): void {
     if (this.blacksmithSummaryValue) {
-      this.blacksmithSummaryValue.textContent = this.getBlacksmithShopSummaryLabel();
+      this.blacksmithSummaryValue.textContent = getBlacksmithShopSummaryLabelFromFeature({
+        isAuthenticated: this.isAuthenticated,
+        blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+        blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+        blacksmithBusy: this.blacksmithBusy,
+        blacksmithOffersCount: this.blacksmithOffers.length,
+        gold: this.hudState.gold,
+      });
     }
 
     if (this.blacksmithErrorValue) {
@@ -1714,17 +1735,25 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.farmContextSeedValue) {
-      this.farmContextSeedValue.textContent = this.getSelectedSeedLabel();
+      this.farmContextSeedValue.textContent = getSelectedSeedLabelFromLogic(this.farmSelectedSeedItemKey);
     }
 
     if (this.farmContextReadyValue) {
-      this.farmContextReadyValue.textContent = this.getFarmReadyPlotsLabel();
+      this.farmContextReadyValue.textContent = getFarmReadyPlotsLabelFromLogic(this.farmState);
     }
 
     this.updateFarmContextPanel();
 
     if (this.farmContextFeedbackValue) {
-      const feedback = this.getFarmFeedbackLabel();
+      const feedback = getFarmFeedbackLabelFromLogic({
+        farmError: this.farmError,
+        farmCraftingError: this.farmCraftingError,
+        farmBusy: this.farmBusy,
+        farmCraftingBusy: this.farmCraftingBusy,
+        farmFeedbackMessage: this.farmFeedbackMessage,
+        isAuthenticated: this.isAuthenticated,
+        farmUnlocked: Boolean(this.farmState?.unlocked),
+      });
       this.farmContextFeedbackValue.dataset.tone = this.farmError ? 'error' : 'info';
       this.farmContextFeedbackValue.textContent = feedback;
     }
@@ -1739,7 +1768,12 @@ export class GameScene extends Phaser.Scene {
     this.ensureVillageSelectedZone();
 
     if (this.villageObjectiveValue) {
-      this.villageObjectiveValue.textContent = this.getVillageObjectiveLabel();
+      this.villageObjectiveValue.textContent = getVillageObjectiveLabelFromLogic({
+        isAuthenticated: this.isAuthenticated,
+        frontSceneMode: this.frontSceneMode,
+        blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+        villageMarketUnlocked: this.villageMarketUnlocked,
+      });
     }
 
     this.updateVillageContextPanel();
@@ -1747,7 +1781,14 @@ export class GameScene extends Phaser.Scene {
     if (this.villageContextFeedbackValue) {
       const hasError = Boolean(this.villageNpcError);
       this.villageContextFeedbackValue.dataset.tone = hasError ? 'error' : 'info';
-      this.villageContextFeedbackValue.textContent = this.getVillageInteractionFeedbackLabel();
+      this.villageContextFeedbackValue.textContent = getVillageInteractionFeedbackLabelFromLogic({
+        villageNpcError: this.villageNpcError,
+        villageFeedbackMessage: this.villageFeedbackMessage,
+        frontSceneMode: this.frontSceneMode,
+        isAuthenticated: this.isAuthenticated,
+        villageShopPanelOpen: this.villageShopControllerState.isOpen,
+        villageShopType: this.villageShopControllerState.shopType,
+      });
     }
 
     if (this.frontSceneMode === 'village') {
@@ -1756,26 +1797,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   private openVillageShopPanel(shopType: VillageShopType, feedbackMessage: string): void {
-    if (this.villageShopType !== shopType) {
-      this.villageShopType = shopType;
-      this.villageShopTab = shopType === 'market' ? 'buy' : 'weapons';
-      this.villageShopSelectedEntryKey = null;
-    }
-
-    this.villageShopPanelOpen = true;
-    this.villageShopRenderSignature = '';
+    this.villageShopControllerState = openVillageShopControllerPanelFromFeature(this.villageShopControllerState, shopType);
     this.villageFeedbackMessage = feedbackMessage;
     this.updateHud();
   }
 
   private closeVillageShopPanel(feedbackMessage?: string): void {
-    if (!this.villageShopPanelOpen) {
+    const nextState = closeVillageShopControllerPanelFromFeature(this.villageShopControllerState);
+    if (nextState === this.villageShopControllerState) {
       return;
     }
 
-    this.villageShopPanelOpen = false;
-    this.villageShopSelectedEntryKey = null;
-    this.villageShopRenderSignature = '';
+    this.villageShopControllerState = nextState;
     if (feedbackMessage) {
       this.villageFeedbackMessage = feedbackMessage;
     }
@@ -1783,96 +1816,47 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setVillageShopTab(tabKey: VillageShopTabKey): void {
-    const tabs = this.getVillageShopTabs();
-    if (!tabs.some((tab) => tab.key === tabKey) || this.villageShopTab === tabKey) {
+    const nextState = setVillageShopControllerTabFromFeature(this.villageShopControllerState, tabKey);
+    if (nextState === this.villageShopControllerState) {
       return;
     }
 
-    this.villageShopTab = tabKey;
-    this.villageShopSelectedEntryKey = null;
-    this.villageShopRenderSignature = '';
+    this.villageShopControllerState = nextState;
     this.updateHud();
   }
 
   private selectVillageShopEntry(entryKey: string): void {
-    if (this.villageShopSelectedEntryKey === entryKey) {
+    const nextState = selectVillageShopControllerEntryFromFeature(this.villageShopControllerState, entryKey);
+    if (nextState === this.villageShopControllerState) {
       return;
     }
-    this.villageShopSelectedEntryKey = entryKey;
-    this.villageShopRenderSignature = '';
+
+    this.villageShopControllerState = nextState;
     this.updateHud();
   }
 
-  private getVillageShopTabs(): VillageShopTabOption[] {
-    return getVillageShopTabsFromLogic(this.villageShopType);
-  }
-
-  private getVillageShopEntries(): VillageShopPanelEntry[] {
-    return buildVillageShopEntriesFromLogic({
-      villageShopType: this.villageShopType,
-      villageShopTab: this.villageShopTab,
-      villageMarketBuybackOffers: this.villageMarketBuybackOffers,
-      villageMarketSeedOffers: this.villageMarketSeedOffers,
-      villageMarketUnlocked: this.villageMarketUnlocked,
-      villageMarketBusy: this.villageMarketBusy,
-      hudGold: this.hudState.gold,
-      blacksmithOffers: this.blacksmithOffers,
-      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
-      blacksmithBusy: this.blacksmithBusy,
-      towerHighestFloor: this.hudState.towerHighestFloor,
-    });
-  }
-
-  private getVillageShopSelectedEntry(entries: VillageShopPanelEntry[]): VillageShopPanelEntry | null {
-    const result = selectVillageShopEntryFromLogic(entries, this.villageShopSelectedEntryKey);
-    this.villageShopSelectedEntryKey = result.selectedEntryKey;
-    return result.selectedEntry;
-  }
-
-  private computeVillageShopRenderSignature(
-    tabs: VillageShopTabOption[],
-    entries: VillageShopPanelEntry[],
-    selectedEntry: VillageShopPanelEntry | null,
-  ): string {
-    return computeVillageShopRenderSignatureFromLogic({
+  private resolveVillageShopPanel(): VillageShopControllerResolution {
+    const resolution = resolveVillageShopControllerFromFeature(this.villageShopControllerState, {
       frontSceneMode: this.frontSceneMode,
-      villageShopPanelOpen: this.villageShopPanelOpen,
-      villageShopType: this.villageShopType,
-      villageShopTab: this.villageShopTab,
-      villageShopSelectedEntryKey: this.villageShopSelectedEntryKey,
       isAuthenticated: this.isAuthenticated,
       hudGold: this.hudState.gold,
-      blacksmithBusy: this.blacksmithBusy,
+      villageMarketUnlocked: this.villageMarketUnlocked,
       villageMarketBusy: this.villageMarketBusy,
+      villageMarketError: this.villageMarketError,
+      villageMarketSeedOffers: this.villageMarketSeedOffers,
+      villageMarketBuybackOffers: this.villageMarketBuybackOffers,
+      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+      blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+      blacksmithBusy: this.blacksmithBusy,
+      blacksmithError: this.blacksmithError,
+      blacksmithOffers: this.blacksmithOffers,
       villageNpcBusy: this.villageNpcBusy,
-      activeError: this.getVillageShopActiveError(),
-      selectedEntryKey: selectedEntry?.entryKey ?? null,
-      tabs,
-      entries,
+      villageNpcState: this.villageNpcState,
+      villageNpcRelationships: this.villageNpcRelationships,
+      towerHighestFloor: this.hudState.towerHighestFloor,
     });
-  }
-
-  private renderVillageShopTabs(tabs: VillageShopTabOption[]): void {
-    if (!this.villageShopTabsRoot) {
-      return;
-    }
-    renderVillageShopTabsFromFeature({
-      root: this.villageShopTabsRoot,
-      tabs,
-      activeTab: this.villageShopTab,
-    });
-  }
-
-  private renderVillageShopEntries(entries: VillageShopPanelEntry[]): void {
-    if (!this.villageShopEntriesRoot) {
-      return;
-    }
-    renderVillageShopEntriesFromFeature({
-      root: this.villageShopEntriesRoot,
-      entries,
-      villageShopType: this.villageShopType,
-      selectedEntryKey: this.villageShopSelectedEntryKey,
-    });
+    this.villageShopControllerState = resolution.state;
+    return resolution;
   }
 
   private updateVillageShopPanel(): void {
@@ -1880,58 +1864,48 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const visible = this.frontSceneMode === 'village' && this.villageShopPanelOpen;
-    this.villageShopPanelRoot.hidden = !visible;
-    if (!visible) {
-      this.villageShopRenderSignature = '';
+    const previousSignature = this.villageShopControllerState.renderSignature;
+    const resolution = this.resolveVillageShopPanel();
+    const viewModel = resolution.viewModel;
+    this.villageShopPanelRoot.hidden = !viewModel.isVisible;
+    if (!viewModel.isVisible || viewModel.renderSignature === previousSignature) {
       return;
     }
-
-    const tabs = this.getVillageShopTabs();
-    if (!tabs.some((tab) => tab.key === this.villageShopTab)) {
-      this.villageShopTab = tabs[0]?.key ?? (this.villageShopType === 'market' ? 'buy' : 'weapons');
-      this.villageShopSelectedEntryKey = null;
-    }
-
-    const entries = this.getVillageShopEntries();
-    const selectedEntry = this.getVillageShopSelectedEntry(entries);
-    const signature = this.computeVillageShopRenderSignature(tabs, entries, selectedEntry);
-    if (signature === this.villageShopRenderSignature) {
-      return;
-    }
-    this.villageShopRenderSignature = signature;
 
     if (this.villageShopNpcValue) {
-      this.villageShopNpcValue.textContent = this.villageShopType === 'market' ? 'Marchande' : 'Forgeron';
+      this.villageShopNpcValue.textContent = viewModel.npcLabel;
     }
     if (this.villageShopTitleValue) {
-      this.villageShopTitleValue.textContent = this.villageShopType === 'market' ? 'Marche du village' : 'Forge du village';
+      this.villageShopTitleValue.textContent = viewModel.titleLabel;
     }
     if (this.villageShopSummaryValue) {
-      this.villageShopSummaryValue.textContent = this.getVillageShopSummaryLabel();
+      this.villageShopSummaryValue.textContent = viewModel.summaryLabel;
     }
 
-    this.renderVillageShopTabs(tabs);
-    this.renderVillageShopEntries(entries);
-    const activeError = this.getVillageShopActiveError();
-    const npcKey: VillageNpcKey = this.villageShopType === 'market' ? 'merchant' : 'blacksmith';
-    const npc = this.villageNpcState[npcKey];
-    const relation = this.villageNpcRelationships[npcKey];
-    const canTalk = this.isAuthenticated && npc.available && relation.canTalkToday && !this.villageNpcBusy;
-    const talkButtonLabel = this.getVillageShopTalkButtonLabel(npcKey);
-    const selectedEntryBusy = selectedEntry
-      ? selectedEntry.source === 'forge'
-        ? this.blacksmithBusy
-        : this.villageMarketBusy
-      : false;
+    if (this.villageShopTabsRoot) {
+      renderVillageShopTabsFromFeature({
+        root: this.villageShopTabsRoot,
+        tabs: viewModel.tabs,
+        activeTab: viewModel.activeTabKey,
+      });
+    }
+
+    if (this.villageShopEntriesRoot) {
+      renderVillageShopEntriesFromFeature({
+        root: this.villageShopEntriesRoot,
+        entries: viewModel.entries,
+        villageShopType: viewModel.shopType,
+        selectedEntryKey: viewModel.selectedEntryKey,
+      });
+    }
 
     updateVillageShopDetailsFromFeature({
-      selectedEntry,
-      activeError,
+      selectedEntry: viewModel.selectedEntry,
+      activeError: viewModel.activeError,
       gold: this.hudState.gold,
-      selectedEntryBusy,
-      talkButtonLabel,
-      canTalk,
+      selectedEntryBusy: viewModel.selectedEntryBusy,
+      talkButtonLabel: viewModel.talkButtonLabel,
+      canTalk: !viewModel.talkButtonDisabled,
       detailNameValue: this.villageShopDetailNameValue,
       detailMetaValue: this.villageShopDetailMetaValue,
       detailDescriptionValue: this.villageShopDetailDescriptionValue,
@@ -1943,107 +1917,50 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private getVillageShopSummaryLabel(): string {
-    return getVillageShopSummaryLabelFromLogic({
-      isAuthenticated: this.isAuthenticated,
-      villageShopType: this.villageShopType,
-      villageMarketUnlocked: this.villageMarketUnlocked,
-      villageMarketBusy: this.villageMarketBusy,
-      villageMarketSeedOffersCount: this.villageMarketSeedOffers.length,
-      villageMarketBuybackOffersCount: this.villageMarketBuybackOffers.length,
-      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
-      blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
-      blacksmithBusy: this.blacksmithBusy,
-      blacksmithOffersCount: this.blacksmithOffers.length,
-    });
-  }
-
-  private getVillageShopActiveError(): string | null {
-    return getVillageShopActiveErrorFromLogic(this.villageShopType, this.villageMarketError, this.blacksmithError);
-  }
-
-  private getVillageShopTalkButtonLabel(npcKey: VillageNpcKey): string {
-    const npc = this.villageNpcState[npcKey];
-    const relation = this.villageNpcRelationships[npcKey];
-    return getVillageShopTalkButtonLabelFromLogic({
-      villageNpcBusy: this.villageNpcBusy,
-      isAuthenticated: this.isAuthenticated,
-      npcAvailable: npc.available,
-      canTalkToday: relation.canTalkToday,
-    });
-  }
-
-  private getForgeOfferCategory(offer: BlacksmithOfferState): ForgeShopCategoryKey {
-    return getForgeOfferCategoryFromLogic(offer);
-  }
-
-  private getForgeCategoryLabel(category: ForgeShopCategoryKey): string {
-    return getForgeCategoryLabelFromLogic(category);
-  }
-
-  private getForgeTierLabel(tier: number): string {
-    return getForgeTierLabelFromLogic(tier);
-  }
-
-  private getForgeRecommendedTier(): 1 | 2 | 3 {
-    return getForgeRecommendedTierFromLogic(this.hudState.towerHighestFloor);
-  }
-
-  private getForgeComparisonLabel(offer: BlacksmithOfferState): string {
-    return getForgeComparisonLabelFromLogic(offer, this.hudState.towerHighestFloor);
-  }
-
   private async handleVillageShopPrimaryAction(): Promise<void> {
-    const entries = this.getVillageShopEntries();
-    const selectedEntry = this.getVillageShopSelectedEntry(entries);
-    if (!selectedEntry) {
-      this.villageFeedbackMessage = 'Selectionne une offre avant de valider.';
+    const action = this.resolveVillageShopPanel().viewModel.primaryAction;
+    if (action.kind === 'select-offer' || action.kind === 'blocked') {
+      this.villageFeedbackMessage = action.message;
       this.updateHud();
       return;
     }
 
-    if (!selectedEntry.canTransact) {
-      this.villageFeedbackMessage = selectedEntry.source === 'market-sell'
-        ? 'Stock insuffisant ou transaction indisponible.'
-        : 'Transaction indisponible pour le moment.';
-      this.updateHud();
-      return;
-    }
-
-    if (selectedEntry.source === 'market-buy') {
-      if (selectedEntry.offerKey) {
-        await this.buyVillageSeedOffer(selectedEntry.offerKey);
-        if (!this.villageMarketError) {
-          this.villageFeedbackMessage = `${selectedEntry.name} achete au Marche.`;
-        }
-      }
-      this.updateHud();
-      return;
-    }
-
-    if (selectedEntry.source === 'market-sell') {
-      await this.sellVillageCrop(selectedEntry.itemKey);
+    if (action.kind === 'buy-seed') {
+      await this.buyVillageSeedOffer(action.offerKey);
       if (!this.villageMarketError) {
-        this.villageFeedbackMessage = `${selectedEntry.name} vendu au Marche.`;
+        this.villageFeedbackMessage = `${action.entry.name} achete au Marche.`;
       }
       this.updateHud();
       return;
     }
 
-    if (selectedEntry.offerKey) {
-      await this.buyBlacksmithOffer(selectedEntry.offerKey);
-      if (!this.blacksmithError) {
-        this.villageFeedbackMessage = `${selectedEntry.name} commande a la Forge.`;
+    if (action.kind === 'sell-crop') {
+      await this.sellVillageCrop(action.itemKey);
+      if (!this.villageMarketError) {
+        this.villageFeedbackMessage = `${action.entry.name} vendu au Marche.`;
       }
       this.updateHud();
+      return;
     }
+
+    await this.buyBlacksmithOffer(action.offerKey);
+    if (!this.blacksmithError) {
+      this.villageFeedbackMessage = `${action.entry.name} commande a la Forge.`;
+    }
+    this.updateHud();
   }
 
   private async handleVillageShopTalkAction(): Promise<void> {
-    const npcKey: VillageNpcKey = this.villageShopType === 'market' ? 'merchant' : 'blacksmith';
-    await this.interactVillageNpc(npcKey);
+    const action = this.resolveVillageShopPanel().viewModel.talkAction;
+    if (!action.canTalk) {
+      this.villageFeedbackMessage = action.message ?? 'Interaction indisponible.';
+      this.updateHud();
+      return;
+    }
+
+    await this.interactVillageNpc(action.npcKey);
     if (!this.villageNpcError) {
-      this.villageFeedbackMessage = npcKey === 'merchant'
+      this.villageFeedbackMessage = action.npcKey === 'merchant'
         ? 'Discussion tenue avec la Marchande.'
         : 'Discussion tenue avec le Forgeron.';
     }
@@ -2064,18 +1981,19 @@ export class GameScene extends Phaser.Scene {
     return this.frontSceneMode === 'farm' ? 'Ferme' : 'Village';
   }
 
-  private getVillageObjectiveLabel(): string {
-    return getVillageObjectiveLabelFromLogic({
-      isAuthenticated: this.isAuthenticated,
-      frontSceneMode: this.frontSceneMode,
-      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
-      villageMarketUnlocked: this.villageMarketUnlocked,
-    });
-  }
-
   private updateVillageContextPanel(): void {
-    const zone = this.getVillageZoneByKey(this.villageSelectedZoneKey);
-    const interactionState = zone ? this.getVillageZoneInteractionState(zone) : null;
+    const zone = getVillageZoneByKeyFromFeature(VILLAGE_SCENE_ZONES, this.villageSelectedZoneKey);
+    const interactionState = zone
+      ? getVillageZoneInteractionStateFromLogic({
+          isAuthenticated: this.isAuthenticated,
+          zone,
+          villageMarketUnlocked: this.villageMarketUnlocked,
+          blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+          blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+          villageNpcState: this.villageNpcState,
+          villageNpcRelationships: this.villageNpcRelationships,
+        })
+      : null;
     updateVillageContextPanelFromFeature({
       zone,
       interactionState,
@@ -2086,17 +2004,6 @@ export class GameScene extends Phaser.Scene {
       hintValue: this.villageContextHintValue,
       interactButton: this.villageContextInteractButton,
       cycleButton: this.villageContextCycleButton,
-    });
-  }
-
-  private getVillageInteractionFeedbackLabel(): string {
-    return getVillageInteractionFeedbackLabelFromLogic({
-      villageNpcError: this.villageNpcError,
-      villageFeedbackMessage: this.villageFeedbackMessage,
-      frontSceneMode: this.frontSceneMode,
-      isAuthenticated: this.isAuthenticated,
-      villageShopPanelOpen: this.villageShopPanelOpen,
-      villageShopType: this.villageShopType,
     });
   }
 
@@ -2119,11 +2026,15 @@ export class GameScene extends Phaser.Scene {
 
   private updateLoopHud(): void {
     updateLoopHudFromFeature({
-      loopSummaryLabel: this.getLoopSummaryLabel(),
+      loopSummaryLabel: getLoopSummaryLabelFromFeature({
+        isAuthenticated: this.isAuthenticated,
+        loopBusy: this.loopBusy,
+        loopState: this.loopState,
+      }),
       loopStageLabel: this.loopState?.stageLabel ?? '-',
-      loopSuppliesLabel: this.getLoopSuppliesLabel(),
-      loopPreparationLabel: this.getLoopPreparationLabel(),
-      loopBlockersLabel: this.getLoopBlockersLabel(),
+      loopSuppliesLabel: getLoopSuppliesLabelFromFeature(this.loopState),
+      loopPreparationLabel: getLoopPreparationLabelFromFeature(this.loopState),
+      loopBlockersLabel: getLoopBlockersLabelFromFeature(this.loopState),
       loopError: this.loopError,
       canPrepare: Boolean(this.isAuthenticated && this.loopState?.preparation.ready),
       loopBusy: this.loopBusy,
@@ -2148,8 +2059,16 @@ export class GameScene extends Phaser.Scene {
 
   private updateAutoSaveHud(): void {
     updateAutoSaveHudFromFeature({
-      summaryLabel: this.getAutoSaveSummaryLabel(),
-      metaLabel: this.getAutoSaveMetaLabel(),
+      summaryLabel: getAutoSaveSummaryLabelFromFeature({
+        isAuthenticated: this.isAuthenticated,
+        autosaveBusy: this.autosaveBusy,
+        autosave: this.autosave,
+      }),
+      metaLabel: getAutoSaveMetaLabelFromFeature({
+        isAuthenticated: this.isAuthenticated,
+        autosave: this.autosave,
+        formatIsoForHud: (value) => this.formatIsoForHud(value),
+      }),
       autosaveError: this.autosaveError,
       summaryValue: this.autosaveSummaryValue,
       metaValue: this.autosaveMetaValue,
@@ -2160,7 +2079,11 @@ export class GameScene extends Phaser.Scene {
 
   private updateSaveSlotsHud(): void {
     updateSaveSlotsHudFromFeature({
-      summaryLabel: this.getSaveSlotsSummaryLabel(),
+      summaryLabel: getSaveSlotsSummaryLabelFromFeature({
+        isAuthenticated: this.isAuthenticated,
+        saveSlotsBusy: this.saveSlotsBusy,
+        saveSlots: this.saveSlots,
+      }),
       saveSlotsError: this.saveSlotsError,
       summaryValue: this.saveSlotsSummaryValue,
       errorValue: this.saveSlotsErrorValue,
@@ -2177,7 +2100,12 @@ export class GameScene extends Phaser.Scene {
       heroProfile: this.heroProfile,
       heroProfileMessage: this.heroProfileMessage,
       heroProfileError: this.heroProfileError,
-      heroProfileSummaryLabel: this.getHeroProfileSummaryLabel(),
+      heroProfileSummaryLabel: getHeroProfileSummaryLabelFromIntro({
+        isAuthenticated: this.isAuthenticated,
+        heroProfileBusy: this.heroProfileBusy,
+        heroProfile: this.heroProfile,
+        getHeroAppearanceLabel: (key) => getHeroAppearanceLabelFromIntro(key, HERO_APPEARANCE_OPTIONS),
+      }),
       summaryValue: this.heroProfileSummaryValue,
       nameInput: this.heroProfileNameInput,
       appearanceSelect: this.heroProfileAppearanceSelect,
@@ -2193,11 +2121,15 @@ export class GameScene extends Phaser.Scene {
       introNarrativeBusy: this.introNarrativeBusy,
       introNarrativeState: this.introNarrativeState,
       introNarrativeError: this.introNarrativeError,
-      introSummaryLabel: this.getIntroSummaryLabel(),
-      introNarrativeLabel: this.getIntroNarrativeLabel(),
-      introHintLabel: this.getIntroHintLabel(),
-      introProgressLabel: this.getIntroProgressLabel(),
-      introAdvanceButtonLabel: this.getIntroAdvanceButtonLabel(),
+      introSummaryLabel: getIntroSummaryLabelFromIntro({
+        isAuthenticated: this.isAuthenticated,
+        introNarrativeBusy: this.introNarrativeBusy,
+        introNarrativeState: this.introNarrativeState,
+      }),
+      introNarrativeLabel: getIntroNarrativeLabelFromIntro(this.isAuthenticated, this.introNarrativeState),
+      introHintLabel: getIntroHintLabelFromIntro(this.isAuthenticated, this.introNarrativeState),
+      introProgressLabel: getIntroProgressLabelFromIntro(this.introNarrativeState),
+      introAdvanceButtonLabel: getIntroAdvanceButtonLabelFromIntro(this.isAuthenticated, this.introNarrativeState),
       summaryValue: this.introSummaryValue,
       narrativeValue: this.introNarrativeValue,
       hintValue: this.introHintValue,
@@ -2627,7 +2559,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.saveSlotsRenderSignature = signature;
-    const slotStates = this.getSafeSlotStates();
+    const slotStates = getSafeSlotStatesFromFeature(this.saveSlots);
     renderSaveSlotsListFromFeature({
       root: this.saveSlotsListRoot,
       isAuthenticated: this.isAuthenticated,
@@ -2635,10 +2567,13 @@ export class GameScene extends Phaser.Scene {
       saveSlotsBusy: this.saveSlotsBusy,
       saveSlotsActionBusyKey: this.saveSlotsActionBusyKey,
       saveSlotsLoadConfirmSlot: this.saveSlotsLoadConfirmSlot,
-      getSaveSlotMetaLabel: (slotState) => this.getSaveSlotMetaLabel(slotState),
-      getSaveSlotStatsPreviewLabel: (slotState) => this.getSaveSlotStatsPreviewLabel(slotState),
-      getSaveSlotInventoryPreviewLabel: (slotState) => this.getSaveSlotInventoryPreviewLabel(slotState),
-      getSaveSlotEquipmentPreviewLabel: (slotState) => this.getSaveSlotEquipmentPreviewLabel(slotState),
+      getSaveSlotMetaLabel: (slotState) => getSaveSlotMetaLabelFromFeature({
+        slotState,
+        formatIsoForHud: (value) => this.formatIsoForHud(value),
+      }),
+      getSaveSlotStatsPreviewLabel: (slotState) => getSaveSlotStatsPreviewLabelFromFeature(slotState),
+      getSaveSlotInventoryPreviewLabel: (slotState) => getSaveSlotInventoryPreviewLabelFromFeature(slotState),
+      getSaveSlotEquipmentPreviewLabel: (slotState) => getSaveSlotEquipmentPreviewLabelFromFeature(slotState),
     });
   }
 
@@ -2708,7 +2643,7 @@ export class GameScene extends Phaser.Scene {
       selectedSeedItemKey: this.farmSelectedSeedItemKey,
       selectedPlotKey: this.farmSelectedPlotKey,
       formatFarmLabel: (raw) => this.formatFarmLabel(raw),
-      getFarmPlotPhaseLabel: (plot) => this.getFarmPlotPhaseLabel(plot),
+      getFarmPlotPhaseLabel: (plot) => getFarmPlotPhaseLabelFromLogic(plot),
       getFarmPlotStatusLabel: (plot) => this.getFarmPlotStatusLabel(plot),
     });
     this.farmSelectedSeedItemKey = result.selectedSeedItemKey;
@@ -2754,25 +2689,6 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private getQuestSummaryLabel(): string {
-    return getQuestSummaryLabelFromFeature({
-      isAuthenticated: this.isAuthenticated,
-      questBusy: this.questBusy,
-      quests: this.quests,
-    });
-  }
-
-  private getBlacksmithShopSummaryLabel(): string {
-    return getBlacksmithShopSummaryLabelFromFeature({
-      isAuthenticated: this.isAuthenticated,
-      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
-      blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
-      blacksmithBusy: this.blacksmithBusy,
-      blacksmithOffersCount: this.blacksmithOffers.length,
-      gold: this.hudState.gold,
-    });
-  }
-
   private getVillageMarketSummaryLabel(): string {
     return getVillageMarketSummaryLabelFromFeature({
       isAuthenticated: this.isAuthenticated,
@@ -2815,26 +2731,6 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private getLoopSummaryLabel(): string {
-    return getLoopSummaryLabelFromFeature({
-      isAuthenticated: this.isAuthenticated,
-      loopBusy: this.loopBusy,
-      loopState: this.loopState,
-    });
-  }
-
-  private getLoopSuppliesLabel(): string {
-    return getLoopSuppliesLabelFromFeature(this.loopState);
-  }
-
-  private getLoopPreparationLabel(): string {
-    return getLoopPreparationLabelFromFeature(this.loopState);
-  }
-
-  private getLoopBlockersLabel(): string {
-    return getLoopBlockersLabelFromFeature(this.loopState);
-  }
-
   private getTowerStorySummaryLabel(): string {
     if (!this.isAuthenticated) {
       return 'Login required';
@@ -2866,60 +2762,6 @@ export class GameScene extends Phaser.Scene {
 
   private formatFarmLabel(raw: string): string {
     return formatFarmLabelFromLogic(raw);
-  }
-
-  private getAutoSaveSummaryLabel(): string {
-    return getAutoSaveSummaryLabelFromFeature({
-      isAuthenticated: this.isAuthenticated,
-      autosaveBusy: this.autosaveBusy,
-      autosave: this.autosave,
-    });
-  }
-
-  private getAutoSaveMetaLabel(): string {
-    return getAutoSaveMetaLabelFromFeature({
-      isAuthenticated: this.isAuthenticated,
-      autosave: this.autosave,
-      formatIsoForHud: (value) => this.formatIsoForHud(value),
-    });
-  }
-
-  private getSaveSlotsSummaryLabel(): string {
-    return getSaveSlotsSummaryLabelFromFeature({
-      isAuthenticated: this.isAuthenticated,
-      saveSlotsBusy: this.saveSlotsBusy,
-      saveSlots: this.saveSlots,
-    });
-  }
-
-  private getSafeSlotStates(): SaveSlotState[] {
-    return getSafeSlotStatesFromFeature(this.saveSlots);
-  }
-
-  private hasExistingSaveSlot(slot: number): boolean {
-    return hasExistingSaveSlotFromFeature({
-      slot,
-      saveSlots: this.saveSlots,
-    });
-  }
-
-  private getSaveSlotMetaLabel(slotState: SaveSlotState): string {
-    return getSaveSlotMetaLabelFromFeature({
-      slotState,
-      formatIsoForHud: (value) => this.formatIsoForHud(value),
-    });
-  }
-
-  private getSaveSlotStatsPreviewLabel(slotState: SaveSlotState): string {
-    return getSaveSlotStatsPreviewLabelFromFeature(slotState);
-  }
-
-  private getSaveSlotInventoryPreviewLabel(slotState: SaveSlotState): string {
-    return getSaveSlotInventoryPreviewLabelFromFeature(slotState);
-  }
-
-  private getSaveSlotEquipmentPreviewLabel(slotState: SaveSlotState): string {
-    return getSaveSlotEquipmentPreviewLabelFromFeature(slotState);
   }
 
   private computeQuestRenderSignature(): string {
@@ -3037,7 +2879,7 @@ export class GameScene extends Phaser.Scene {
       saveSlotsActionBusyKey: this.saveSlotsActionBusyKey,
       saveSlotsLoadConfirmSlot: this.saveSlotsLoadConfirmSlot,
       saveSlotsError: this.saveSlotsError,
-      slotStates: this.getSafeSlotStates(),
+      slotStates: getSafeSlotStatesFromFeature(this.saveSlots),
     });
   }
 
@@ -3049,9 +2891,9 @@ export class GameScene extends Phaser.Scene {
     const availability = computeCombatActionAvailabilityFromFeature({
       isAuthenticated: this.isAuthenticated,
       combatState: this.combatState,
-      isPlayerDarkened: this.getCombatStatusTurns('playerDarkenedTurns') > 0,
-      hasCleanseableDebuffs: this.hasCleanseableDebuffs(),
-      hasInterruptibleEnemyIntent: this.hasInterruptibleEnemyIntent(),
+      isPlayerDarkened: getCombatStatusTurnsFromLogic(this.combatState, 'playerDarkenedTurns') > 0,
+      hasCleanseableDebuffs: hasCleanseableDebuffsFromLogic(this.combatState),
+      hasInterruptibleEnemyIntent: hasInterruptibleEnemyIntentFromLogic(this.combatState),
     });
 
     if (this.combatStartButton) {
@@ -3532,7 +3374,7 @@ export class GameScene extends Phaser.Scene {
       const payload = await this.fetchJson<unknown>('/profile', {
         method: 'GET',
       });
-      this.heroProfile = this.normalizeHeroProfilePayload(payload);
+      this.heroProfile = this.payloadGateway.normalizeHeroProfilePayload(payload);
       this.heroProfileMessage = this.heroProfile
         ? null
         : 'Aucun profil hero. Cree ton personnage.';
@@ -3618,7 +3460,7 @@ export class GameScene extends Phaser.Scene {
       const payload = await this.fetchJson<unknown>('/shops/village-market', {
         method: 'GET',
       });
-      const parsed = this.normalizeVillageMarketPayload(payload);
+      const parsed = this.payloadGateway.normalizeVillageMarketPayload(payload);
       this.villageMarketUnlocked = parsed.unlocked;
       this.villageMarketSeedOffers = parsed.seedOffers;
       this.villageMarketBuybackOffers = parsed.cropBuybackOffers;
@@ -3813,9 +3655,9 @@ export class GameScene extends Phaser.Scene {
       isAuthenticated: this.isAuthenticated,
       action,
       combatState: this.combatState,
-      hasCleanseableDebuffs: this.hasCleanseableDebuffs(),
-      hasInterruptibleEnemyIntent: this.hasInterruptibleEnemyIntent(),
-      isPlayerDarkened: this.getCombatStatusTurns('playerDarkenedTurns') > 0,
+      hasCleanseableDebuffs: hasCleanseableDebuffsFromLogic(this.combatState),
+      hasInterruptibleEnemyIntent: hasInterruptibleEnemyIntentFromLogic(this.combatState),
+      isPlayerDarkened: getCombatStatusTurnsFromLogic(this.combatState, 'playerDarkenedTurns') > 0,
     });
     if (validationError) {
       this.setCombatError(validationError);
@@ -4040,12 +3882,12 @@ export class GameScene extends Phaser.Scene {
     const npc = this.villageNpcState[npcKey];
     const relationship = this.villageNpcRelationships[npcKey];
     if (!npc.available) {
-      this.villageNpcError = `${this.getVillageNpcDisplayName(npcKey)} is unavailable right now.`;
+      this.villageNpcError = `${getVillageNpcDisplayNameFromLogic(npcKey)} is unavailable right now.`;
       this.updateHud();
       return;
     }
     if (!relationship.canTalkToday) {
-      this.villageNpcError = `${this.getVillageNpcDisplayName(npcKey)} already talked today.`;
+      this.villageNpcError = `${getVillageNpcDisplayNameFromLogic(npcKey)} already talked today.`;
       this.updateHud();
       return;
     }
@@ -4196,7 +4038,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async harvestFarmPlot(plotKey: string): Promise<void> {
-    const harvestedCropKey = this.getFarmPlotByKey(plotKey)?.cropKey ?? null;
+    const harvestedCropKey = getFarmPlotByKeyFromLogic(plotKey, this.farmState)?.cropKey ?? null;
     const harvestedCropLabel = harvestedCropKey ? this.formatFarmLabel(harvestedCropKey) : null;
     await runHarvestFarmPlotActionFromFeature({
       isAuthenticated: this.isAuthenticated,
@@ -4249,7 +4091,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (!this.hasExistingSaveSlot(slot)) {
+    if (!hasExistingSaveSlotFromFeature({ slot, saveSlots: this.saveSlots })) {
       this.saveSlotsError = `Slot ${slot} is empty.`;
       this.updateHud();
       return;
@@ -4295,7 +4137,7 @@ export class GameScene extends Phaser.Scene {
     await runLoadSaveSlotActionFromFeature({
       slot,
       isAuthenticated: this.isAuthenticated,
-      hasExistingSaveSlot: this.hasExistingSaveSlot(slot),
+      hasExistingSaveSlot: hasExistingSaveSlotFromFeature({ slot, saveSlots: this.saveSlots }),
       saveSlotsLoadConfirmSlot: this.saveSlotsLoadConfirmSlot,
       fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
       refreshGameplayState: () => this.refreshGameplayState(),
@@ -4346,7 +4188,7 @@ export class GameScene extends Phaser.Scene {
       heroProfileNameDraft: this.heroProfileNameDraft,
       heroProfileAppearanceDraft: this.heroProfileAppearanceDraft,
       fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
-      normalizeHeroProfilePayload: (payload) => this.normalizeHeroProfilePayload(payload),
+      normalizeHeroProfilePayload: (payload) => this.payloadGateway.normalizeHeroProfilePayload(payload),
       setHeroProfileBusy: (busy) => {
         this.heroProfileBusy = busy;
       },
@@ -4376,7 +4218,7 @@ export class GameScene extends Phaser.Scene {
       introNarrativeBusy: this.introNarrativeBusy,
       introNarrativeCompleted: Boolean(this.introNarrativeState?.completed),
       fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
-      normalizeGameplayIntroPayload: (payload) => this.normalizeGameplayIntroPayload(payload),
+      normalizeGameplayIntroPayload: (payload) => this.payloadGateway.normalizeGameplayIntroPayload(payload),
       refreshGameplayState: () => this.refreshGameplayState(),
       setIntroNarrativeBusy: (busy) => {
         this.introNarrativeBusy = busy;
@@ -4397,7 +4239,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const introNarrativeState = this.normalizeGameplayIntroPayload(payload);
+    const introNarrativeState = this.payloadGateway.normalizeGameplayIntroPayload(payload);
     if (introNarrativeState) {
       this.introNarrativeState = introNarrativeState;
       this.introNarrativeError = null;
@@ -4417,7 +4259,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    const farm = this.normalizeGameplayFarmPayload(payload);
+    const farm = this.payloadGateway.normalizeGameplayFarmPayload(payload);
     if (farm) {
       this.farmState = farm;
       if (farm.unlocked) {
@@ -4444,17 +4286,17 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    const farmStory = this.normalizeGameplayFarmStoryPayload(payload);
+    const farmStory = this.payloadGateway.normalizeGameplayFarmStoryPayload(payload);
     if (farmStory) {
       this.farmStoryState = farmStory;
     }
 
-    const crafting = this.normalizeGameplayCraftingPayload(payload);
+    const crafting = this.payloadGateway.normalizeGameplayCraftingPayload(payload);
     if (crafting) {
       this.farmCraftingState = crafting;
     }
 
-    const loop = this.normalizeGameplayLoopPayload(payload);
+    const loop = this.payloadGateway.normalizeGameplayLoopPayload(payload);
     if (loop) {
       this.loopState = loop;
     }
@@ -4512,9 +4354,9 @@ export class GameScene extends Phaser.Scene {
 
       const npcs = this.payloadGateway.asRecord(village.npcs);
       if (npcs) {
-        const mayor = this.normalizeVillageNpcEntry(npcs.mayor);
-        const blacksmithNpc = this.normalizeVillageNpcEntry(npcs.blacksmith);
-        const merchant = this.normalizeVillageNpcEntry(npcs.merchant);
+        const mayor = this.payloadGateway.normalizeVillageNpcEntry(npcs.mayor);
+        const blacksmithNpc = this.payloadGateway.normalizeVillageNpcEntry(npcs.blacksmith);
+        const merchant = this.payloadGateway.normalizeVillageNpcEntry(npcs.merchant);
 
         if (mayor) {
           this.villageNpcState.mayor = mayor;
@@ -4529,9 +4371,9 @@ export class GameScene extends Phaser.Scene {
 
       const relationships = this.payloadGateway.asRecord(village.relationships);
       if (relationships) {
-        const mayorRelationship = this.normalizeVillageNpcRelationshipEntry(relationships.mayor);
-        const blacksmithRelationship = this.normalizeVillageNpcRelationshipEntry(relationships.blacksmith);
-        const merchantRelationship = this.normalizeVillageNpcRelationshipEntry(relationships.merchant);
+        const mayorRelationship = this.payloadGateway.normalizeVillageNpcRelationshipEntry(relationships.mayor);
+        const blacksmithRelationship = this.payloadGateway.normalizeVillageNpcRelationshipEntry(relationships.blacksmith);
+        const merchantRelationship = this.payloadGateway.normalizeVillageNpcRelationshipEntry(relationships.merchant);
 
         if (mayorRelationship) {
           this.villageNpcRelationships.mayor = mayorRelationship;
@@ -4562,7 +4404,7 @@ export class GameScene extends Phaser.Scene {
       this.hudState.towerBossFloor10Defeated = Boolean(bossFloor10Defeated);
     }
 
-    const towerStory = this.normalizeGameplayTowerStoryPayload(payload);
+    const towerStory = this.payloadGateway.normalizeGameplayTowerStoryPayload(payload);
     if (towerStory) {
       this.towerStoryState = towerStory;
     }
@@ -4592,11 +4434,7 @@ export class GameScene extends Phaser.Scene {
     };
     this.villageNpcBusy = false;
     this.villageNpcError = null;
-    this.villageShopPanelOpen = false;
-    this.villageShopType = 'market';
-    this.villageShopTab = 'buy';
-    this.villageShopSelectedEntryKey = null;
-    this.villageShopRenderSignature = '';
+    this.villageShopControllerState = createVillageShopControllerStateFromFeature();
     this.farmState = null;
     this.farmBusy = false;
     this.farmError = null;
@@ -4659,7 +4497,10 @@ export class GameScene extends Phaser.Scene {
     this.blacksmithBusy = false;
     this.blacksmithError = null;
     this.blacksmithRenderSignature = '';
-    this.villageShopRenderSignature = '';
+    this.villageShopControllerState = {
+      ...this.villageShopControllerState,
+      renderSignature: '',
+    };
   }
 
   private resetVillageMarketState(): void {
@@ -4669,7 +4510,10 @@ export class GameScene extends Phaser.Scene {
     this.villageMarketBusy = false;
     this.villageMarketError = null;
     this.villageMarketRenderSignature = '';
-    this.villageShopRenderSignature = '';
+    this.villageShopControllerState = {
+      ...this.villageShopControllerState,
+      renderSignature: '',
+    };
   }
 
   private resetQuestState(): void {
@@ -4689,7 +4533,7 @@ export class GameScene extends Phaser.Scene {
     this.combatState = snapshot;
     this.combatStatus = snapshot.status;
     this.combatLogs = snapshot.logs.slice(-20);
-    this.combatMessage = this.resolveCombatMessage(snapshot);
+    this.combatMessage = resolveCombatMessageFromLogic(snapshot);
     this.combatError = null;
     this.syncHudStateFromCombat(snapshot);
 
@@ -4727,54 +4571,6 @@ export class GameScene extends Phaser.Scene {
     this.hudState.maxHp = snapshot.player.maxHp;
     this.hudState.mp = snapshot.player.mp;
     this.hudState.maxMp = snapshot.player.maxMp;
-  }
-
-  private resolveCombatMessage(snapshot: CombatEncounterState): string {
-    return resolveCombatMessageFromLogic(snapshot);
-  }
-
-  private getCombatRecapLabel(): string {
-    return getCombatRecapLabelFromLogic(this.combatState);
-  }
-
-  private getCombatRecapOutcomeLabel(status: CombatStatus): string {
-    return getCombatRecapOutcomeLabelFromLogic(status);
-  }
-
-  private getCombatName(): string {
-    return getCombatNameFromLogic(this.combatState, this.isAuthenticated);
-  }
-
-  private getCombatStatusLabel(): string {
-    return getCombatStatusLabelFromLogic(this.combatStatus);
-  }
-
-  private getCombatTurnLabel(): string {
-    return getCombatTurnLabelFromLogic(this.combatState);
-  }
-
-  private getCombatUnitValue(current: number, max: number): string {
-    return getCombatUnitValueFromLogic(current, max);
-  }
-
-  private getCombatEnemyValue(stat: 'hp' | 'mp'): string {
-    return getCombatEnemyValueFromLogic(this.combatState, stat);
-  }
-
-  private getCombatPlayerEffectChips(): CombatEffectChip[] {
-    return getCombatPlayerEffectChipsFromLogic(this.combatState);
-  }
-
-  private getCombatEnemyEffectChips(): CombatEffectChip[] {
-    return getCombatEnemyEffectChipsFromLogic(this.combatState);
-  }
-
-  private getCombatTelemetryLabel(): string {
-    return getCombatTelemetryLabelFromLogic(this.combatState);
-  }
-
-  private getCombatBossSpecialTelemetryParts(): string[] {
-    return getCombatBossSpecialTelemetryPartsFromLogic(this.combatState);
   }
 
   private renderCombatEnemyTelegraphs(): void {
@@ -4972,32 +4768,6 @@ export class GameScene extends Phaser.Scene {
       default:
         return iconLabel;
     }
-  }
-
-  private getCombatScriptTurns(key: string): number {
-    return getCombatScriptTurnsFromLogic(this.combatState, key);
-  }
-
-  private getCombatStatusTurns(
-    key: 'playerPoisonedTurns' | 'playerBlindedTurns' | 'playerDarkenedTurns',
-  ): number {
-    return getCombatStatusTurnsFromLogic(this.combatState, key);
-  }
-
-  private getCombatScriptFlag(key: string): boolean {
-    return getCombatScriptFlagFromLogic(this.combatState, key);
-  }
-
-  private hasCleanseableDebuffs(): boolean {
-    return hasCleanseableDebuffsFromLogic(this.combatState);
-  }
-
-  private hasInterruptibleEnemyIntent(): boolean {
-    return hasInterruptibleEnemyIntentFromLogic(this.combatState);
-  }
-
-  private isInterruptibleEnemyIntent(intent: string): boolean {
-    return isInterruptibleEnemyIntentFromLogic(intent);
   }
 
   private clearCombatError(): void {
@@ -5531,11 +5301,30 @@ export class GameScene extends Phaser.Scene {
       },
       hudState: this.hudState,
       hudSummaries: {
-        combat: this.getCombatStatusLabel(),
-        quests: this.getQuestSummaryLabel(),
-        blacksmith: this.getBlacksmithShopSummaryLabel(),
-        autosave: this.getAutoSaveSummaryLabel(),
-        saveSlots: this.getSaveSlotsSummaryLabel(),
+        combat: getCombatStatusLabelFromLogic(this.combatStatus),
+        quests: getQuestSummaryLabelFromFeature({
+          isAuthenticated: this.isAuthenticated,
+          questBusy: this.questBusy,
+          quests: this.quests,
+        }),
+        blacksmith: getBlacksmithShopSummaryLabelFromFeature({
+          isAuthenticated: this.isAuthenticated,
+          blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+          blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+          blacksmithBusy: this.blacksmithBusy,
+          blacksmithOffersCount: this.blacksmithOffers.length,
+          gold: this.hudState.gold,
+        }),
+        autosave: getAutoSaveSummaryLabelFromFeature({
+          isAuthenticated: this.isAuthenticated,
+          autosaveBusy: this.autosaveBusy,
+          autosave: this.autosave,
+        }),
+        saveSlots: getSaveSlotsSummaryLabelFromFeature({
+          isAuthenticated: this.isAuthenticated,
+          saveSlotsBusy: this.saveSlotsBusy,
+          saveSlots: this.saveSlots,
+        }),
       },
       combat: this.buildCombatTraceSnapshot(),
       debugQa: {
@@ -5572,7 +5361,7 @@ export class GameScene extends Phaser.Scene {
       combatError: this.combatError,
       combatLogs: this.combatLogs,
       combatState: this.combatState,
-      getCombatTelemetryLabel: () => this.getCombatTelemetryLabel(),
+      getCombatTelemetryLabel: () => getCombatTelemetryLabelFromLogic(this.combatState),
       cloneCombatState: (state) => this.cloneCombatState(state),
     });
   }
@@ -5743,26 +5532,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private getBlacksmithStatusLabel(): string {
-    return getBlacksmithStatusLabelFromVillageHud({ blacksmithUnlocked: this.hudState.blacksmithUnlocked, blacksmithCurseLifted: this.hudState.blacksmithCurseLifted });
-  }
-
-  private getVillageNpcSummaryLabel(): string {
-    return getVillageNpcSummaryLabelFromLogic({
-      isAuthenticated: this.isAuthenticated,
-      villageNpcState: this.villageNpcState,
-      villageNpcRelationships: this.villageNpcRelationships,
-    });
-  }
-
-  private getVillageNpcEntryLabel(npcKey: VillageNpcKey): string {
-    return getVillageNpcEntryLabelFromLogic({
-      npcKey,
-      villageNpcState: this.villageNpcState,
-      villageNpcRelationships: this.villageNpcRelationships,
-    });
-  }
-
   private getVillageNpcDialogueLabel(npcKey: VillageNpcKey): string {
     return getVillageNpcDialogueLabelFromLogic({
       isAuthenticated: this.isAuthenticated,
@@ -5801,90 +5570,6 @@ export class GameScene extends Phaser.Scene {
 
   private formatVillageRelationshipTierLabel(tier: VillageNpcRelationshipTier): string {
     return formatVillageRelationshipTierLabelFromLogic(tier);
-  }
-
-  private getVillageNpcDisplayName(npcKey: VillageNpcKey): string {
-    return getVillageNpcDisplayNameFromLogic(npcKey);
-  }
-
-  private getIntroSummaryLabel(): string {
-    return getIntroSummaryLabelFromIntro({ isAuthenticated: this.isAuthenticated, introNarrativeBusy: this.introNarrativeBusy, introNarrativeState: this.introNarrativeState });
-  }
-
-  private getIntroNarrativeLabel(): string {
-    return getIntroNarrativeLabelFromIntro(this.isAuthenticated, this.introNarrativeState);
-  }
-
-  private getIntroHintLabel(): string {
-    return getIntroHintLabelFromIntro(this.isAuthenticated, this.introNarrativeState);
-  }
-
-  private getIntroProgressLabel(): string {
-    return getIntroProgressLabelFromIntro(this.introNarrativeState);
-  }
-
-  private getIntroAdvanceButtonLabel(): string {
-    return getIntroAdvanceButtonLabelFromIntro(this.isAuthenticated, this.introNarrativeState);
-  }
-
-  private getHeroProfileSummaryLabel(): string {
-    return getHeroProfileSummaryLabelFromIntro({ isAuthenticated: this.isAuthenticated, heroProfileBusy: this.heroProfileBusy, heroProfile: this.heroProfile, getHeroAppearanceLabel: (key) => this.getHeroAppearanceLabel(key) });
-  }
-
-  private getHeroAppearanceLabel(key: HeroAppearanceKey): string {
-    return getHeroAppearanceLabelFromIntro(key, HERO_APPEARANCE_OPTIONS);
-  }
-
-  private normalizeGameplayIntroPayload(payload: unknown): IntroNarrativeState | null {
-    return this.payloadGateway.normalizeGameplayIntroPayload(payload);
-  }
-
-  private normalizeVillageNpcEntry(payload: unknown): VillageNpcHudEntry | null {
-    return this.payloadGateway.normalizeVillageNpcEntry(payload);
-  }
-
-  private normalizeVillageNpcRelationshipEntry(payload: unknown): VillageNpcRelationshipHudEntry | null {
-    return this.payloadGateway.normalizeVillageNpcRelationshipEntry(payload);
-  }
-
-  private normalizeGameplayFarmStoryPayload(payload: unknown): FarmStoryState | null {
-    return this.payloadGateway.normalizeGameplayFarmStoryPayload(payload);
-  }
-
-  private normalizeFarmStoryEventEntry(payload: unknown): FarmStoryEventState | null {
-    return this.payloadGateway.normalizeFarmStoryEventEntry(payload);
-  }
-
-  private normalizeGameplayTowerStoryPayload(payload: unknown): TowerStoryState | null {
-    return this.payloadGateway.normalizeGameplayTowerStoryPayload(payload);
-  }
-
-  private normalizeTowerStoryEventEntry(payload: unknown): TowerStoryEventState | null {
-    return this.payloadGateway.normalizeTowerStoryEventEntry(payload);
-  }
-
-  private normalizeGameplayFarmPayload(payload: unknown): FarmState | null {
-    return this.payloadGateway.normalizeGameplayFarmPayload(payload);
-  }
-
-  private normalizeGameplayCraftingPayload(payload: unknown): FarmCraftingState | null {
-    return this.payloadGateway.normalizeGameplayCraftingPayload(payload);
-  }
-
-  private normalizeGameplayLoopPayload(payload: unknown): GameplayLoopState | null {
-    return this.payloadGateway.normalizeGameplayLoopPayload(payload);
-  }
-
-  private normalizeVillageMarketPayload(payload: unknown): {
-    unlocked: boolean;
-    seedOffers: VillageSeedOfferState[];
-    cropBuybackOffers: VillageCropBuybackOfferState[];
-  } {
-    return this.payloadGateway.normalizeVillageMarketPayload(payload);
-  }
-
-  private normalizeHeroProfilePayload(payload: unknown): HeroProfileState | null {
-    return this.payloadGateway.normalizeHeroProfilePayload(payload);
   }
 
   private async fetchJson<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -5997,7 +5682,16 @@ export class GameScene extends Phaser.Scene {
     const visual = createVillageActionZoneFromFeature({
       scene: this,
       config,
-      getZoneStateLabel: (zone) => this.getVillageZoneStateLabel(zone),
+      getZoneStateLabel: (zone) => getVillageZoneStateLabelFromLogic({
+        isAuthenticated: this.isAuthenticated,
+        zone,
+        villageMarketUnlocked: this.villageMarketUnlocked,
+        villageMarketSeedOffersCount: this.villageMarketSeedOffers.length,
+        blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+        blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+        villageNpcState: this.villageNpcState,
+        villageNpcRelationships: this.villageNpcRelationships,
+      }),
       onHover: () => {
         this.setVillageSelectedZone(config.key, false);
         this.updateHud();
@@ -6053,16 +5747,16 @@ export class GameScene extends Phaser.Scene {
     this.farmSceneRenderSignature = signature;
 
     this.ensureSelectedFarmPlot();
-    const slots = this.getFarmSceneSlots();
+    const slots = getFarmSceneSlotsFromLogic(this.farmState) as FarmScenePlotSlot[];
     renderFarmScenePlotVisualsFromFeature({
       scene: this,
       plotVisuals: this.farmScenePlotVisuals,
       slots,
       selectedPlotKey: this.farmSelectedPlotKey,
-      getPlotPosition: (slot) => this.getFarmScenePlotPosition(slot),
-      getPlotPhase: (plot) => this.getFarmPlotPhase(plot),
-      getPlotPalette: (phase, selected) => this.getFarmScenePlotPalette(phase, selected),
-      getPlotPhaseLabel: (plot) => this.getFarmPlotPhaseLabel(plot),
+      getPlotPosition: (slot) => getFarmScenePlotPositionFromLogic(slot),
+      getPlotPhase: (plot) => getFarmPlotPhaseFromLogic(plot),
+      getPlotPalette: (phase, selected) => getFarmScenePlotPaletteFromLogic(phase, selected),
+      getPlotPhaseLabel: (plot) => getFarmPlotPhaseLabelFromLogic(plot),
       onSelectPlot: (plotKey) => {
         this.setSelectedFarmPlot(plotKey, true);
         this.updateHud();
@@ -6070,7 +5764,15 @@ export class GameScene extends Phaser.Scene {
     });
 
     if (this.farmSceneActionHintLabel) {
-      this.farmSceneActionHintLabel.setText(this.getFarmFeedbackLabel());
+      this.farmSceneActionHintLabel.setText(getFarmFeedbackLabelFromLogic({
+        farmError: this.farmError,
+        farmCraftingError: this.farmCraftingError,
+        farmBusy: this.farmBusy,
+        farmCraftingBusy: this.farmCraftingBusy,
+        farmFeedbackMessage: this.farmFeedbackMessage,
+        isAuthenticated: this.isAuthenticated,
+        farmUnlocked: Boolean(this.farmState?.unlocked),
+      }));
     }
   }
 
@@ -6088,12 +5790,42 @@ export class GameScene extends Phaser.Scene {
     renderVillageSceneZoneVisualsFromFeature({
       zoneVisuals: this.villageSceneZoneVisuals,
       selectedZoneKey: this.villageSelectedZoneKey,
-      getZoneStateLabel: (zone) => this.getVillageZoneStateLabel(zone),
-      getZoneStateColor: (zone) => this.getVillageZoneStateColor(zone),
+      getZoneStateLabel: (zone) => getVillageZoneStateLabelFromLogic({
+        isAuthenticated: this.isAuthenticated,
+        zone,
+        villageMarketUnlocked: this.villageMarketUnlocked,
+        villageMarketSeedOffersCount: this.villageMarketSeedOffers.length,
+        blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+        blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+        villageNpcState: this.villageNpcState,
+        villageNpcRelationships: this.villageNpcRelationships,
+      }),
+      getZoneStateColor: (zone) => getVillageZoneStateColorFromLogic({
+        isAuthenticated: this.isAuthenticated,
+        zone,
+        villageMarketUnlocked: this.villageMarketUnlocked,
+        blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+        interactionState: getVillageZoneInteractionStateFromLogic({
+          isAuthenticated: this.isAuthenticated,
+          zone,
+          villageMarketUnlocked: this.villageMarketUnlocked,
+          blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+          blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+          villageNpcState: this.villageNpcState,
+          villageNpcRelationships: this.villageNpcRelationships,
+        }),
+      }),
     });
 
     if (this.villageSceneActionHintLabel) {
-      this.villageSceneActionHintLabel.setText(this.getVillageInteractionFeedbackLabel());
+      this.villageSceneActionHintLabel.setText(getVillageInteractionFeedbackLabelFromLogic({
+        villageNpcError: this.villageNpcError,
+        villageFeedbackMessage: this.villageFeedbackMessage,
+        frontSceneMode: this.frontSceneMode,
+        isAuthenticated: this.isAuthenticated,
+        villageShopPanelOpen: this.villageShopControllerState.isOpen,
+        villageShopType: this.villageShopControllerState.shopType,
+      }));
     }
   }
 
@@ -6132,7 +5864,7 @@ export class GameScene extends Phaser.Scene {
     this.villageSelectedZoneKey = zoneKey;
     this.villageSceneRenderSignature = '';
     if (announceSelection) {
-      const zone = this.getVillageZoneByKey(zoneKey);
+      const zone = getVillageZoneByKeyFromFeature(VILLAGE_SCENE_ZONES, zoneKey);
       if (zone) {
         this.villageFeedbackMessage = `Cible active: ${zone.title}.`;
       }
@@ -6174,68 +5906,13 @@ export class GameScene extends Phaser.Scene {
     this.setVillageSelectedZone(nextZoneKey, announceSelection);
   }
 
-  private getVillageZoneByKey(zoneKey: VillageSceneZoneKey | null): VillageSceneZoneConfig | null {
-    return getVillageZoneByKeyFromFeature(VILLAGE_SCENE_ZONES, zoneKey);
-  }
-
-  private getVillageZoneStateLabel(zone: VillageSceneZoneConfig): string {
-    return getVillageZoneStateLabelFromLogic({
-      isAuthenticated: this.isAuthenticated,
-      zone,
-      villageMarketUnlocked: this.villageMarketUnlocked,
-      villageMarketSeedOffersCount: this.villageMarketSeedOffers.length,
-      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
-      blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
-      villageNpcState: this.villageNpcState,
-      villageNpcRelationships: this.villageNpcRelationships,
-    });
-  }
-
-  private getVillageZoneStateColor(zone: VillageSceneZoneConfig): string {
-    const interactionState = this.getVillageZoneInteractionState(zone);
-    return getVillageZoneStateColorFromLogic({
-      isAuthenticated: this.isAuthenticated,
-      zone,
-      villageMarketUnlocked: this.villageMarketUnlocked,
-      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
-      interactionState,
-    });
-  }
-
-  private getVillageZoneInteractionState(zone: VillageSceneZoneConfig): { enabled: boolean; reason: string } {
-    return getVillageZoneInteractionStateFromLogic({
-      isAuthenticated: this.isAuthenticated,
-      zone,
-      villageMarketUnlocked: this.villageMarketUnlocked,
-      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
-      blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
-      villageNpcState: this.villageNpcState,
-      villageNpcRelationships: this.villageNpcRelationships,
-    });
-  }
-
-  private getFarmSceneSlots(): FarmScenePlotSlot[] {
-    return getFarmSceneSlotsFromLogic(this.farmState) as FarmScenePlotSlot[];
-  }
-
-  private getFarmScenePlotPosition(slot: FarmScenePlotSlot): { x: number; y: number } {
-    return getFarmScenePlotPositionFromLogic(slot);
-  }
-
-  private getFarmScenePlotPalette(
-    phase: FarmPlotPhase,
-    selected: boolean,
-  ): { frame: number; bed: number; crop: number; badge: string } {
-    return getFarmScenePlotPaletteFromLogic(phase, selected);
-  }
-
   private ensureSelectedFarmPlot(): void {
-    const slots = this.getFarmSceneSlots();
+    const slots = getFarmSceneSlotsFromLogic(this.farmState);
     this.farmSelectedPlotKey = resolveSelectedFarmPlotKeyFromLogic(slots, this.farmSelectedPlotKey);
   }
 
   private setSelectedFarmPlot(plotKey: string, announceSelection: boolean): void {
-    const slot = getFarmSlotByKeyFromLogic(this.getFarmSceneSlots(), plotKey);
+    const slot = getFarmSlotByKeyFromLogic(getFarmSceneSlotsFromLogic(this.farmState), plotKey);
     if (!slot) {
       return;
     }
@@ -6248,29 +5925,9 @@ export class GameScene extends Phaser.Scene {
     this.farmSceneRenderSignature = '';
   }
 
-  private getFarmPlotByKey(plotKey: string | null): FarmPlotState | null {
-    return getFarmPlotByKeyFromLogic(plotKey, this.farmState) as FarmPlotState | null;
-  }
-
-  private getFarmPlotPhase(plot: FarmPlotState | null): FarmPlotPhase {
-    return getFarmPlotPhaseFromLogic(plot);
-  }
-
-  private getFarmPlotPhaseLabel(plot: FarmPlotState | null): string {
-    return getFarmPlotPhaseLabelFromLogic(plot);
-  }
-
-  private getSelectedSeedLabel(): string {
-    return getSelectedSeedLabelFromLogic(this.farmSelectedSeedItemKey);
-  }
-
-  private getFarmReadyPlotsLabel(): string {
-    return getFarmReadyPlotsLabelFromLogic(this.farmState);
-  }
-
   private updateFarmContextPanel(): void {
     const farm = this.farmState;
-    const selectedPlot = this.getFarmPlotByKey(this.farmSelectedPlotKey);
+    const selectedPlot = getFarmPlotByKeyFromLogic(this.farmSelectedPlotKey, this.farmState);
     const context = buildFarmContextViewModelFromFeature({
       isAuthenticated: this.isAuthenticated,
       farmUnlocked: Boolean(farm?.unlocked),
@@ -6325,18 +5982,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private getFarmFeedbackLabel(): string {
-    return getFarmFeedbackLabelFromLogic({
-      farmError: this.farmError,
-      farmCraftingError: this.farmCraftingError,
-      farmBusy: this.farmBusy,
-      farmCraftingBusy: this.farmCraftingBusy,
-      farmFeedbackMessage: this.farmFeedbackMessage,
-      isAuthenticated: this.isAuthenticated,
-      farmUnlocked: Boolean(this.farmState?.unlocked),
-    });
-  }
-
   private toggleFarmCraftingPanel(): void {
     if (!this.isAuthenticated) {
       this.farmFeedbackMessage = 'Connexion requise pour ouvrir le craft.';
@@ -6375,15 +6020,13 @@ export class GameScene extends Phaser.Scene {
     if (mode === 'farm') {
       this.farmFeedbackMessage = feedbackMessage;
       this.villageFeedbackMessage = null;
-      this.villageShopPanelOpen = false;
-      this.villageShopRenderSignature = '';
+      this.villageShopControllerState = closeVillageShopControllerPanelFromFeature(this.villageShopControllerState);
       this.player.setPosition(FARM_SCENE_PLAYER_SPAWN.x, FARM_SCENE_PLAYER_SPAWN.y);
     } else {
       this.villageFeedbackMessage = feedbackMessage;
       this.farmFeedbackMessage = null;
       if (modeChanged) {
-        this.villageShopPanelOpen = false;
-        this.villageShopRenderSignature = '';
+        this.villageShopControllerState = closeVillageShopControllerPanelFromFeature(this.villageShopControllerState);
       }
       this.player.setPosition(VILLAGE_SCENE_PLAYER_SPAWN.x, VILLAGE_SCENE_PLAYER_SPAWN.y);
       this.ensureVillageSelectedZone();
@@ -6405,7 +6048,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleVillageHotkeys(): void {
-    if (this.frontSceneMode !== 'village' || this.isTypingInsideField()) {
+    if (this.frontSceneMode !== 'village' || isTypingInsideFieldFromCommon(document.activeElement)) {
       return;
     }
 
@@ -6425,15 +6068,28 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const selectedZone = this.getVillageZoneByKey(targetKey ?? this.villageSelectedZoneKey);
-    const interactionState = selectedZone ? this.getVillageZoneInteractionState(selectedZone) : null;
+    const selectedZone = getVillageZoneByKeyFromFeature(VILLAGE_SCENE_ZONES, targetKey ?? this.villageSelectedZoneKey);
+    const interactionState = selectedZone
+      ? getVillageZoneInteractionStateFromLogic({
+          isAuthenticated: this.isAuthenticated,
+          zone: selectedZone,
+          villageMarketUnlocked: this.villageMarketUnlocked,
+          blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+          blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+          villageNpcState: this.villageNpcState,
+          villageNpcRelationships: this.villageNpcRelationships,
+        })
+      : null;
     const interactionPlan = buildVillageInteractionPlanFromFeature({
       targetKey,
       selectedZoneKey: this.villageSelectedZoneKey,
       zones: VILLAGE_SCENE_ZONES,
       interactionState,
-      villageShopPanelOpen: this.villageShopPanelOpen,
-      secondaryDialogueMessage: this.getVillageSecondaryDialogue(),
+      villageShopPanelOpen: this.villageShopControllerState.isOpen,
+      secondaryDialogueMessage: getVillageSecondaryDialogueFromLogic({
+        isAuthenticated: this.isAuthenticated,
+        towerHighestFloor: this.hudState.towerHighestFloor,
+      }),
     });
 
     for (const step of interactionPlan.steps) {
@@ -6443,8 +6099,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (step.kind === 'close-shop-panel') {
-        this.villageShopPanelOpen = false;
-        this.villageShopRenderSignature = '';
+        this.villageShopControllerState = closeVillageShopControllerPanelFromFeature(this.villageShopControllerState);
         continue;
       }
 
@@ -6473,16 +6128,9 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
   }
 
-  private getVillageSecondaryDialogue(): string {
-    return getVillageSecondaryDialogueFromLogic({
-      isAuthenticated: this.isAuthenticated,
-      towerHighestFloor: this.hudState.towerHighestFloor,
-    });
-  }
-
   private handleFarmHotkeys(): void {
     const hotkeyResolution = resolveFarmHotkeyCommandFromFeature({
-      isTypingInsideField: this.isTypingInsideField(),
+      isTypingInsideField: isTypingInsideFieldFromCommon(document.activeElement),
       hotkeys: {
         craft: Phaser.Input.Keyboard.JustDown(this.farmHotkeys.craft),
         sleep: Phaser.Input.Keyboard.JustDown(this.farmHotkeys.sleep),
@@ -6518,10 +6166,6 @@ export class GameScene extends Phaser.Scene {
         void this.harvestFarmPlot(hotkeyResolution.plotKey);
       }
     }
-  }
-
-  private isTypingInsideField(): boolean {
-    return isTypingInsideFieldFromCommon(document.activeElement);
   }
 
   private rebuildSceneObstacles(): void {
