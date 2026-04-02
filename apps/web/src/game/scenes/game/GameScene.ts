@@ -132,6 +132,7 @@ import {
   getLoopSummaryLabel as getLoopSummaryLabelFromFeature,
   getLoopSuppliesLabel as getLoopSuppliesLabelFromFeature,
 } from './features/combat/combatLoopHudLogic';
+import { updateLoopHud as updateLoopHudFromFeature } from './features/combat/combatLoopHudRenderer';
 import {
   getCombatLogsFallback as getCombatLogsFallbackFromFeature,
   renderCombatEffectChips as renderCombatEffectChipsFromFeature,
@@ -236,6 +237,7 @@ import {
   getVillageZoneByKey as getVillageZoneByKeyFromFeature,
 } from './features/village/villageSceneSelection';
 import { createVillageActionZone as createVillageActionZoneFromFeature } from './features/village/villageSceneZones';
+import { updateVillageContextPanel as updateVillageContextPanelFromFeature } from './features/village/villageContextHudRenderer';
 import {
   getBlacksmithStatusLabel as getBlacksmithStatusLabelFromVillageHud,
   getDayPhaseKey as getDayPhaseKeyFromVillageHud,
@@ -2043,37 +2045,17 @@ export class GameScene extends Phaser.Scene {
   private updateVillageContextPanel(): void {
     const zone = this.getVillageZoneByKey(this.villageSelectedZoneKey);
     const interactionState = zone ? this.getVillageZoneInteractionState(zone) : null;
-
-    if (this.villageContextTitleValue) {
-      this.villageContextTitleValue.textContent = zone?.title ?? 'Aucune cible';
-    }
-    if (this.villageContextRoleValue) {
-      this.villageContextRoleValue.textContent = zone?.role ?? 'Selectionne une zone du village.';
-    }
-    if (this.villageContextHintValue) {
-      if (!zone) {
-        this.villageContextHintValue.textContent = 'Utilise R ou clique une zone pour choisir une interaction.';
-      } else if (interactionState && !interactionState.enabled) {
-        this.villageContextHintValue.textContent = interactionState.reason;
-      } else {
-        this.villageContextHintValue.textContent = zone.hint;
-      }
-    }
-
-    if (this.villageContextInteractButton) {
-      if (zone) {
-        this.villageContextInteractButton.dataset.targetKey = zone.key;
-      } else {
-        delete this.villageContextInteractButton.dataset.targetKey;
-      }
-      this.villageContextInteractButton.textContent = zone ? `${zone.actionLabel} (E)` : 'Interagir';
-      this.villageContextInteractButton.disabled =
-        this.frontSceneMode !== 'village' || !zone || !interactionState || !interactionState.enabled;
-    }
-
-    if (this.villageContextCycleButton) {
-      this.villageContextCycleButton.disabled = this.frontSceneMode !== 'village' || VILLAGE_SCENE_ZONES.length < 2;
-    }
+    updateVillageContextPanelFromFeature({
+      zone,
+      interactionState,
+      isVillageMode: this.frontSceneMode === 'village',
+      zoneCount: VILLAGE_SCENE_ZONES.length,
+      titleValue: this.villageContextTitleValue,
+      roleValue: this.villageContextRoleValue,
+      hintValue: this.villageContextHintValue,
+      interactButton: this.villageContextInteractButton,
+      cycleButton: this.villageContextCycleButton,
+    });
   }
 
   private getVillageInteractionFeedbackLabel(): string {
@@ -2105,30 +2087,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateLoopHud(): void {
-    if (this.loopSummaryValue) {
-      this.loopSummaryValue.textContent = this.getLoopSummaryLabel();
-    }
-    if (this.loopStageValue) {
-      this.loopStageValue.textContent = this.loopState?.stageLabel ?? '-';
-    }
-    if (this.loopSuppliesValue) {
-      this.loopSuppliesValue.textContent = this.getLoopSuppliesLabel();
-    }
-    if (this.loopPrepValue) {
-      this.loopPrepValue.textContent = this.getLoopPreparationLabel();
-    }
-    if (this.loopBlockersValue) {
-      this.loopBlockersValue.textContent = this.getLoopBlockersLabel();
-    }
-    if (this.loopErrorValue) {
-      this.loopErrorValue.hidden = !this.loopError;
-      this.loopErrorValue.textContent = this.loopError ?? '';
-    }
-    if (this.loopPrepareButton) {
-      const canPrepare = Boolean(this.isAuthenticated && this.loopState?.preparation.ready);
-      this.loopPrepareButton.disabled = !canPrepare || this.loopBusy;
-      this.loopPrepareButton.textContent = this.loopBusy ? 'Preparing...' : 'Prepare combat';
-    }
+    updateLoopHudFromFeature({
+      loopSummaryLabel: this.getLoopSummaryLabel(),
+      loopStageLabel: this.loopState?.stageLabel ?? '-',
+      loopSuppliesLabel: this.getLoopSuppliesLabel(),
+      loopPreparationLabel: this.getLoopPreparationLabel(),
+      loopBlockersLabel: this.getLoopBlockersLabel(),
+      loopError: this.loopError,
+      canPrepare: Boolean(this.isAuthenticated && this.loopState?.preparation.ready),
+      loopBusy: this.loopBusy,
+      summaryValue: this.loopSummaryValue,
+      stageValue: this.loopStageValue,
+      suppliesValue: this.loopSuppliesValue,
+      prepValue: this.loopPrepValue,
+      blockersValue: this.loopBlockersValue,
+      errorValue: this.loopErrorValue,
+      prepareButton: this.loopPrepareButton,
+    });
   }
 
   private updateTowerStoryHud(): void {
