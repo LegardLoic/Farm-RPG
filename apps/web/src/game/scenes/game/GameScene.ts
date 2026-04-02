@@ -96,6 +96,7 @@ import {
 import { updateGamepadInputFrame as updateGamepadInputFrameFromFeature } from './features/common/gamepadInputController';
 import { getSceneObstacleLayout as getSceneObstacleLayoutFromCommon } from './features/common/sceneObstacleLayout';
 import { setFrontSceneModeForScene as setFrontSceneModeForSceneFromCommon } from './features/common/frontSceneModeController';
+import { setupPlayerForScene as setupPlayerForSceneFromCommon } from './features/common/playerSetupController';
 import {
   renderFarmCraftingRecipes as renderFarmCraftingRecipesFromFeature,
   renderFarmPanel as renderFarmPanelFromFeature,
@@ -129,6 +130,7 @@ import {
 } from './features/combat/combatLoopHudLogic';
 import { updateLoopHud as updateLoopHudFromFeature } from './features/combat/combatLoopHudRenderer';
 import { runPrepareCombatLoopActionForScene as runPrepareCombatLoopActionForSceneFromFeature } from './features/combat/combatLoopActionHandlers';
+import { updateCombatHudForScene as updateCombatHudForSceneFromFeature } from './features/combat/combatHudUpdater';
 import {
   getCombatLogsFallback as getCombatLogsFallbackFromFeature,
   renderCombatEffectChips as renderCombatEffectChipsFromFeature,
@@ -137,20 +139,8 @@ import {
   renderCombatLogs as renderCombatLogsFromFeature,
 } from './features/combat/combatHudRenderer';
 import {
-  getCombatBossSpecialTelemetryParts as getCombatBossSpecialTelemetryPartsFromLogic,
-  getCombatEnemyEffectChips as getCombatEnemyEffectChipsFromLogic,
-  getCombatEnemyValue as getCombatEnemyValueFromLogic,
-  getCombatName as getCombatNameFromLogic,
-  getCombatPlayerEffectChips as getCombatPlayerEffectChipsFromLogic,
   getCombatRecapLabel as getCombatRecapLabelFromLogic,
-  getCombatRecapOutcomeLabel as getCombatRecapOutcomeLabelFromLogic,
-  getCombatScriptFlag as getCombatScriptFlagFromLogic,
-  getCombatScriptTurns as getCombatScriptTurnsFromLogic,
-  getCombatStatusLabel as getCombatStatusLabelFromLogic,
   getCombatTelemetryLabel as getCombatTelemetryLabelFromLogic,
-  getCombatTurnLabel as getCombatTurnLabelFromLogic,
-  getCombatUnitValue as getCombatUnitValueFromLogic,
-  isInterruptibleEnemyIntent as isInterruptibleEnemyIntentFromLogic,
   resolveCombatMessage as resolveCombatMessageFromLogic,
 } from './features/combat/combatHudLogic';
 import {
@@ -186,6 +176,7 @@ import {
   runBuyVillageSeedOfferAction as runBuyVillageSeedOfferActionFromFeature,
   runSellVillageCropAction as runSellVillageCropActionFromFeature,
 } from './features/shops/shopActionHandlers';
+import { runVillageShopPrimaryActionForScene as runVillageShopPrimaryActionForSceneFromFeature } from './features/shops/villageShopActionHandlers';
 import {
   runCaptureSaveSlotAction as runCaptureSaveSlotActionFromFeature,
   runDeleteSaveSlotAction as runDeleteSaveSlotActionFromFeature,
@@ -1237,45 +1228,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setupPlayer(): void {
-    const manifest = this.getSpriteManifest();
-    const playerSprite = manifest.sprites['player-hero'];
-    if (!playerSprite) {
-      throw new Error('Player sprite manifest entry is missing');
-    }
-
-    const playerStrip = this.getStripManifestEntry('player-hero');
-    const canUsePlayerStrip = Boolean(playerStrip && this.textures.exists(playerStrip.key));
-
-    if (canUsePlayerStrip && playerStrip) {
-      this.ensureStripAnimations(playerStrip);
-      const idleFrames = this.getStripFrames(playerStrip, 'idle');
-      const firstFrame = idleFrames[0] ?? 0;
-
-      this.player = this.physics.add.sprite(FARM_SCENE_PLAYER_SPAWN.x, FARM_SCENE_PLAYER_SPAWN.y, playerStrip.key, firstFrame);
-      this.player.setOrigin(playerStrip.origin?.x ?? playerSprite.origin.x, playerStrip.origin?.y ?? playerSprite.origin.y);
-      this.player.setScale(playerStrip.scale?.x ?? playerSprite.scale.x, playerStrip.scale?.y ?? playerSprite.scale.y);
-      this.player.setCollideWorldBounds(true);
-      this.player.setSize(playerStrip.physics?.width ?? playerSprite.physics.width, playerStrip.physics?.height ?? playerSprite.physics.height);
-      this.player.setOffset(playerStrip.physics?.offsetX ?? playerSprite.physics.offsetX, playerStrip.physics?.offsetY ?? playerSprite.physics.offsetY);
-      this.player.setDepth(34);
-      this.playerUsesStripAnimation = true;
-      this.playPlayerStripAnimation('idle', true);
-    } else {
-      if (!this.textures.exists(playerSprite.key)) {
-        throw new Error(`Player sprite texture not loaded: ${playerSprite.key}`);
-      }
-
-      this.player = this.physics.add.sprite(FARM_SCENE_PLAYER_SPAWN.x, FARM_SCENE_PLAYER_SPAWN.y, playerSprite.key);
-      this.player.setOrigin(playerSprite.origin.x, playerSprite.origin.y);
-      this.player.setScale(playerSprite.scale.x, playerSprite.scale.y);
-      this.player.setCollideWorldBounds(true);
-      this.player.setSize(playerSprite.physics.width, playerSprite.physics.height);
-      this.player.setOffset(playerSprite.physics.offsetX, playerSprite.physics.offsetY);
-      this.player.setDepth(34);
-      this.playerUsesStripAnimation = false;
-    }
-
-    this.rebuildSceneObstacles();
+    setupPlayerForSceneFromCommon(
+      this as unknown as Parameters<typeof setupPlayerForSceneFromCommon>[0],
+      FARM_SCENE_PLAYER_SPAWN,
+    );
   }
 
   private setupInput(): void {
@@ -1321,35 +1277,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateCombatHud(): void {
-    this.setHudText('combatName', getCombatNameFromLogic(this.combatState, this.isAuthenticated));
-    this.setHudText('combatStatus', getCombatStatusLabelFromLogic(this.combatStatus));
-    this.setHudText('combatEncounterId', this.combatEncounterId ?? '-');
-    this.setHudText('combatTurn', getCombatTurnLabelFromLogic(this.combatState));
-    this.setHudText('combatRound', this.combatState ? `${this.combatState.round}` : '-');
-    this.setHudText('combatResult', this.combatMessage);
     this.setHudText('combatRecap', getCombatRecapLabelFromLogic(this.combatState));
-    this.setHudText('combatPlayerHp', getCombatUnitValueFromLogic(this.hudState.hp, this.hudState.maxHp));
-    this.setHudText('combatPlayerMp', getCombatUnitValueFromLogic(this.hudState.mp, this.hudState.maxMp));
-    this.renderCombatEffectChips('combatPlayerEffects', getCombatPlayerEffectChipsFromLogic(this.combatState));
-    this.setHudText('combatEnemyName', this.combatState ? this.combatState.enemy.name : '-');
-    this.renderCombatEnemySprite();
-    this.setHudText('combatEnemyHp', getCombatEnemyValueFromLogic(this.combatState, 'hp'));
-    this.setHudText('combatEnemyMp', getCombatEnemyValueFromLogic(this.combatState, 'mp'));
-    this.renderCombatEffectChips('combatEnemyEffects', getCombatEnemyEffectChipsFromLogic(this.combatState));
     this.setHudText('combatTelemetry', getCombatTelemetryLabelFromLogic(this.combatState));
-    this.renderCombatEnemyTelegraphs();
-
-    if (this.combatStatusBadge) {
-      this.combatStatusBadge.dataset.status = this.combatStatus;
-    }
-
-    if (this.combatErrorValue) {
-      this.combatErrorValue.hidden = !this.combatError;
-      this.combatErrorValue.textContent = this.combatError ?? '';
-    }
-
-    this.renderCombatLogs();
-    this.updateCombatButtons();
+    updateCombatHudForSceneFromFeature(
+      this as unknown as Parameters<typeof updateCombatHudForSceneFromFeature>[0],
+    );
   }
 
   private updateQuestHud(): void {
@@ -1529,36 +1461,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async handleVillageShopPrimaryAction(): Promise<void> {
-    const action = this.resolveVillageShopPanel().viewModel.primaryAction;
-    if (action.kind === 'select-offer' || action.kind === 'blocked') {
-      this.villageFeedbackMessage = action.message;
-      this.updateHud();
-      return;
-    }
-
-    if (action.kind === 'buy-seed') {
-      await this.buyVillageSeedOffer(action.offerKey);
-      if (!this.villageMarketError) {
-        this.villageFeedbackMessage = `${action.entry.name} achete au Marche.`;
-      }
-      this.updateHud();
-      return;
-    }
-
-    if (action.kind === 'sell-crop') {
-      await this.sellVillageCrop(action.itemKey);
-      if (!this.villageMarketError) {
-        this.villageFeedbackMessage = `${action.entry.name} vendu au Marche.`;
-      }
-      this.updateHud();
-      return;
-    }
-
-    await this.buyBlacksmithOffer(action.offerKey);
-    if (!this.blacksmithError) {
-      this.villageFeedbackMessage = `${action.entry.name} commande a la Forge.`;
-    }
-    this.updateHud();
+    await runVillageShopPrimaryActionForSceneFromFeature(
+      this as unknown as Parameters<typeof runVillageShopPrimaryActionForSceneFromFeature>[0],
+    );
   }
 
   private async handleVillageShopTalkAction(): Promise<void> {
