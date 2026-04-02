@@ -121,3 +121,42 @@ export function resolveFarmHotkeyCommand(input: {
     hotkey: null,
   };
 }
+
+export function runFarmHotkeyCommand(
+  resolution: FarmHotkeyResolution,
+  handlers: {
+    toggleCraftingPanel: () => void;
+    sleepAtFarm: () => void;
+    plantPlot: (plotKey: string) => void;
+    waterPlot: (plotKey: string) => void;
+    harvestPlot: (plotKey: string) => void;
+  },
+): void {
+  if (resolution.kind === 'toggle-crafting-panel') {
+    handlers.toggleCraftingPanel();
+    return;
+  }
+
+  if (resolution.kind === 'sleep-at-farm') {
+    handlers.sleepAtFarm();
+    return;
+  }
+
+  if (resolution.kind !== 'plot-action') {
+    return;
+  }
+
+  if (resolution.farmAction === 'plant') {
+    handlers.plantPlot(resolution.plotKey);
+    return;
+  }
+
+  if (resolution.farmAction === 'water') {
+    handlers.waterPlot(resolution.plotKey);
+    return;
+  }
+
+  if (resolution.farmAction === 'harvest') {
+    handlers.harvestPlot(resolution.plotKey);
+  }
+}

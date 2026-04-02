@@ -66,6 +66,7 @@ import {
 } from './features/farm/farmSceneRenderer';
 import { createFarmActionZone as createFarmActionZoneFromFeature } from './features/farm/farmSceneZones';
 import { buildFarmContextViewModel as buildFarmContextViewModelFromFeature } from './features/farm/farmContextLogic';
+import { updateFarmContextPanel as updateFarmContextPanelFromFeature } from './features/farm/farmContextHudRenderer';
 import {
   runCraftFarmRecipeAction as runCraftFarmRecipeActionFromFeature,
   runHarvestFarmPlotAction as runHarvestFarmPlotActionFromFeature,
@@ -73,23 +74,26 @@ import {
   runSleepAtFarmAction as runSleepAtFarmActionFromFeature,
   runWaterFarmPlotAction as runWaterFarmPlotActionFromFeature,
 } from './features/farm/farmActionHandlers';
-import { resolveFarmHotkeyCommand as resolveFarmHotkeyCommandFromFeature } from './features/farm/farmHotkeyController';
+import {
+  resolveFarmHotkeyCommand as resolveFarmHotkeyCommandFromFeature,
+  runFarmHotkeyCommand as runFarmHotkeyCommandFromFeature,
+} from './features/farm/farmHotkeyController';
 import { isTypingInsideField as isTypingInsideFieldFromCommon } from './features/common/inputGuards';
 import {
   activateGamepadHudElement as activateGamepadHudElementFromCommon,
   applyGamepadHudFocusState as applyGamepadHudFocusStateFromCommon,
   clearGamepadHudFocus as clearGamepadHudFocusFromCommon,
-  computeGamepadNavigationStep as computeGamepadNavigationStepFromCommon,
-  consumeGamepadJustPressedButtons as consumeGamepadJustPressedButtonsFromCommon,
   getGamepadHudFocusableElements as getGamepadHudFocusableElementsFromCommon,
   getPrimaryConnectedGamepad as getPrimaryConnectedGamepadFromCommon,
   getWrappedGamepadHudFocusIndex as getWrappedGamepadHudFocusIndexFromCommon,
   resolveRetainedGamepadHudFocusIndex as resolveRetainedGamepadHudFocusIndexFromCommon,
 } from './features/common/gamepadHudLogic';
+import { resolveGamepadFrame as resolveGamepadFrameFromFeature } from './features/common/gamepadFrameController';
 import { getSceneObstacleLayout as getSceneObstacleLayoutFromCommon } from './features/common/sceneObstacleLayout';
 import {
   renderFarmCraftingRecipes as renderFarmCraftingRecipesFromFeature,
   renderFarmPanel as renderFarmPanelFromFeature,
+  updateFarmHudValues as updateFarmHudValuesFromFeature,
 } from './features/farm/farmHudRenderer';
 import {
   computeCombatActionAvailability as computeCombatActionAvailabilityFromFeature,
@@ -100,6 +104,7 @@ import {
   getCombatEnemyIntentUi as getCombatEnemyIntentUiFromFeature,
   getCombatIntentIconTooltip as getCombatIntentIconTooltipFromFeature,
 } from './features/combat/combatIntentUiLogic';
+import { resolveCombatGamepadShortcuts as resolveCombatGamepadShortcutsFromFeature } from './features/combat/combatGamepadShortcuts';
 import {
   applyEnemyHudStripFrame as applyEnemyHudStripFrameFromFeature,
   getCombatEnemyPortraitPath as getCombatEnemyPortraitPathFromFeature,
@@ -204,18 +209,13 @@ import {
   hasExistingSaveSlot as hasExistingSaveSlotFromFeature,
 } from './features/saves/saveHudLogic';
 import {
-  formatVillageNpcStateLabel as formatVillageNpcStateLabelFromLogic,
   formatVillageRelationshipTierLabel as formatVillageRelationshipTierLabelFromLogic,
   getBlacksmithContextDialogue as getBlacksmithContextDialogueFromLogic,
   getMayorContextDialogue as getMayorContextDialogueFromLogic,
   getMerchantContextDialogue as getMerchantContextDialogueFromLogic,
   getVillageInteractionFeedbackLabel as getVillageInteractionFeedbackLabelFromLogic,
-  getVillageNpcCooldownDialogue as getVillageNpcCooldownDialogueFromLogic,
   getVillageNpcDialogueLabel as getVillageNpcDialogueLabelFromLogic,
   getVillageNpcDisplayName as getVillageNpcDisplayNameFromLogic,
-  getVillageNpcEntryLabel as getVillageNpcEntryLabelFromLogic,
-  getVillageNpcSummaryLabel as getVillageNpcSummaryLabelFromLogic,
-  getVillageNpcUnavailableDialogue as getVillageNpcUnavailableDialogueFromLogic,
   getVillageObjectiveLabel as getVillageObjectiveLabelFromLogic,
   getVillageSecondaryDialogue as getVillageSecondaryDialogueFromLogic,
   getVillageZoneInteractionState as getVillageZoneInteractionStateFromLogic,
@@ -241,6 +241,8 @@ import {
 import { createVillageActionZone as createVillageActionZoneFromFeature } from './features/village/villageSceneZones';
 import { updateVillageContextPanel as updateVillageContextPanelFromFeature } from './features/village/villageContextHudRenderer';
 import { buildVillageInteractionPlan as buildVillageInteractionPlanFromFeature } from './features/village/villageInteractionController';
+import { runVillageInteractionPlan as runVillageInteractionPlanFromFeature } from './features/village/villageInteractionActionRunner';
+import { updateVillageNpcHud as updateVillageNpcHudFromFeature } from './features/village/villageNpcHudRenderer';
 import {
   getDayPhaseKey as getDayPhaseKeyFromVillageHud,
   getDayPhaseLabel as getDayPhaseLabelFromVillageHud,
@@ -322,10 +324,10 @@ import {
 import {
   applyImportedDebugQaTrace as applyImportedDebugQaTraceFromFeature,
   buildCombatTraceSnapshot as buildCombatTraceSnapshotFromFeature,
-  buildDebugQaTracePayload as buildDebugQaTracePayloadFromFeature,
   captureDebugQaReplayBaseline as captureDebugQaReplayBaselineFromFeature,
   restoreDebugQaReplayBaseline as restoreDebugQaReplayBaselineFromFeature,
 } from './features/debugQa/debugQaTraceBuilders';
+import { buildDebugQaTracePayloadFromScene as buildDebugQaTracePayloadFromSceneFromFeature } from './features/debugQa/debugQaTraceCollector';
 import {
   bindHudElements as bindHudElementsFromHud,
   clearHudElementBindings as clearHudElementBindingsFromHud,
@@ -1510,60 +1512,29 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateVillageNpcHud(): void {
-    if (this.villageNpcSummaryValue) {
-      this.villageNpcSummaryValue.textContent = getVillageNpcSummaryLabelFromLogic({
-        isAuthenticated: this.isAuthenticated,
-        villageNpcState: this.villageNpcState,
-        villageNpcRelationships: this.villageNpcRelationships,
-      });
-    }
-
-    if (this.villageNpcMayorValue) {
-      this.villageNpcMayorValue.textContent = getVillageNpcEntryLabelFromLogic({
-        npcKey: 'mayor',
-        villageNpcState: this.villageNpcState,
-        villageNpcRelationships: this.villageNpcRelationships,
-      });
-    }
-
-    if (this.villageNpcBlacksmithValue) {
-      this.villageNpcBlacksmithValue.textContent = getVillageNpcEntryLabelFromLogic({
-        npcKey: 'blacksmith',
-        villageNpcState: this.villageNpcState,
-        villageNpcRelationships: this.villageNpcRelationships,
-      });
-    }
-
-    if (this.villageNpcMerchantValue) {
-      this.villageNpcMerchantValue.textContent = getVillageNpcEntryLabelFromLogic({
-        npcKey: 'merchant',
-        villageNpcState: this.villageNpcState,
-        villageNpcRelationships: this.villageNpcRelationships,
-      });
-    }
-
-    if (this.villageNpcMayorDialogueValue) {
-      this.villageNpcMayorDialogueValue.textContent = this.getVillageNpcDialogueLabel('mayor');
-    }
-
-    if (this.villageNpcBlacksmithDialogueValue) {
-      this.villageNpcBlacksmithDialogueValue.textContent = this.getVillageNpcDialogueLabel('blacksmith');
-    }
-
-    if (this.villageNpcMerchantDialogueValue) {
-      this.villageNpcMerchantDialogueValue.textContent = this.getVillageNpcDialogueLabel('merchant');
-    }
-
-    if (this.villageNpcErrorValue) {
-      this.villageNpcErrorValue.hidden = !this.villageNpcError;
-      this.villageNpcErrorValue.textContent = this.villageNpcError ?? '';
-    }
-
-    this.updateVillageNpcTalkButton('mayor', this.villageNpcTalkMayorButton);
-    this.updateVillageNpcTalkButton('blacksmith', this.villageNpcTalkBlacksmithButton);
-    this.updateVillageNpcTalkButton('merchant', this.villageNpcTalkMerchantButton);
+    updateVillageNpcHudFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      villageNpcBusy: this.villageNpcBusy,
+      villageNpcError: this.villageNpcError,
+      villageNpcState: this.villageNpcState,
+      villageNpcRelationships: this.villageNpcRelationships,
+      elements: {
+        summaryValue: this.villageNpcSummaryValue,
+        mayorValue: this.villageNpcMayorValue,
+        blacksmithValue: this.villageNpcBlacksmithValue,
+        merchantValue: this.villageNpcMerchantValue,
+        mayorDialogueValue: this.villageNpcMayorDialogueValue,
+        blacksmithDialogueValue: this.villageNpcBlacksmithDialogueValue,
+        merchantDialogueValue: this.villageNpcMerchantDialogueValue,
+        errorValue: this.villageNpcErrorValue,
+        talkMayorButton: this.villageNpcTalkMayorButton,
+        talkBlacksmithButton: this.villageNpcTalkBlacksmithButton,
+        talkMerchantButton: this.villageNpcTalkMerchantButton,
+      },
+    });
   }
 
+  // Kept for compatibility with existing regression tests while rendering moved to feature modules.
   private updateVillageNpcTalkButton(
     npcKey: VillageNpcKey,
     button: HTMLButtonElement | null,
@@ -1626,62 +1597,42 @@ export class GameScene extends Phaser.Scene {
 
   private updateFarmHud(): void {
     this.ensureSelectedFarmPlot();
-
-    if (this.farmSummaryValue) {
-      this.farmSummaryValue.textContent = this.getFarmSummaryLabel();
-    }
-
-    if (this.farmStorySummaryValue) {
-      this.farmStorySummaryValue.textContent = this.getFarmStorySummaryLabel();
-    }
-
-    if (this.farmStoryNarrativeValue) {
-      this.farmStoryNarrativeValue.textContent = this.getFarmStoryNarrativeLabel();
-    }
-
-    if (this.farmErrorValue) {
-      this.farmErrorValue.hidden = !this.farmError;
-      this.farmErrorValue.textContent = this.farmError ?? '';
-    }
-
-    if (this.farmSleepButton) {
-      const canSleep = Boolean(this.isAuthenticated && this.farmState?.unlocked);
-      this.farmSleepButton.disabled = !canSleep || this.farmBusy;
-      this.farmSleepButton.textContent = this.farmBusy ? 'Dormir...' : 'Dormir (+1 jour)';
-    }
-
-    if (this.farmCraftingToggleButton) {
-      this.farmCraftingToggleButton.disabled = !this.isAuthenticated || !this.farmState?.unlocked;
-      this.farmCraftingToggleButton.textContent = this.farmCraftingPanelOpen ? 'Fermer craft' : 'Ouvrir craft';
-    }
-
-    if (this.farmGoVillageButton) {
-      this.farmGoVillageButton.disabled = !this.isAuthenticated;
-    }
-
-    if (this.farmContextSeedValue) {
-      this.farmContextSeedValue.textContent = getSelectedSeedLabelFromLogic(this.farmSelectedSeedItemKey);
-    }
-
-    if (this.farmContextReadyValue) {
-      this.farmContextReadyValue.textContent = getFarmReadyPlotsLabelFromLogic(this.farmState);
-    }
-
+    const canSleep = Boolean(this.isAuthenticated && this.farmState?.unlocked);
+    const feedback = getFarmFeedbackLabelFromLogic({
+      farmError: this.farmError,
+      farmCraftingError: this.farmCraftingError,
+      farmBusy: this.farmBusy,
+      farmCraftingBusy: this.farmCraftingBusy,
+      farmFeedbackMessage: this.farmFeedbackMessage,
+      isAuthenticated: this.isAuthenticated,
+      farmUnlocked: Boolean(this.farmState?.unlocked),
+    });
+    updateFarmHudValuesFromFeature({
+      summaryValue: this.farmSummaryValue,
+      storySummaryValue: this.farmStorySummaryValue,
+      storyNarrativeValue: this.farmStoryNarrativeValue,
+      errorValue: this.farmErrorValue,
+      sleepButton: this.farmSleepButton,
+      craftingToggleButton: this.farmCraftingToggleButton,
+      goVillageButton: this.farmGoVillageButton,
+      contextSeedValue: this.farmContextSeedValue,
+      contextReadyValue: this.farmContextReadyValue,
+      contextFeedbackValue: this.farmContextFeedbackValue,
+      summaryLabel: this.getFarmSummaryLabel(),
+      storySummaryLabel: this.getFarmStorySummaryLabel(),
+      storyNarrativeLabel: this.getFarmStoryNarrativeLabel(),
+      farmError: this.farmError,
+      sleepButtonDisabled: !canSleep || this.farmBusy,
+      sleepButtonLabel: this.farmBusy ? 'Dormir...' : 'Dormir (+1 jour)',
+      craftingToggleDisabled: !this.isAuthenticated || !this.farmState?.unlocked,
+      craftingToggleLabel: this.farmCraftingPanelOpen ? 'Fermer craft' : 'Ouvrir craft',
+      goVillageDisabled: !this.isAuthenticated,
+      selectedSeedLabel: getSelectedSeedLabelFromLogic(this.farmSelectedSeedItemKey),
+      readyPlotsLabel: getFarmReadyPlotsLabelFromLogic(this.farmState),
+      feedbackTone: this.farmError ? 'error' : 'info',
+      feedbackLabel: feedback,
+    });
     this.updateFarmContextPanel();
-
-    if (this.farmContextFeedbackValue) {
-      const feedback = getFarmFeedbackLabelFromLogic({
-        farmError: this.farmError,
-        farmCraftingError: this.farmCraftingError,
-        farmBusy: this.farmBusy,
-        farmCraftingBusy: this.farmCraftingBusy,
-        farmFeedbackMessage: this.farmFeedbackMessage,
-        isAuthenticated: this.isAuthenticated,
-        farmUnlocked: Boolean(this.farmState?.unlocked),
-      });
-      this.farmContextFeedbackValue.dataset.tone = this.farmError ? 'error' : 'info';
-      this.farmContextFeedbackValue.textContent = feedback;
-    }
 
     this.renderFarmPanel();
     if (this.frontSceneMode === 'farm') {
@@ -2074,26 +2025,32 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.syncGamepadHudFocusables(false);
-    const consumption = consumeGamepadJustPressedButtonsFromCommon(gamepad, this.gamepadPreviousButtonStates);
-    this.gamepadPreviousButtonStates = consumption.nextStates;
-    const justPressedButtons = consumption.justPressed;
+    const frame = resolveGamepadFrameFromFeature({
+      gamepad,
+      previousButtonStates: this.gamepadPreviousButtonStates,
+      navigationButtons: {
+        up: GAMEPAD_BUTTON_DPAD_UP,
+        left: GAMEPAD_BUTTON_DPAD_LEFT,
+        down: GAMEPAD_BUTTON_DPAD_DOWN,
+        right: GAMEPAD_BUTTON_DPAD_RIGHT,
+        leftBumper: GAMEPAD_BUTTON_LEFT_BUMPER,
+        rightBumper: GAMEPAD_BUTTON_RIGHT_BUMPER,
+      },
+    });
+    if (frame.kind !== 'connected') {
+      return;
+    }
+    this.gamepadPreviousButtonStates = frame.nextPreviousButtonStates;
+    const justPressedButtons = frame.justPressedButtons;
     if (justPressedButtons.size === 0) {
       return;
     }
 
-    const navigationStep = computeGamepadNavigationStepFromCommon(justPressedButtons, {
-      up: GAMEPAD_BUTTON_DPAD_UP,
-      left: GAMEPAD_BUTTON_DPAD_LEFT,
-      down: GAMEPAD_BUTTON_DPAD_DOWN,
-      right: GAMEPAD_BUTTON_DPAD_RIGHT,
-      leftBumper: GAMEPAD_BUTTON_LEFT_BUMPER,
-      rightBumper: GAMEPAD_BUTTON_RIGHT_BUMPER,
-    });
-    if (navigationStep !== 0) {
-      this.moveGamepadHudFocus(navigationStep);
+    if (frame.navigationStep !== 0) {
+      this.moveGamepadHudFocus(frame.navigationStep);
     }
 
-    this.handleGamepadCombatShortcuts(justPressedButtons);
+    this.handleGamepadCombatShortcuts(new Set(justPressedButtons));
 
     if (justPressedButtons.has(GAMEPAD_BUTTON_A)) {
       if (this.activateFocusedGamepadHudElement()) {
@@ -2141,33 +2098,26 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleGamepadCombatShortcuts(justPressedButtons: Set<number>): void {
-    if (!this.isAuthenticated) {
-      return;
-    }
+    const resolution = resolveCombatGamepadShortcutsFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      combatState: this.combatState,
+      justPressedButtons,
+      startButton: GAMEPAD_BUTTON_Y,
+      attackButton: GAMEPAD_BUTTON_X,
+      defendButton: GAMEPAD_BUTTON_Y,
+      fireballButton: GAMEPAD_BUTTON_B,
+    });
 
     if (
-      !this.combatState ||
-      this.combatState.status !== 'active' ||
-      this.combatState.turn !== 'player'
+      resolution.shouldStartCombat &&
+      this.combatStartButton &&
+      !this.combatStartButton.disabled
     ) {
-      if (
-        justPressedButtons.has(GAMEPAD_BUTTON_Y) &&
-        this.combatStartButton &&
-        !this.combatStartButton.disabled
-      ) {
-        void this.startCombat();
-      }
-      return;
+      void this.startCombat();
     }
 
-    if (justPressedButtons.has(GAMEPAD_BUTTON_X)) {
-      this.tryPerformCombatActionFromGamepad('attack');
-    }
-    if (justPressedButtons.has(GAMEPAD_BUTTON_Y)) {
-      this.tryPerformCombatActionFromGamepad('defend');
-    }
-    if (justPressedButtons.has(GAMEPAD_BUTTON_B)) {
-      this.tryPerformCombatActionFromGamepad('fireball');
+    for (const action of resolution.actions) {
+      this.tryPerformCombatActionFromGamepad(action);
     }
   }
 
@@ -4750,7 +4700,7 @@ export class GameScene extends Phaser.Scene {
 
   private buildDebugQaTracePayload(): DebugQaTracePayload {
     const timestamp = new Date().toISOString();
-    return buildDebugQaTracePayloadFromFeature({
+    return buildDebugQaTracePayloadFromSceneFromFeature({
       timestamp,
       frontend: {
         mode: import.meta.env.MODE,
@@ -4764,61 +4714,37 @@ export class GameScene extends Phaser.Scene {
           height: window.innerHeight,
         },
       },
-      auth: {
-        authenticated: this.isAuthenticated,
-        status: this.authStatus,
-      },
+      isAuthenticated: this.isAuthenticated,
+      authStatus: this.authStatus,
       hudState: this.hudState,
-      hudSummaries: {
-        combat: getCombatStatusLabelFromLogic(this.combatStatus),
-        quests: getQuestSummaryLabelFromFeature({
-          isAuthenticated: this.isAuthenticated,
-          questBusy: this.questBusy,
-          quests: this.quests,
-        }),
-        blacksmith: getBlacksmithShopSummaryLabelFromFeature({
-          isAuthenticated: this.isAuthenticated,
-          blacksmithUnlocked: this.hudState.blacksmithUnlocked,
-          blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
-          blacksmithBusy: this.blacksmithBusy,
-          blacksmithOffersCount: this.blacksmithOffers.length,
-          gold: this.hudState.gold,
-        }),
-        autosave: getAutoSaveSummaryLabelFromFeature({
-          isAuthenticated: this.isAuthenticated,
-          autosaveBusy: this.autosaveBusy,
-          autosave: this.autosave,
-        }),
-        saveSlots: getSaveSlotsSummaryLabelFromFeature({
-          isAuthenticated: this.isAuthenticated,
-          saveSlotsBusy: this.saveSlotsBusy,
-          saveSlots: this.saveSlots,
-        }),
-      },
+      combatStatus: this.combatStatus,
+      questBusy: this.questBusy,
+      quests: this.quests,
+      blacksmithUnlocked: this.hudState.blacksmithUnlocked,
+      blacksmithCurseLifted: this.hudState.blacksmithCurseLifted,
+      blacksmithBusy: this.blacksmithBusy,
+      blacksmithOffersCount: this.blacksmithOffers.length,
+      gold: this.hudState.gold,
+      autosaveBusy: this.autosaveBusy,
+      autosave: this.autosave,
+      saveSlotsBusy: this.saveSlotsBusy,
+      saveSlots: this.saveSlots,
       combat: this.buildCombatTraceSnapshot(),
-      debugQa: {
-        enabled: this.debugQaEnabled,
-        status: this.debugQaStatus,
-        busyAction: this.debugQaBusyAction,
-        message: this.debugQaMessage,
-        error: this.debugQaError,
-        filters: {
-          recapOutcome: this.debugQaRecapOutcomeFilter,
-          recapEnemyQuery: this.debugQaRecapEnemyFilter,
-          scriptedEnemyQuery: this.debugQaScriptEnemyFilter,
-          scriptedIntentQuery: this.debugQaScriptIntentFilter,
-        },
-        scriptedIntentsReference: {
-          loaded: this.debugQaScriptedIntentsReference !== null,
-          enemyProfiles: this.debugQaScriptedIntentsReference?.scriptedIntents.length ?? 0,
-        },
-        replayAutoPlay: {
-          active: this.debugQaReplayAutoPlayIntervalId !== null,
-          speed: this.debugQaReplayAutoPlaySpeed,
-          intervalMs: this.getDebugQaReplayAutoPlayIntervalMs(this.debugQaReplayAutoPlaySpeed),
-        },
-        stripCalibrationPreset: this.stripCalibrationPreset,
-      },
+      debugQaEnabled: this.debugQaEnabled,
+      debugQaStatus: this.debugQaStatus,
+      debugQaBusyAction: this.debugQaBusyAction,
+      debugQaMessage: this.debugQaMessage,
+      debugQaError: this.debugQaError,
+      debugQaRecapOutcomeFilter: this.debugQaRecapOutcomeFilter,
+      debugQaRecapEnemyFilter: this.debugQaRecapEnemyFilter,
+      debugQaScriptEnemyFilter: this.debugQaScriptEnemyFilter,
+      debugQaScriptIntentFilter: this.debugQaScriptIntentFilter,
+      debugQaScriptedIntentsLoaded: this.debugQaScriptedIntentsReference !== null,
+      debugQaScriptedEnemyProfilesCount: this.debugQaScriptedIntentsReference?.scriptedIntents.length ?? 0,
+      debugQaReplayAutoPlayActive: this.debugQaReplayAutoPlayIntervalId !== null,
+      debugQaReplayAutoPlaySpeed: this.debugQaReplayAutoPlaySpeed,
+      debugQaReplayAutoPlayIntervalMs: this.getDebugQaReplayAutoPlayIntervalMs(this.debugQaReplayAutoPlaySpeed),
+      stripCalibrationPreset: this.stripCalibrationPreset,
     });
   }
 
@@ -5001,6 +4927,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  // Kept for compatibility with existing regression tests while rendering moved to feature modules.
   private getVillageNpcDialogueLabel(npcKey: VillageNpcKey): string {
     return getVillageNpcDialogueLabelFromLogic({
       isAuthenticated: this.isAuthenticated,
@@ -5010,33 +4937,22 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private getVillageNpcUnavailableDialogue(npcKey: VillageNpcKey, stateKey: string): string {
-    return getVillageNpcUnavailableDialogueFromLogic(npcKey, stateKey);
-  }
-
-  private getVillageNpcCooldownDialogue(
-    npcKey: VillageNpcKey,
-    tier: VillageNpcRelationshipTier,
-  ): string {
-    return getVillageNpcCooldownDialogueFromLogic(npcKey, tier);
-  }
-
+  // Kept for compatibility with existing regression tests while rendering moved to feature modules.
   private getMayorContextDialogue(tier: VillageNpcRelationshipTier, stateKey: string): string {
     return getMayorContextDialogueFromLogic(tier, stateKey);
   }
 
+  // Kept for compatibility with existing regression tests while rendering moved to feature modules.
   private getBlacksmithContextDialogue(tier: VillageNpcRelationshipTier, stateKey: string): string {
     return getBlacksmithContextDialogueFromLogic(tier, stateKey);
   }
 
+  // Kept for compatibility with existing regression tests while rendering moved to feature modules.
   private getMerchantContextDialogue(tier: VillageNpcRelationshipTier, stateKey: string): string {
     return getMerchantContextDialogueFromLogic(tier, stateKey);
   }
 
-  private formatVillageNpcStateLabel(stateKey: string): string {
-    return formatVillageNpcStateLabelFromLogic(stateKey);
-  }
-
+  // Kept for compatibility with existing regression tests while rendering moved to feature modules.
   private formatVillageRelationshipTierLabel(tier: VillageNpcRelationshipTier): string {
     return formatVillageRelationshipTierLabelFromLogic(tier);
   }
@@ -5406,49 +5322,14 @@ export class GameScene extends Phaser.Scene {
       getFarmPlotStatusLabel: (plot) => this.getFarmPlotStatusLabel(plot),
       formatFarmLabel: (raw) => this.formatFarmLabel(raw),
     });
-
-    if (this.farmContextTitleValue) {
-      this.farmContextTitleValue.textContent = context.title;
-    }
-
-    if (this.farmContextStatusValue) {
-      this.farmContextStatusValue.textContent = context.status;
-    }
-    const selectedPlotKey = context.selectedPlotKey;
-
-    const plantButton = this.farmContextPlantButton;
-    if (plantButton) {
-      plantButton.dataset.farmAction = 'plant';
-      if (selectedPlotKey) {
-        plantButton.dataset.plotKey = selectedPlotKey;
-      } else {
-        delete plantButton.dataset.plotKey;
-      }
-      plantButton.textContent = context.plantLabel;
-      plantButton.disabled = !context.canPlant;
-    }
-
-    const waterButton = this.farmContextWaterButton;
-    if (waterButton) {
-      waterButton.dataset.farmAction = 'water';
-      if (selectedPlotKey) {
-        waterButton.dataset.plotKey = selectedPlotKey;
-      } else {
-        delete waterButton.dataset.plotKey;
-      }
-      waterButton.disabled = !context.canWater;
-    }
-
-    const harvestButton = this.farmContextHarvestButton;
-    if (harvestButton) {
-      harvestButton.dataset.farmAction = 'harvest';
-      if (selectedPlotKey) {
-        harvestButton.dataset.plotKey = selectedPlotKey;
-      } else {
-        delete harvestButton.dataset.plotKey;
-      }
-      harvestButton.disabled = !context.canHarvest;
-    }
+    updateFarmContextPanelFromFeature({
+      context,
+      titleValue: this.farmContextTitleValue,
+      statusValue: this.farmContextStatusValue,
+      plantButton: this.farmContextPlantButton,
+      waterButton: this.farmContextWaterButton,
+      harvestButton: this.farmContextHarvestButton,
+    });
   }
 
   private toggleFarmCraftingPanel(): void {
@@ -5560,41 +5441,23 @@ export class GameScene extends Phaser.Scene {
         towerHighestFloor: this.hudState.towerHighestFloor,
       }),
     });
-
-    for (const step of interactionPlan.steps) {
-      if (step.kind === 'select-zone') {
-        this.setVillageSelectedZone(step.zoneKey, step.announceSelection);
-        continue;
-      }
-
-      if (step.kind === 'close-shop-panel') {
+    await runVillageInteractionPlanFromFeature({
+      steps: interactionPlan.steps,
+      setSelectedZone: (zoneKey, announceSelection) => this.setVillageSelectedZone(zoneKey, announceSelection),
+      closeShopPanel: () => {
         this.villageShopControllerState = closeVillageShopControllerPanelFromFeature(this.villageShopControllerState);
-        continue;
-      }
-
-      if (step.kind === 'open-shop-panel') {
-        this.openVillageShopPanel(step.shopType, step.feedbackMessage);
-        return;
-      }
-
-      if (step.kind === 'talk-npc') {
-        await this.interactVillageNpc(step.npcKey);
-        if (!this.villageNpcError) {
-          this.villageFeedbackMessage = step.successMessage;
-        }
-        this.updateHud();
-        return;
-      }
-
-      if (step.kind === 'switch-front-scene') {
-        this.setFrontSceneMode(step.sceneMode, step.feedbackMessage);
-        return;
-      }
-
-      this.villageFeedbackMessage = step.message;
-    }
-
-    this.updateHud();
+      },
+      openShopPanel: (shopType, feedbackMessage) => this.openVillageShopPanel(shopType, feedbackMessage),
+      interactVillageNpc: async (npcKey) => {
+        await this.interactVillageNpc(npcKey);
+        return !this.villageNpcError;
+      },
+      setFrontSceneMode: (mode, feedbackMessage) => this.setFrontSceneMode(mode, feedbackMessage),
+      setVillageFeedbackMessage: (message) => {
+        this.villageFeedbackMessage = message;
+      },
+      updateHud: () => this.updateHud(),
+    });
   }
 
   private handleFarmHotkeys(): void {
@@ -5609,32 +5472,21 @@ export class GameScene extends Phaser.Scene {
       },
       selectedPlotKey: this.farmSelectedPlotKey,
     });
-
-    if (hotkeyResolution.kind === 'toggle-crafting-panel') {
-      this.toggleFarmCraftingPanel();
-      return;
-    }
-
-    if (hotkeyResolution.kind === 'sleep-at-farm') {
-      void this.sleepAtFarm();
-      return;
-    }
-
-    if (hotkeyResolution.kind === 'plot-action') {
-      if (hotkeyResolution.farmAction === 'plant') {
-        void this.plantFarmPlot(hotkeyResolution.plotKey);
-        return;
-      }
-
-      if (hotkeyResolution.farmAction === 'water') {
-        void this.waterFarmPlot(hotkeyResolution.plotKey);
-        return;
-      }
-
-      if (hotkeyResolution.farmAction === 'harvest') {
-        void this.harvestFarmPlot(hotkeyResolution.plotKey);
-      }
-    }
+    runFarmHotkeyCommandFromFeature(hotkeyResolution, {
+      toggleCraftingPanel: () => this.toggleFarmCraftingPanel(),
+      sleepAtFarm: () => {
+        void this.sleepAtFarm();
+      },
+      plantPlot: (plotKey) => {
+        void this.plantFarmPlot(plotKey);
+      },
+      waterPlot: (plotKey) => {
+        void this.waterFarmPlot(plotKey);
+      },
+      harvestPlot: (plotKey) => {
+        void this.harvestFarmPlot(plotKey);
+      },
+    });
   }
 
   private rebuildSceneObstacles(): void {

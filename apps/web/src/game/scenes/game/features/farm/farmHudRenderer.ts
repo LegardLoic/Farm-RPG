@@ -17,6 +17,76 @@ export type RenderFarmPanelResult = {
   selectedSeedItemKey: string;
 };
 
+export function updateFarmHudValues(params: {
+  summaryValue: HTMLElement | null;
+  storySummaryValue: HTMLElement | null;
+  storyNarrativeValue: HTMLElement | null;
+  errorValue: HTMLElement | null;
+  sleepButton: HTMLButtonElement | null;
+  craftingToggleButton: HTMLButtonElement | null;
+  goVillageButton: HTMLButtonElement | null;
+  contextSeedValue: HTMLElement | null;
+  contextReadyValue: HTMLElement | null;
+  contextFeedbackValue: HTMLElement | null;
+  summaryLabel: string;
+  storySummaryLabel: string;
+  storyNarrativeLabel: string;
+  farmError: string | null;
+  sleepButtonDisabled: boolean;
+  sleepButtonLabel: string;
+  craftingToggleDisabled: boolean;
+  craftingToggleLabel: string;
+  goVillageDisabled: boolean;
+  selectedSeedLabel: string;
+  readyPlotsLabel: string;
+  feedbackTone: 'error' | 'info';
+  feedbackLabel: string;
+}): void {
+  if (params.summaryValue) {
+    params.summaryValue.textContent = params.summaryLabel;
+  }
+
+  if (params.storySummaryValue) {
+    params.storySummaryValue.textContent = params.storySummaryLabel;
+  }
+
+  if (params.storyNarrativeValue) {
+    params.storyNarrativeValue.textContent = params.storyNarrativeLabel;
+  }
+
+  if (params.errorValue) {
+    params.errorValue.hidden = !params.farmError;
+    params.errorValue.textContent = params.farmError ?? '';
+  }
+
+  if (params.sleepButton) {
+    params.sleepButton.disabled = params.sleepButtonDisabled;
+    params.sleepButton.textContent = params.sleepButtonLabel;
+  }
+
+  if (params.craftingToggleButton) {
+    params.craftingToggleButton.disabled = params.craftingToggleDisabled;
+    params.craftingToggleButton.textContent = params.craftingToggleLabel;
+  }
+
+  if (params.goVillageButton) {
+    params.goVillageButton.disabled = params.goVillageDisabled;
+  }
+
+  if (params.contextSeedValue) {
+    params.contextSeedValue.textContent = params.selectedSeedLabel;
+  }
+
+  if (params.contextReadyValue) {
+    params.contextReadyValue.textContent = params.readyPlotsLabel;
+  }
+
+  if (params.contextFeedbackValue) {
+    params.contextFeedbackValue.dataset.tone = params.feedbackTone;
+    params.contextFeedbackValue.textContent = params.feedbackLabel;
+  }
+}
+
 export function renderFarmPanel(params: RenderFarmPanelParams): RenderFarmPanelResult {
   params.seedSelect.replaceChildren();
   params.plotsRoot.replaceChildren();
