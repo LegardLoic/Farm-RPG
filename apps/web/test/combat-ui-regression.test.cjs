@@ -364,7 +364,13 @@ test('combat preparation loop panel wiring exists for lot 95', () => {
 });
 
 test('animation polish wiring exists for lot 97', () => {
-  assert.equal(gameSceneSource.includes("if (action === 'attack' || action === 'sunder' || action === 'interrupt')"), true);
+  const hasInlineAnimationSwitch = gameSceneSource.includes(
+    "if (action === 'attack' || action === 'sunder' || action === 'interrupt')",
+  );
+  const hasExtractedAnimationMapping = gameSceneSource.includes(
+    'const animation = getPlayerCombatActionAnimationFromFeature(action);',
+  );
+  assert.equal(hasInlineAnimationSwitch || hasExtractedAnimationMapping, true);
   assert.equal(gameSceneSource.includes('private triggerPlayerStripAccent(animation: Exclude<StripAnimationName, \'idle\'>, durationMs: number): void'), true);
   assert.equal(gameSceneSource.includes('this.player.setTint(tint);'), true);
   assert.equal(stylesSource.includes('.combat-enemy-strip[data-strip-animation="cast"]'), true);

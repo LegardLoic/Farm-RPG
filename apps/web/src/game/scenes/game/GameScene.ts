@@ -97,6 +97,11 @@ import {
 import { createFarmActionZone as createFarmActionZoneFromFeature } from './features/farm/farmSceneZones';
 import { buildFarmContextViewModel as buildFarmContextViewModelFromFeature } from './features/farm/farmContextLogic';
 import {
+  computeCombatActionAvailability as computeCombatActionAvailabilityFromFeature,
+  getPlayerCombatActionAnimation as getPlayerCombatActionAnimationFromFeature,
+  validateCombatActionRequest as validateCombatActionRequestFromFeature,
+} from './features/combat/combatActionLogic';
+import {
   buildVillageShopEntries as buildVillageShopEntriesFromLogic,
   computeVillageShopRenderSignature as computeVillageShopRenderSignatureFromLogic,
   getForgeCategoryLabel as getForgeCategoryLabelFromLogic,
@@ -230,14 +235,6 @@ import type {
   VillageNpcRelationshipHudState,
   VillageNpcRelationshipTier,
 } from './gameScene.stateTypes';
-
-
-const FIREBALL_MANA_COST = 5;
-const RALLY_MANA_COST = 3;
-const SUNDER_MANA_COST = 4;
-const MEND_MANA_COST = 3;
-const CLEANSE_MANA_COST = 3;
-const INTERRUPT_MANA_COST = 4;
 
 const DEBUG_QA_PRESET_OPTIONS: DebugQaPresetOption[] = [
   { key: 'starter', label: 'Starter' },
@@ -4676,63 +4673,52 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateCombatButtons(): void {
-    const active = Boolean(this.isAuthenticated && this.combatState && this.combatState.status === 'active');
-    const playerTurn = Boolean(active && this.combatState?.turn === 'player');
-    const mana = this.combatState?.player.mp ?? 0;
-    const hp = this.combatState?.player.hp ?? 0;
-    const maxHp = this.combatState?.player.maxHp ?? 0;
-    const darkened = this.getCombatStatusTurns('playerDarkenedTurns') > 0;
-    const fireballReady = Boolean(playerTurn && mana >= FIREBALL_MANA_COST && !darkened);
-    const mendReady = Boolean(playerTurn && mana >= MEND_MANA_COST && hp < maxHp);
-    const cleanseReady = Boolean(playerTurn && mana >= CLEANSE_MANA_COST && this.hasCleanseableDebuffs());
-    const interruptReady = Boolean(
-      playerTurn &&
-      mana >= INTERRUPT_MANA_COST &&
-      !darkened &&
-      this.hasInterruptibleEnemyIntent(),
-    );
-    const rallyReady = Boolean(playerTurn && mana >= RALLY_MANA_COST && !darkened);
-    const sunderReady = Boolean(playerTurn && mana >= SUNDER_MANA_COST);
-    const effectiveMendReady = Boolean(mendReady && !darkened);
+    const availability = computeCombatActionAvailabilityFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      combatState: this.combatState,
+      isPlayerDarkened: this.getCombatStatusTurns('playerDarkenedTurns') > 0,
+      hasCleanseableDebuffs: this.hasCleanseableDebuffs(),
+      hasInterruptibleEnemyIntent: this.hasInterruptibleEnemyIntent(),
+    });
 
     if (this.combatStartButton) {
       this.combatStartButton.disabled = !this.isAuthenticated || this.combatBusy;
     }
 
     if (this.combatAttackButton) {
-      this.combatAttackButton.disabled = !playerTurn || this.combatBusy;
+      this.combatAttackButton.disabled = !availability.playerTurn || this.combatBusy;
     }
 
     if (this.combatDefendButton) {
-      this.combatDefendButton.disabled = !playerTurn || this.combatBusy;
+      this.combatDefendButton.disabled = !availability.playerTurn || this.combatBusy;
     }
 
     if (this.combatFireballButton) {
-      this.combatFireballButton.disabled = !fireballReady || this.combatBusy;
+      this.combatFireballButton.disabled = !availability.fireballReady || this.combatBusy;
     }
 
     if (this.combatMendButton) {
-      this.combatMendButton.disabled = !effectiveMendReady || this.combatBusy;
+      this.combatMendButton.disabled = !availability.effectiveMendReady || this.combatBusy;
     }
 
     if (this.combatCleanseButton) {
-      this.combatCleanseButton.disabled = !cleanseReady || this.combatBusy;
+      this.combatCleanseButton.disabled = !availability.cleanseReady || this.combatBusy;
     }
 
     if (this.combatInterruptButton) {
-      this.combatInterruptButton.disabled = !interruptReady || this.combatBusy;
+      this.combatInterruptButton.disabled = !availability.interruptReady || this.combatBusy;
     }
 
     if (this.combatRallyButton) {
-      this.combatRallyButton.disabled = !rallyReady || this.combatBusy;
+      this.combatRallyButton.disabled = !availability.rallyReady || this.combatBusy;
     }
 
     if (this.combatSunderButton) {
-      this.combatSunderButton.disabled = !sunderReady || this.combatBusy;
+      this.combatSunderButton.disabled = !availability.sunderReady || this.combatBusy;
     }
 
     if (this.combatForfeitButton) {
-      this.combatForfeitButton.disabled = !active || this.combatBusy;
+      this.combatForfeitButton.disabled = !availability.active || this.combatBusy;
     }
   }
 
@@ -5648,87 +5634,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async performCombatAction(action: CombatActionName): Promise<void> {
-    if (!this.isAuthenticated) {
-      this.setCombatError('Connecte toi pour agir en combat.');
+    const validationError = validateCombatActionRequestFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      action,
+      combatState: this.combatState,
+      hasCleanseableDebuffs: this.hasCleanseableDebuffs(),
+      hasInterruptibleEnemyIntent: this.hasInterruptibleEnemyIntent(),
+      isPlayerDarkened: this.getCombatStatusTurns('playerDarkenedTurns') > 0,
+    });
+    if (validationError) {
+      this.setCombatError(validationError);
       this.updateHud();
       return;
     }
-
-    if (!this.combatState || this.combatState.status !== 'active') {
-      this.setCombatError('Aucun combat actif.');
-      this.updateHud();
-      return;
-    }
-
-    if (this.combatState.turn !== 'player') {
-      this.setCombatError('Ce nest pas ton tour.');
-      this.updateHud();
-      return;
-    }
-
-    if (action === 'fireball' && this.combatState.player.mp < FIREBALL_MANA_COST) {
-      this.setCombatError('Pas assez de MP pour Fireball.');
-      this.updateHud();
-      return;
-    }
-
-    if (action === 'rally' && this.combatState.player.mp < RALLY_MANA_COST) {
-      this.setCombatError('Pas assez de MP pour Rally.');
-      this.updateHud();
-      return;
-    }
-
-    if (action === 'sunder' && this.combatState.player.mp < SUNDER_MANA_COST) {
-      this.setCombatError('Pas assez de MP pour Sunder.');
-      this.updateHud();
-      return;
-    }
-
-    if (action === 'mend' && this.combatState.player.mp < MEND_MANA_COST) {
-      this.setCombatError('Pas assez de MP pour Mend.');
-      this.updateHud();
-      return;
-    }
-
-    if (action === 'mend' && this.combatState.player.hp >= this.combatState.player.maxHp) {
-      this.setCombatError('Tes PV sont deja au maximum.');
-      this.updateHud();
-      return;
-    }
-
-    if (action === 'cleanse' && this.combatState.player.mp < CLEANSE_MANA_COST) {
-      this.setCombatError('Pas assez de MP pour Cleanse.');
-      this.updateHud();
-      return;
-    }
-
-    if (action === 'cleanse' && !this.hasCleanseableDebuffs()) {
-      this.setCombatError('Aucun debuff a retirer.');
-      this.updateHud();
-      return;
-    }
-
-    if (action === 'interrupt' && this.combatState.player.mp < INTERRUPT_MANA_COST) {
-      this.setCombatError('Pas assez de MP pour Interrupt.');
-      this.updateHud();
-      return;
-    }
-
-    const darkened = this.getCombatStatusTurns('playerDarkenedTurns') > 0;
-    const blockedByDarkness =
-      action === 'fireball' ||
-      action === 'rally' ||
-      action === 'mend' ||
-      action === 'interrupt';
-    if (darkened && blockedByDarkness) {
-      this.setCombatError('Tu es sous Obscurite et ne peux pas te concentrer sur ce skill.');
-      this.updateHud();
-      return;
-    }
-
-    if (action === 'interrupt' && !this.hasInterruptibleEnemyIntent()) {
-      this.setCombatError('Aucune intention ennemie interruptible.');
-      this.updateHud();
+    const combatState = this.combatState;
+    if (!combatState) {
       return;
     }
 
@@ -5739,7 +5659,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
 
     try {
-      const encounterId = this.combatEncounterId ?? this.combatState.id;
+      const encounterId = this.combatEncounterId ?? combatState.id;
       const payload = await this.fetchJson<unknown>(`/combat/${encounterId}/action`, {
         method: 'POST',
         body: JSON.stringify({ action }),
@@ -5829,13 +5749,11 @@ export class GameScene extends Phaser.Scene {
   private playPlayerCombatActionAnimation(action: CombatActionName): void {
     const playerStrip = this.getStripManifestEntry('player-hero');
     const playerTimings = this.getStripPlayerTimings(playerStrip);
-
-    if (action === 'attack' || action === 'sunder' || action === 'interrupt') {
-      this.triggerPlayerStripAction('hit', playerTimings.hitDurationMs);
-      return;
-    }
-
-    this.triggerPlayerStripAction('cast', playerTimings.castDurationMs);
+    const animation = getPlayerCombatActionAnimationFromFeature(action);
+    this.triggerPlayerStripAction(
+      animation,
+      animation === 'hit' ? playerTimings.hitDurationMs : playerTimings.castDurationMs,
+    );
   }
 
   private async logout(): Promise<void> {
