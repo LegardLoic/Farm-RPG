@@ -294,6 +294,7 @@ import {
   readDebugQaFlagList as readDebugQaFlagListFromDebugQa,
   readDebugQaNumber as readDebugQaNumberFromDebugQa,
 } from './features/debugQa/debugQaHelpers';
+import { updateDebugQaHud as updateDebugQaHudFromFeature } from './features/debugQa/debugQaHudRenderer';
 import {
   bindHudElements as bindHudElementsFromHud,
   clearHudElementBindings as clearHudElementBindingsFromHud,
@@ -2512,178 +2513,61 @@ export class GameScene extends Phaser.Scene {
     if (!this.debugQaEnabled || !this.debugQaPanelRoot) {
       return;
     }
-
-    if (this.debugQaStatusValue) {
-      this.debugQaStatusValue.textContent = this.getDebugQaStatusLabel();
-      this.debugQaStatusValue.dataset.status = this.debugQaStatus;
-    }
-
-    if (this.debugQaMessageValue) {
-      const message = this.debugQaError ?? this.debugQaMessage;
-      this.debugQaMessageValue.hidden = !message;
-      this.debugQaMessageValue.textContent = message ?? '';
-      this.debugQaMessageValue.dataset.variant = this.debugQaError ? 'error' : this.debugQaStatus === 'success' ? 'success' : 'info';
-    }
-
-    if (this.debugQaScriptedIntentsOutput) {
-      this.debugQaScriptedIntentsOutput.textContent = this.getDebugQaScriptedIntentsDisplayText();
-    }
-
-    const loading = this.debugQaStatus === 'loading';
-    const requiresAuthDisabled = !this.isAuthenticated || loading;
-    if (this.debugQaGrantXpInput) {
-      this.debugQaGrantXpInput.disabled = requiresAuthDisabled;
-    }
-    if (this.debugQaGrantGoldInput) {
-      this.debugQaGrantGoldInput.disabled = requiresAuthDisabled;
-    }
-    if (this.debugQaTowerFloorInput) {
-      this.debugQaTowerFloorInput.disabled = requiresAuthDisabled;
-    }
-    if (this.debugQaStatePresetSelect) {
-      this.debugQaStatePresetSelect.disabled = requiresAuthDisabled;
-    }
-    if (this.debugQaQuestKeyInput) {
-      this.debugQaQuestKeyInput.disabled = requiresAuthDisabled;
-    }
-    if (this.debugQaQuestStatusSelect) {
-      this.debugQaQuestStatusSelect.disabled = requiresAuthDisabled;
-    }
-    if (this.debugQaLoadoutPresetSelect) {
-      this.debugQaLoadoutPresetSelect.disabled = requiresAuthDisabled;
-    }
-    if (this.debugQaWorldFlagsInput) {
-      this.debugQaWorldFlagsInput.disabled = requiresAuthDisabled;
-    }
-    if (this.debugQaWorldFlagsRemoveInput) {
-      this.debugQaWorldFlagsRemoveInput.disabled = requiresAuthDisabled;
-    }
-    if (this.debugQaWorldFlagsReplaceInput) {
-      this.debugQaWorldFlagsReplaceInput.disabled = requiresAuthDisabled;
-    }
-    if (this.debugQaRecapOutcomeFilterSelect) {
-      this.debugQaRecapOutcomeFilterSelect.disabled = loading;
-      this.debugQaRecapOutcomeFilterSelect.value = this.debugQaRecapOutcomeFilter;
-    }
-    if (this.debugQaRecapEnemyFilterInput) {
-      this.debugQaRecapEnemyFilterInput.disabled = loading;
-      this.debugQaRecapEnemyFilterInput.value = this.debugQaRecapEnemyFilter;
-    }
-    if (this.debugQaScriptEnemyFilterInput) {
-      this.debugQaScriptEnemyFilterInput.disabled = loading;
-      this.debugQaScriptEnemyFilterInput.value = this.debugQaScriptEnemyFilter;
-    }
-    if (this.debugQaScriptIntentFilterInput) {
-      this.debugQaScriptIntentFilterInput.disabled = loading;
-      this.debugQaScriptIntentFilterInput.value = this.debugQaScriptIntentFilter;
-    }
-
-    if (this.debugQaGrantButton) {
-      this.debugQaGrantButton.disabled = requiresAuthDisabled;
-      this.debugQaGrantButton.textContent =
-        this.debugQaBusyAction === 'grant-resources' ? 'Granting...' : 'Grant resources';
-    }
-    if (this.debugQaTowerFloorButton) {
-      this.debugQaTowerFloorButton.disabled = requiresAuthDisabled;
-      this.debugQaTowerFloorButton.textContent =
-        this.debugQaBusyAction === 'set-tower-floor' ? 'Applying...' : 'Set tower floor';
-    }
-    if (this.debugQaStatePresetButton) {
-      this.debugQaStatePresetButton.disabled = requiresAuthDisabled;
-      this.debugQaStatePresetButton.textContent =
-        this.debugQaBusyAction === 'apply-state-preset' ? 'Applying...' : 'Apply state preset';
-    }
-    if (this.debugQaSetQuestStatusButton) {
-      this.debugQaSetQuestStatusButton.disabled = requiresAuthDisabled;
-      this.debugQaSetQuestStatusButton.textContent =
-        this.debugQaBusyAction === 'set-quest-status' ? 'Applying...' : 'Set quest status';
-    }
-    if (this.debugQaLoadoutButton) {
-      this.debugQaLoadoutButton.disabled = requiresAuthDisabled;
-      this.debugQaLoadoutButton.textContent =
-        this.debugQaBusyAction === 'apply-loadout-preset' ? 'Applying...' : 'Apply loadout';
-    }
-    if (this.debugQaCompleteQuestsButton) {
-      this.debugQaCompleteQuestsButton.disabled = requiresAuthDisabled;
-      this.debugQaCompleteQuestsButton.textContent =
-        this.debugQaBusyAction === 'complete-quests' ? 'Completing...' : 'Complete quests';
-    }
-    if (this.debugQaSetWorldFlagsButton) {
-      this.debugQaSetWorldFlagsButton.disabled = requiresAuthDisabled;
-      this.debugQaSetWorldFlagsButton.textContent =
-        this.debugQaBusyAction === 'set-world-flags' ? 'Applying...' : 'Set world flags';
-    }
-    const scriptedIntentsLoading = this.debugQaStatus === 'loading' && this.debugQaBusyAction === null;
-    const scriptedIntentsButtonDisabled = loading || !this.debugQaEnabled;
-    const scriptedIntentsLabel = scriptedIntentsLoading ? 'Loading reference...' : 'Load scripted intents';
-    if (this.debugQaScriptedIntentsButton) {
-      this.debugQaScriptedIntentsButton.disabled = scriptedIntentsButtonDisabled;
-      this.debugQaScriptedIntentsButton.textContent = scriptedIntentsLabel;
-    }
-
-    const replayActive = Boolean(this.debugQaStepReplayState);
-    const autoPlayActive = this.debugQaReplayAutoPlayIntervalId !== null;
-
-    if (this.debugQaImportButton) {
-      this.debugQaImportButton.disabled = loading || replayActive;
-      this.debugQaImportButton.textContent = loading ? 'Importing...' : 'Import JSON trace';
-    }
-
-    if (this.debugQaReplayButton) {
-      this.debugQaReplayButton.disabled = loading || !this.debugQaImportedTrace || replayActive;
-      this.debugQaReplayButton.textContent = 'Replay imported trace';
-    }
-
-    if (this.debugQaReplayStepStartButton) {
-      this.debugQaReplayStepStartButton.disabled = loading || !this.debugQaImportedTrace || replayActive;
-      this.debugQaReplayStepStartButton.textContent = 'Start step replay';
-    }
-
-    if (this.debugQaReplayStepNextButton) {
-      const replayLabel = this.debugQaStepReplayState
-        ? `Next step (${this.debugQaStepReplayState.stepIndex}/${this.debugQaStepReplayState.totalSteps})`
-        : 'Next step';
-      this.debugQaReplayStepNextButton.disabled = !replayActive || autoPlayActive;
-      this.debugQaReplayStepNextButton.textContent = replayLabel;
-    }
-
-    if (this.debugQaReplayAutoPlayButton) {
-      this.debugQaReplayAutoPlayButton.disabled = !replayActive;
-      this.debugQaReplayAutoPlayButton.textContent = autoPlayActive ? 'Pause auto-play' : 'Start auto-play';
-    }
-
-    if (this.debugQaReplayAutoPlaySpeedSelect) {
-      this.debugQaReplayAutoPlaySpeedSelect.disabled = !replayActive || autoPlayActive;
-      this.debugQaReplayAutoPlaySpeedSelect.value = this.debugQaReplayAutoPlaySpeed;
-    }
-
-    if (this.debugQaReplayStepStopButton) {
-      this.debugQaReplayStepStopButton.disabled = !replayActive;
-      this.debugQaReplayStepStopButton.textContent = 'Stop step replay';
-    }
-
-    if (this.debugQaStripCalibrationSelect) {
-      this.debugQaStripCalibrationSelect.disabled = loading;
-      this.debugQaStripCalibrationSelect.value = this.stripCalibrationPreset;
-    }
-
-    if (this.debugQaStripCalibrationButton) {
-      this.debugQaStripCalibrationButton.disabled = loading;
-      this.debugQaStripCalibrationButton.textContent = 'Apply strip calibration';
-    }
-
-    if (this.debugQaImportFileInput) {
-      this.debugQaImportFileInput.disabled = loading || replayActive;
-    }
-
-    if (this.debugQaExportButton) {
-      this.debugQaExportButton.disabled = loading || replayActive;
-      this.debugQaExportButton.textContent = 'Export JSON trace';
-    }
-    if (this.debugQaExportMarkdownButton) {
-      this.debugQaExportMarkdownButton.disabled = loading || replayActive;
-      this.debugQaExportMarkdownButton.textContent = 'Export Markdown recap';
-    }
+    updateDebugQaHudFromFeature({
+      debugQaEnabled: this.debugQaEnabled,
+      debugQaStatus: this.debugQaStatus,
+      debugQaBusyAction: this.debugQaBusyAction,
+      isAuthenticated: this.isAuthenticated,
+      debugQaError: this.debugQaError,
+      debugQaMessage: this.debugQaMessage,
+      scriptedIntentsDisplayText: this.getDebugQaScriptedIntentsDisplayText(),
+      debugQaRecapOutcomeFilter: this.debugQaRecapOutcomeFilter,
+      debugQaRecapEnemyFilter: this.debugQaRecapEnemyFilter,
+      debugQaScriptEnemyFilter: this.debugQaScriptEnemyFilter,
+      debugQaScriptIntentFilter: this.debugQaScriptIntentFilter,
+      debugQaReplayAutoPlaySpeed: this.debugQaReplayAutoPlaySpeed,
+      stripCalibrationPreset: this.stripCalibrationPreset,
+      hasImportedTrace: Boolean(this.debugQaImportedTrace),
+      stepReplayState: this.debugQaStepReplayState,
+      replayAutoPlayActive: this.debugQaReplayAutoPlayIntervalId !== null,
+      statusValue: this.debugQaStatusValue,
+      messageValue: this.debugQaMessageValue,
+      scriptedIntentsOutput: this.debugQaScriptedIntentsOutput,
+      grantXpInput: this.debugQaGrantXpInput,
+      grantGoldInput: this.debugQaGrantGoldInput,
+      towerFloorInput: this.debugQaTowerFloorInput,
+      statePresetSelect: this.debugQaStatePresetSelect,
+      questKeyInput: this.debugQaQuestKeyInput,
+      questStatusSelect: this.debugQaQuestStatusSelect,
+      loadoutPresetSelect: this.debugQaLoadoutPresetSelect,
+      worldFlagsInput: this.debugQaWorldFlagsInput,
+      worldFlagsRemoveInput: this.debugQaWorldFlagsRemoveInput,
+      worldFlagsReplaceInput: this.debugQaWorldFlagsReplaceInput,
+      recapOutcomeFilterSelect: this.debugQaRecapOutcomeFilterSelect,
+      recapEnemyFilterInput: this.debugQaRecapEnemyFilterInput,
+      scriptEnemyFilterInput: this.debugQaScriptEnemyFilterInput,
+      scriptIntentFilterInput: this.debugQaScriptIntentFilterInput,
+      grantButton: this.debugQaGrantButton,
+      towerFloorButton: this.debugQaTowerFloorButton,
+      statePresetButton: this.debugQaStatePresetButton,
+      setQuestStatusButton: this.debugQaSetQuestStatusButton,
+      loadoutButton: this.debugQaLoadoutButton,
+      completeQuestsButton: this.debugQaCompleteQuestsButton,
+      setWorldFlagsButton: this.debugQaSetWorldFlagsButton,
+      scriptedIntentsButton: this.debugQaScriptedIntentsButton,
+      importButton: this.debugQaImportButton,
+      replayButton: this.debugQaReplayButton,
+      replayStepStartButton: this.debugQaReplayStepStartButton,
+      replayStepNextButton: this.debugQaReplayStepNextButton,
+      replayAutoPlayButton: this.debugQaReplayAutoPlayButton,
+      replayAutoPlaySpeedSelect: this.debugQaReplayAutoPlaySpeedSelect,
+      replayStepStopButton: this.debugQaReplayStepStopButton,
+      stripCalibrationSelect: this.debugQaStripCalibrationSelect,
+      stripCalibrationButton: this.debugQaStripCalibrationButton,
+      importFileInput: this.debugQaImportFileInput,
+      exportButton: this.debugQaExportButton,
+      exportMarkdownButton: this.debugQaExportMarkdownButton,
+    });
   }
 
   private renderAutoSaveActions(): void {
@@ -5319,22 +5203,6 @@ export class GameScene extends Phaser.Scene {
 
   private setCombatError(message: string): void {
     this.combatError = message;
-  }
-
-  private getDebugQaStatusLabel(): string {
-    if (this.debugQaStatus === 'loading') {
-      return 'Loading...';
-    }
-
-    if (this.debugQaStatus === 'error') {
-      return 'Error';
-    }
-
-    if (this.debugQaStatus === 'success') {
-      return 'Done';
-    }
-
-    return 'Idle';
   }
 
   private syncDebugQaFiltersFromInputs(): void {
