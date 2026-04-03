@@ -104,6 +104,12 @@ import {
 import {
   getPlayerCombatActionAnimation as getPlayerCombatActionAnimationFromFeature,
 } from './features/combat/combatActionLogic';
+import {
+  resetCombatActionPanelModeForScene as resetCombatActionPanelModeForSceneFromFeature,
+  setCombatActionPanelModeForScene as setCombatActionPanelModeForSceneFromFeature,
+  type CombatActionPanelMode,
+  updateCombatActionPanelForScene as updateCombatActionPanelForSceneFromFeature,
+} from './features/combat/combatActionPanelController';
 import { updateCombatButtonsForScene as updateCombatButtonsForSceneFromFeature } from './features/combat/combatButtonUpdater';
 import { runForfeitCombatActionForScene as runForfeitCombatActionForSceneFromFeature, runPerformCombatActionForScene as runPerformCombatActionForSceneFromFeature, runStartCombatActionForScene as runStartCombatActionForSceneFromFeature } from './features/combat/combatSessionActionHandlers';
 import {
@@ -524,6 +530,12 @@ export class GameScene extends Phaser.Scene {
   private combatCleanseButton: HTMLButtonElement | null = null;
   private combatInterruptButton: HTMLButtonElement | null = null;
   private combatForfeitButton: HTMLButtonElement | null = null;
+  private combatActionRootRow: HTMLElement | null = null;
+  private combatActionSkillsRow: HTMLElement | null = null;
+  private combatActionItemsRow: HTMLElement | null = null;
+  private combatActionHintValue: HTMLElement | null = null;
+  private combatOpenSkillsButton: HTMLButtonElement | null = null;
+  private combatOpenItemsButton: HTMLButtonElement | null = null;
   private combatLogsList: HTMLElement | null = null;
   private combatStatusBadge: HTMLElement | null = null;
   private combatErrorValue: HTMLElement | null = null;
@@ -646,6 +658,7 @@ export class GameScene extends Phaser.Scene {
   private combatLogs: string[] = [];
   private combatMessage = 'Aucun combat actif.';
   private combatError: string | null = null;
+  private combatActionPanelMode: CombatActionPanelMode = 'root';
   private readonly payloadGateway = createGameScenePayloadGateway({
     getFallbackCombatStatus: () => this.combatState?.status ?? 'active',
     isHeroAppearanceKey,
@@ -846,6 +859,7 @@ export class GameScene extends Phaser.Scene {
 
     const hudAction = button.dataset.hudAction;
     const combatAction = button.dataset.combatAction;
+    const combatUiAction = button.dataset.combatUiAction;
     const questAction = button.dataset.questAction;
     const shopAction = button.dataset.shopAction;
     const marketAction = button.dataset.marketAction;
@@ -870,7 +884,26 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    if (combatUiAction === 'open-skills') {
+      this.setCombatActionPanelMode('skills');
+      this.updateHud();
+      return;
+    }
+
+    if (combatUiAction === 'open-items') {
+      this.setCombatActionPanelMode('items');
+      this.updateHud();
+      return;
+    }
+
+    if (combatUiAction === 'back-root') {
+      this.setCombatActionPanelMode('root');
+      this.updateHud();
+      return;
+    }
+
     if (combatAction === 'start') {
+      this.setCombatActionPanelMode('root');
       void this.startCombat();
       return;
     }
@@ -885,11 +918,13 @@ export class GameScene extends Phaser.Scene {
       combatAction === 'sunder' ||
       combatAction === 'mend'
     ) {
+      this.setCombatActionPanelMode('root');
       void this.performCombatAction(combatAction);
       return;
     }
 
     if (combatAction === 'forfeit') {
+      this.setCombatActionPanelMode('root');
       void this.forfeitCombat();
       return;
     }
@@ -1282,6 +1317,7 @@ export class GameScene extends Phaser.Scene {
     updateCombatHudForSceneFromFeature(
       this as unknown as Parameters<typeof updateCombatHudForSceneFromFeature>[0],
     );
+    this.updateCombatActionPanel();
   }
 
   private updateQuestHud(): void {
@@ -2140,6 +2176,25 @@ export class GameScene extends Phaser.Scene {
 
   private updateCombatButtons(): void {
     updateCombatButtonsForSceneFromFeature(this as unknown as Parameters<typeof updateCombatButtonsForSceneFromFeature>[0]);
+  }
+
+  private updateCombatActionPanel(): void {
+    updateCombatActionPanelForSceneFromFeature(
+      this as unknown as Parameters<typeof updateCombatActionPanelForSceneFromFeature>[0],
+    );
+  }
+
+  private setCombatActionPanelMode(mode: CombatActionPanelMode): void {
+    setCombatActionPanelModeForSceneFromFeature(
+      this as unknown as Parameters<typeof setCombatActionPanelModeForSceneFromFeature>[0],
+      mode,
+    );
+  }
+
+  private resetCombatActionPanelMode(): void {
+    resetCombatActionPanelModeForSceneFromFeature(
+      this as unknown as Parameters<typeof resetCombatActionPanelModeForSceneFromFeature>[0],
+    );
   }
 
   private renderCombatLogs(): void {
@@ -3183,6 +3238,9 @@ export class GameScene extends Phaser.Scene {
     this.combatLogs = snapshot.logs.slice(-20);
     this.combatMessage = resolveCombatMessageFromLogic(snapshot);
     this.combatError = null;
+    if (snapshot.turn !== 'player' || snapshot.status !== 'active') {
+      this.resetCombatActionPanelMode();
+    }
     this.syncHudStateFromCombat(snapshot);
 
     if (snapshot.player.hp < previousPlayerHp) {
@@ -3203,6 +3261,7 @@ export class GameScene extends Phaser.Scene {
     this.combatStatus = 'idle';
     this.combatMessage = this.isAuthenticated ? 'Aucun combat actif.' : 'Connecte toi pour lancer un combat.';
     this.combatError = null;
+    this.resetCombatActionPanelMode();
     this.stopDebugQaStepReplayAutoPlay(false);
     this.debugQaStepReplayState = null;
     this.syncHudStateFromCombat(null);

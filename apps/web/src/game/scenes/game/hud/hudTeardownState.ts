@@ -62,4 +62,5 @@ export function resetHudTeardownState(target: any): void {
   target.debugQaScriptedIntentsText = 'Click "Load reference" to inspect the combat script QA payload.';
   target.spriteManifest = null;
   target.playerUsesStripAnimation = false;
+  target.combatActionPanelMode = 'root';
 }

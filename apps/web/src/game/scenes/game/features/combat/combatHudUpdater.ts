@@ -1,5 +1,8 @@
 import type { CombatEffectChip, CombatEncounterState, CombatUiStatus } from '../../gameScene.stateTypes';
 import {
+  getCombatEncounterFloorLabel as getCombatEncounterFloorLabelFromLogic,
+  getCombatEncounterTypeLabel as getCombatEncounterTypeLabelFromLogic,
+  getCombatEnemyRoleLabel as getCombatEnemyRoleLabelFromLogic,
   getCombatEnemyEffectChips as getCombatEnemyEffectChipsFromLogic,
   getCombatEnemyValue as getCombatEnemyValueFromLogic,
   getCombatName as getCombatNameFromLogic,
@@ -18,6 +21,7 @@ export type CombatHudUpdateSceneLike = {
   combatEncounterId: string | null;
   combatMessage: string;
   hudState: {
+    towerCurrentFloor: number;
     hp: number;
     maxHp: number;
     mp: number;
@@ -38,6 +42,8 @@ export function updateCombatHudForScene(scene: CombatHudUpdateSceneLike): void {
   scene.setHudText('combatName', getCombatNameFromLogic(scene.combatState, scene.isAuthenticated));
   scene.setHudText('combatStatus', getCombatStatusLabelFromLogic(scene.combatStatus));
   scene.setHudText('combatEncounterId', scene.combatEncounterId ?? '-');
+  scene.setHudText('combatFloor', getCombatEncounterFloorLabelFromLogic(scene.combatState, scene.hudState.towerCurrentFloor));
+  scene.setHudText('combatType', getCombatEncounterTypeLabelFromLogic(scene.combatState, scene.hudState.towerCurrentFloor));
   scene.setHudText('combatTurn', getCombatTurnLabelFromLogic(scene.combatState));
   scene.setHudText('combatRound', scene.combatState ? `${scene.combatState.round}` : '-');
   scene.setHudText('combatResult', scene.combatMessage);
@@ -46,6 +52,7 @@ export function updateCombatHudForScene(scene: CombatHudUpdateSceneLike): void {
   scene.setHudText('combatPlayerMp', getCombatUnitValueFromLogic(scene.hudState.mp, scene.hudState.maxMp));
   scene.renderCombatEffectChips('combatPlayerEffects', getCombatPlayerEffectChipsFromLogic(scene.combatState));
   scene.setHudText('combatEnemyName', scene.combatState ? scene.combatState.enemy.name : '-');
+  scene.setHudText('combatEnemyRole', getCombatEnemyRoleLabelFromLogic(scene.combatState, scene.hudState.towerCurrentFloor));
   scene.renderCombatEnemySprite();
   scene.setHudText('combatEnemyHp', getCombatEnemyValueFromLogic(scene.combatState, 'hp'));
   scene.setHudText('combatEnemyMp', getCombatEnemyValueFromLogic(scene.combatState, 'mp'));
