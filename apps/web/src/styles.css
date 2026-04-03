@@ -697,9 +697,14 @@ body::before {
   margin-top: 10px;
 }
 
+.hud-character-shortcut {
+  margin-top: 10px;
+}
+
 .hud-auth,
 .hud-hero-profile,
 .hud-intro,
+.hud-character,
 .hud-village-npcs,
 .hud-combat,
 .hud-quests,
@@ -765,6 +770,7 @@ body::before {
 }
 
 .hud-auth-button,
+.hud-character-button,
 .hud-combat-button {
   border: 1px solid rgba(226, 182, 109, 0.4);
   background: rgba(226, 182, 109, 0.18);
@@ -779,9 +785,15 @@ body::before {
 }
 
 .hud-auth-button.secondary,
+.hud-character-button.secondary,
 .hud-combat-button.secondary {
   border-color: rgba(127, 209, 199, 0.4);
   background: rgba(127, 209, 199, 0.16);
+}
+
+.hud-character-button.danger {
+  border-color: rgba(242, 111, 111, 0.45);
+  background: rgba(242, 111, 111, 0.18);
 }
 
 .hud-combat-button.primary {
@@ -795,18 +807,22 @@ body::before {
 }
 
 .hud-auth-button:hover:not(:disabled),
+.hud-character-button:hover:not(:disabled),
 .hud-combat-button:hover:not(:disabled) {
   filter: brightness(1.08);
   transform: translateY(-1px);
 }
 
 .hud-auth-button:disabled,
+.hud-character-button:disabled,
 .hud-combat-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
 
 .hud-auth-button:focus-visible,
+.hud-character-toggle:focus-visible,
+.hud-character-button:focus-visible,
 .hud-combat-button:focus-visible,
 .hud-hero-profile-button:focus-visible,
 .hud-intro-button:focus-visible,
@@ -901,6 +917,292 @@ body::before {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.hud-character-shortcut .hud-character-toggle {
+  width: 100%;
+  border: 1px solid rgba(127, 209, 199, 0.42);
+  background: rgba(127, 209, 199, 0.16);
+  color: #d5fff8;
+  border-radius: 10px;
+  min-height: 38px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hud-character-shortcut .hud-character-toggle:hover {
+  filter: brightness(1.08);
+}
+
+.hud-character {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hud-character-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.hud-character-header span {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.hud-character-header strong {
+  display: block;
+  margin-top: 4px;
+  color: #ecf4ff;
+}
+
+.hud-character-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.hud-character-summary {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #c8d6e9;
+}
+
+.hud-character-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.hud-character-block {
+  border: 1px solid rgba(185, 195, 212, 0.22);
+  background: rgba(8, 14, 24, 0.6);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hud-character-block.detail {
+  min-height: 200px;
+}
+
+.hud-character-block-title {
+  margin: 0;
+  font-size: 0.66rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #9fb1c9;
+}
+
+.hud-character-block-title.secondary {
+  margin-top: 6px;
+}
+
+.hud-character-stats {
+  display: grid;
+  gap: 6px;
+}
+
+.character-stat-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: #c8d6e9;
+}
+
+.character-stat-line.primary {
+  font-size: 0.82rem;
+  color: #dce8f8;
+}
+
+.character-stat-line strong {
+  color: #f4f8ff;
+}
+
+.hud-character-slots {
+  display: grid;
+  gap: 6px;
+}
+
+.character-slot-entry {
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(185, 195, 212, 0.28);
+  background: rgba(16, 25, 39, 0.62);
+  border-radius: 8px;
+  padding: 7px 8px;
+  display: grid;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.character-slot-entry.selected {
+  border-color: rgba(127, 209, 199, 0.58);
+  background: rgba(127, 209, 199, 0.16);
+}
+
+.character-slot-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #9fb1c9;
+}
+
+.character-slot-item {
+  font-size: 0.8rem;
+  color: #eef5ff;
+}
+
+.character-slot-rarity {
+  font-size: 0.68rem;
+  color: #cad8ea;
+}
+
+.hud-character-detail-name {
+  color: #f4f8ff;
+}
+
+.hud-character-detail-meta,
+.hud-character-detail-description,
+.hud-character-comparison,
+.hud-character-build-summary {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: #c8d6e9;
+}
+
+.hud-character-comparison {
+  border: 1px solid rgba(127, 164, 255, 0.26);
+  background: rgba(127, 164, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 9px;
+}
+
+.hud-character-build {
+  border: 1px solid rgba(185, 195, 212, 0.22);
+  background: rgba(8, 14, 24, 0.6);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.hud-character-linked-skills {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 4px;
+}
+
+.character-linked-skill,
+.character-linked-skill-empty {
+  font-size: 0.74rem;
+  color: #d7e2f1;
+}
+
+.hud-character-inventory-panel {
+  border: 1px solid rgba(185, 195, 212, 0.22);
+  background: rgba(8, 14, 24, 0.6);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.hud-character-inventory {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 7px;
+}
+
+.character-inventory-entry {
+  border: 1px solid rgba(185, 195, 212, 0.24);
+  background: rgba(16, 25, 39, 0.58);
+  border-radius: 9px;
+  padding: 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.character-inventory-entry.selected {
+  border-color: rgba(127, 209, 199, 0.5);
+}
+
+.character-inventory-entry.incompatible {
+  border-color: rgba(242, 111, 111, 0.45);
+}
+
+.character-inventory-meta {
+  display: grid;
+  gap: 3px;
+}
+
+.character-inventory-meta strong {
+  font-size: 0.8rem;
+  color: #edf5ff;
+}
+
+.character-inventory-meta span,
+.character-inventory-meta small {
+  font-size: 0.7rem;
+  color: #c2d2e7;
+}
+
+.character-inventory-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.character-inventory-button {
+  border: 1px solid rgba(127, 209, 199, 0.42);
+  background: rgba(127, 209, 199, 0.14);
+  color: #dcfff8;
+  border-radius: 7px;
+  min-height: 30px;
+  padding: 6px 8px;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.character-inventory-button.equip {
+  border-color: rgba(226, 182, 109, 0.44);
+  background: rgba(226, 182, 109, 0.16);
+  color: #ffe9c4;
+}
+
+.character-inventory-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.character-inventory-empty {
+  font-size: 0.74rem;
+  color: #c2d2e7;
+}
+
+.hud-character-error {
+  border: 1px solid rgba(242, 111, 111, 0.45);
+  background: rgba(242, 111, 111, 0.16);
+  color: #ffd0d0;
+  border-radius: 8px;
+  padding: 8px 9px;
+  font-size: 0.74rem;
 }
 
 .hud-village-npcs {
@@ -2949,6 +3251,29 @@ body::before {
     flex-direction: column;
   }
 
+  .hud-character-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hud-character-header-actions {
+    justify-content: flex-start;
+  }
+
+  .hud-character-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .character-inventory-entry {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .character-inventory-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
   .hud-combat-meta,
   .hud-combat-grid {
     grid-template-columns: 1fr;
@@ -3016,6 +3341,7 @@ body::before {
   }
 
   .hud-auth-button,
+  .hud-character-button,
   .hud-combat-button,
   .hud-hero-profile-button,
   .hud-intro-button,

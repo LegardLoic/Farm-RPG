@@ -176,6 +176,64 @@ export function createHudTemplate(params: CreateHudTemplateParams): string {
           <p class="hud-intro-progress" data-hud="introProgress">Progression: 0/3</p>
           <div class="hud-intro-error" data-hud="introError" hidden></div>
         </div>
+        <div class="hud-character-shortcut">
+          <button class="hud-character-toggle" data-hud="characterToggle" data-character-action="toggle-panel">
+            Fiche perso (P)
+          </button>
+        </div>
+        <div class="hud-character" data-hud="characterPanel" hidden>
+          <div class="hud-character-header">
+            <div>
+              <span>Personnage / Equipement</span>
+              <strong data-hud="characterIdentity">Heros sans profil</strong>
+            </div>
+            <div class="hud-character-header-actions">
+              <button class="hud-character-button" data-hud="characterRefresh" data-character-action="refresh">
+                Actualiser
+              </button>
+              <button class="hud-character-button danger" data-hud="characterUnequip" data-character-action="unequip" data-slot="main_hand">
+                Retirer slot
+              </button>
+              <button class="hud-character-button secondary" data-character-action="toggle-panel">Fermer</button>
+            </div>
+          </div>
+          <p class="hud-character-summary" data-hud="characterSummary">
+            Lisibilite du build: stats, slots, detail et comparaison.
+          </p>
+          <div class="hud-character-grid">
+            <div class="hud-character-block">
+              <p class="hud-character-block-title">Stats principales</p>
+              <div class="hud-character-stats" data-hud="characterStats"></div>
+              <p class="hud-character-block-title secondary">Synthese</p>
+              <div class="hud-character-stats secondary" data-hud="characterSecondaryStats"></div>
+            </div>
+            <div class="hud-character-block">
+              <p class="hud-character-block-title">Slots equipes</p>
+              <div class="hud-character-slots" data-hud="characterSlots"></div>
+            </div>
+            <div class="hud-character-block detail">
+              <p class="hud-character-block-title">Detail selection</p>
+              <strong class="hud-character-detail-name" data-hud="characterDetailName">Slot vide</strong>
+              <p class="hud-character-detail-meta" data-hud="characterDetailMeta">-</p>
+              <p class="hud-character-detail-description" data-hud="characterDetailDescription">
+                Selectionne un slot ou un objet de l inventaire.
+              </p>
+              <p class="hud-character-comparison" data-hud="characterComparison">
+                Comparaison: selectionne un objet de l inventaire pour comparer.
+              </p>
+            </div>
+          </div>
+          <div class="hud-character-build">
+            <p class="hud-character-block-title">Orientation du build</p>
+            <p class="hud-character-build-summary" data-hud="characterBuildSummary">Orientation: Hybride lisible.</p>
+            <ul class="hud-character-linked-skills" data-hud="characterLinkedSkills"></ul>
+          </div>
+          <div class="hud-character-inventory-panel">
+            <p class="hud-character-block-title">Objets equipables (inventaire)</p>
+            <ul class="hud-character-inventory" data-hud="characterInventory"></ul>
+          </div>
+          <div class="hud-character-error" data-hud="characterError" hidden></div>
+        </div>
         <div class="hud-combat" data-hud="combatPanel">
           <div class="hud-combat-header">
             <div>

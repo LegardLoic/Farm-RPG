@@ -272,6 +272,20 @@ import {
 } from './features/quests/questHudLogic';
 import { renderQuestList as renderQuestListFromFeature } from './features/quests/questHudRenderer';
 import {
+  buildCharacterPanelViewModel as buildCharacterPanelViewModelFromFeature,
+  normalizeCharacterEquipmentPayload as normalizeCharacterEquipmentPayloadFromFeature,
+  normalizeCharacterInventoryPayload as normalizeCharacterInventoryPayloadFromFeature,
+  type CharacterPanelViewModel,
+} from './features/character/characterEquipmentLogic';
+import { updateCharacterHudForScene as updateCharacterHudForSceneFromFeature } from './features/character/characterEquipmentHudRenderer';
+import {
+  createEmptyCharacterEquipmentState as createEmptyCharacterEquipmentStateFromFeature,
+  isCharacterEquipmentSlot as isCharacterEquipmentSlotFromFeature,
+  type CharacterEquipmentEntryState,
+  type CharacterEquipmentSlot,
+  type CharacterInventoryItemState,
+} from './features/character/characterEquipmentTypes';
+import {
   buildDebugQaMarkdownFilename as buildDebugQaMarkdownFilenameFromDebugQa,
   buildDebugQaMarkdownReport as buildDebugQaMarkdownReportFromDebugQa,
   buildDebugQaTraceFilename as buildDebugQaTraceFilenameFromDebugQa,
@@ -515,6 +529,9 @@ export class GameScene extends Phaser.Scene {
     interact: Phaser.Input.Keyboard.Key;
     cycleTarget: Phaser.Input.Keyboard.Key;
   };
+  private characterHotkeys!: {
+    togglePanel: Phaser.Input.Keyboard.Key;
+  };
 
   private hudRoot: HTMLElement | null = null;
   private hudPanelRoot: HTMLElement | null = null;
@@ -633,6 +650,23 @@ export class GameScene extends Phaser.Scene {
   private introProgressValue: HTMLElement | null = null;
   private introAdvanceButton: HTMLButtonElement | null = null;
   private introErrorValue: HTMLElement | null = null;
+  private characterToggleButton: HTMLButtonElement | null = null;
+  private characterPanelRoot: HTMLElement | null = null;
+  private characterIdentityValue: HTMLElement | null = null;
+  private characterSummaryValue: HTMLElement | null = null;
+  private characterStatsRoot: HTMLElement | null = null;
+  private characterSecondaryStatsRoot: HTMLElement | null = null;
+  private characterSlotsRoot: HTMLElement | null = null;
+  private characterDetailNameValue: HTMLElement | null = null;
+  private characterDetailMetaValue: HTMLElement | null = null;
+  private characterDetailDescriptionValue: HTMLElement | null = null;
+  private characterComparisonValue: HTMLElement | null = null;
+  private characterBuildValue: HTMLElement | null = null;
+  private characterLinkedSkillsRoot: HTMLElement | null = null;
+  private characterInventoryRoot: HTMLElement | null = null;
+  private characterRefreshButton: HTMLButtonElement | null = null;
+  private characterUnequipButton: HTMLButtonElement | null = null;
+  private characterErrorValue: HTMLElement | null = null;
 
   private authStatus = 'Verification...';
   private isAuthenticated = false;
@@ -745,6 +779,15 @@ export class GameScene extends Phaser.Scene {
   private introNarrativeState: IntroNarrativeState | null = null;
   private introNarrativeBusy = false;
   private introNarrativeError: string | null = null;
+  private characterPanelOpen = false;
+  private characterBusy = false;
+  private characterActionBusy = false;
+  private characterError: string | null = null;
+  private characterEquipment: CharacterEquipmentEntryState[] = createEmptyCharacterEquipmentStateFromFeature();
+  private characterInventory: CharacterInventoryItemState[] = [];
+  private characterSelectedSlot: CharacterEquipmentSlot = 'main_hand';
+  private characterSelectedInventoryItemKey: string | null = null;
+  private characterRenderSignature = '';
   private gamepadPreviousButtonStates: boolean[] = [];
   private gamepadHudFocusableElements: HTMLElement[] = [];
   private gamepadHudFocusIndex = -1;
@@ -874,6 +917,7 @@ export class GameScene extends Phaser.Scene {
     const farmCraftAction = button.dataset.farmCraftAction;
     const saveAction = button.dataset.saveAction;
     const profileAction = button.dataset.profileAction;
+    const characterAction = button.dataset.characterAction;
     const introAction = button.dataset.introAction;
     const debugAction = button.dataset.debugAction;
 
@@ -1121,6 +1165,60 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    if (characterAction === 'toggle-panel') {
+      this.toggleCharacterPanel();
+      return;
+    }
+
+    if (characterAction === 'refresh') {
+      void this.refreshCharacterState();
+      return;
+    }
+
+    if (characterAction === 'select-slot') {
+      const slotValue = button.dataset.slot?.trim() ?? '';
+      if (isCharacterEquipmentSlotFromFeature(slotValue)) {
+        this.characterSelectedSlot = slotValue;
+        this.characterSelectedInventoryItemKey = null;
+        this.characterError = null;
+        this.updateHud();
+      }
+      return;
+    }
+
+    if (characterAction === 'select-item') {
+      const itemKey = button.dataset.itemKey?.trim() ?? '';
+      if (itemKey.length > 0) {
+        this.characterSelectedInventoryItemKey = itemKey;
+        this.characterError = null;
+        this.updateHud();
+      }
+      return;
+    }
+
+    if (characterAction === 'equip-item') {
+      const itemKey = button.dataset.itemKey?.trim() ?? '';
+      if (itemKey.length === 0) {
+        return;
+      }
+
+      const slotValue = button.dataset.slot?.trim() ?? this.characterSelectedSlot;
+      if (!isCharacterEquipmentSlotFromFeature(slotValue)) {
+        return;
+      }
+
+      void this.equipCharacterItem(slotValue, itemKey);
+      return;
+    }
+
+    if (characterAction === 'unequip') {
+      const slotValue = button.dataset.slot?.trim() ?? this.characterSelectedSlot;
+      if (isCharacterEquipmentSlotFromFeature(slotValue)) {
+        void this.unequipCharacterSlot(slotValue);
+      }
+      return;
+    }
+
     if (profileAction === 'save') {
       void this.saveHeroProfile();
       return;
@@ -1252,6 +1350,7 @@ export class GameScene extends Phaser.Scene {
       this.updateVillageSelectionFromPlayerPosition();
     }
     this.updateGamepadInput();
+    this.handleCharacterHotkeys();
     if (this.frontSceneMode === 'farm') {
       this.handleFarmHotkeys();
     } else {
@@ -1290,6 +1389,9 @@ export class GameScene extends Phaser.Scene {
     this.villageHotkeys = {
       interact: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E),
       cycleTarget: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R),
+    };
+    this.characterHotkeys = {
+      togglePanel: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.P),
     };
   }
 
@@ -1691,6 +1793,34 @@ export class GameScene extends Phaser.Scene {
       progressValue: this.introProgressValue,
       advanceButton: this.introAdvanceButton,
       errorValue: this.introErrorValue,
+    });
+  }
+
+  private updateCharacterHud(): void {
+    updateCharacterHudForSceneFromFeature(
+      this as unknown as Parameters<typeof updateCharacterHudForSceneFromFeature>[0],
+    );
+  }
+
+  private buildCharacterPanelViewModel(): CharacterPanelViewModel {
+    const heroAppearanceLabel = this.heroProfile
+      ? getHeroAppearanceLabelFromIntro(this.heroProfile.appearanceKey, HERO_APPEARANCE_OPTIONS)
+      : 'Fermier classique';
+
+    return buildCharacterPanelViewModelFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      panelOpen: this.characterPanelOpen,
+      busy: this.characterBusy,
+      actionBusy: this.characterActionBusy,
+      error: this.characterError,
+      heroProfile: this.heroProfile,
+      heroAppearanceLabel,
+      hudState: this.hudState,
+      combatState: this.combatState,
+      equipment: this.characterEquipment,
+      inventory: this.characterInventory,
+      selectedSlot: this.characterSelectedSlot,
+      selectedInventoryItemKey: this.characterSelectedInventoryItemKey,
     });
   }
 
@@ -2510,6 +2640,7 @@ export class GameScene extends Phaser.Scene {
     if (authenticated) {
       await this.refreshGameplayState();
       await this.refreshHeroProfileState();
+      await this.refreshCharacterState();
       await this.refreshAutoSaveState();
       await this.refreshSaveSlotsState();
       await this.refreshBlacksmithState();
@@ -2522,6 +2653,7 @@ export class GameScene extends Phaser.Scene {
     this.resetGameplayHudState();
     this.resetIntroNarrativeState();
     this.resetHeroProfileState();
+    this.resetCharacterState();
     this.resetAutoSaveState();
     this.resetSaveSlotsState();
     this.resetBlacksmithState();
@@ -2599,6 +2731,112 @@ export class GameScene extends Phaser.Scene {
       this.heroProfile = null;
     } finally {
       this.heroProfileBusy = false;
+      this.updateHud();
+    }
+  }
+
+  private toggleCharacterPanel(): void {
+    this.characterPanelOpen = !this.characterPanelOpen;
+    this.characterError = null;
+    if (this.characterPanelOpen) {
+      void this.refreshCharacterState();
+    }
+    this.updateHud();
+  }
+
+  private async refreshCharacterState(): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.resetCharacterState();
+      this.updateHud();
+      return;
+    }
+
+    this.characterBusy = true;
+    this.characterError = null;
+    this.updateHud();
+
+    try {
+      const [equipmentPayload, inventoryPayload] = await Promise.all([
+        this.fetchJson<unknown>('/equipment', { method: 'GET' }),
+        this.fetchJson<unknown>('/inventory', { method: 'GET' }),
+      ]);
+
+      this.characterEquipment = normalizeCharacterEquipmentPayloadFromFeature(equipmentPayload, {
+        asRecord: (value) => this.payloadGateway.asRecord(value),
+        asString: (value) => this.payloadGateway.asString(value),
+        asNumber: (value) => this.payloadGateway.asNumber(value),
+      });
+      this.characterInventory = normalizeCharacterInventoryPayloadFromFeature(inventoryPayload, {
+        asRecord: (value) => this.payloadGateway.asRecord(value),
+        asString: (value) => this.payloadGateway.asString(value),
+        asNumber: (value) => this.payloadGateway.asNumber(value),
+      });
+
+      if (!this.characterEquipment.some((entry) => entry.slot === this.characterSelectedSlot)) {
+        this.characterSelectedSlot = 'main_hand';
+      }
+      if (
+        this.characterSelectedInventoryItemKey &&
+        !this.characterInventory.some((entry) => entry.itemKey === this.characterSelectedInventoryItemKey)
+      ) {
+        this.characterSelectedInventoryItemKey = null;
+      }
+    } catch (error) {
+      this.characterError = this.getErrorMessage(error, 'Impossible de charger la fiche personnage.');
+    } finally {
+      this.characterBusy = false;
+      this.updateHud();
+    }
+  }
+
+  private async equipCharacterItem(slot: CharacterEquipmentSlot, itemKey: string): Promise<void> {
+    if (!this.isAuthenticated || this.characterActionBusy) {
+      return;
+    }
+
+    this.characterActionBusy = true;
+    this.characterError = null;
+    this.characterSelectedSlot = slot;
+    this.characterSelectedInventoryItemKey = itemKey;
+    this.updateHud();
+
+    try {
+      await this.fetchJson('/equipment/equip', {
+        method: 'POST',
+        body: JSON.stringify({ slot, itemKey }),
+      });
+      await this.refreshGameplayState();
+      await this.refreshCharacterState();
+    } catch (error) {
+      this.characterError = this.getErrorMessage(error, 'Equipement impossible.');
+    } finally {
+      this.characterActionBusy = false;
+      this.updateHud();
+    }
+  }
+
+  private async unequipCharacterSlot(slot: CharacterEquipmentSlot): Promise<void> {
+    if (!this.isAuthenticated || this.characterActionBusy) {
+      return;
+    }
+
+    this.characterActionBusy = true;
+    this.characterError = null;
+    this.characterSelectedSlot = slot;
+    this.characterSelectedInventoryItemKey = null;
+    this.updateHud();
+
+    try {
+      await this.fetchJson('/equipment/unequip', {
+        method: 'POST',
+        body: JSON.stringify({ slot }),
+      });
+      await this.refreshGameplayState();
+      await this.refreshCharacterState();
+    } catch (error) {
+      this.characterError = this.getErrorMessage(error, 'Retrait equipement impossible.');
+    } finally {
+      this.characterActionBusy = false;
       this.updateHud();
     }
   }
@@ -3173,6 +3411,18 @@ export class GameScene extends Phaser.Scene {
     this.heroProfileMessage = null;
     this.heroProfileNameDraft = '';
     this.heroProfileAppearanceDraft = 'default';
+  }
+
+  private resetCharacterState(): void {
+    this.characterPanelOpen = false;
+    this.characterBusy = false;
+    this.characterActionBusy = false;
+    this.characterError = null;
+    this.characterEquipment = createEmptyCharacterEquipmentStateFromFeature();
+    this.characterInventory = [];
+    this.characterSelectedSlot = 'main_hand';
+    this.characterSelectedInventoryItemKey = null;
+    this.characterRenderSignature = '';
   }
 
   private resetIntroNarrativeState(): void {
@@ -4138,6 +4388,16 @@ export class GameScene extends Phaser.Scene {
 
     if (Phaser.Input.Keyboard.JustDown(this.villageHotkeys.interact)) {
       void this.handleVillageInteractionIntent();
+    }
+  }
+
+  private handleCharacterHotkeys(): void {
+    if (isTypingInsideFieldFromCommon(document.activeElement)) {
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.characterHotkeys.togglePanel)) {
+      this.toggleCharacterPanel();
     }
   }
 
