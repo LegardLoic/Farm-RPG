@@ -243,16 +243,30 @@ export function createHudTemplate(params: CreateHudTemplateParams): string {
             </div>
           </div>
           <div class="hud-combat-actions">
-            <button class="hud-combat-button primary" data-combat-action="start">Demarrer combat</button>
-            <button class="hud-combat-button" data-combat-action="attack">Attack</button>
-            <button class="hud-combat-button secondary" data-combat-action="defend">Defend</button>
-            <button class="hud-combat-button" data-combat-action="fireball">Fireball</button>
-            <button class="hud-combat-button secondary" data-combat-action="mend">Mend (+HP)</button>
-            <button class="hud-combat-button secondary" data-combat-action="cleanse">Cleanse</button>
-            <button class="hud-combat-button" data-combat-action="interrupt">Interrupt</button>
-            <button class="hud-combat-button secondary" data-combat-action="rally">Rally (+Atk)</button>
-            <button class="hud-combat-button" data-combat-action="sunder">Sunder (-Def)</button>
-            <button class="hud-combat-button danger" data-combat-action="forfeit">Fuir</button>
+            <div class="hud-combat-actions-row root" data-hud="combatActionRoot">
+              <button class="hud-combat-button primary" data-combat-action="start">Demarrer combat</button>
+              <button class="hud-combat-button" data-combat-action="attack">Attack</button>
+              <button class="hud-combat-button secondary" data-combat-action="defend">Defend</button>
+              <button class="hud-combat-button secondary" data-combat-ui-action="open-skills">Competences</button>
+              <button class="hud-combat-button secondary" data-combat-ui-action="open-items">Objets</button>
+              <button class="hud-combat-button danger" data-combat-action="forfeit">Fuir</button>
+            </div>
+            <div class="hud-combat-actions-row skills" data-hud="combatActionSkills" hidden>
+              <button class="hud-combat-button" data-combat-action="fireball">Fireball</button>
+              <button class="hud-combat-button secondary" data-combat-action="mend">Mend (+HP)</button>
+              <button class="hud-combat-button secondary" data-combat-action="cleanse">Cleanse</button>
+              <button class="hud-combat-button" data-combat-action="interrupt">Interrupt</button>
+              <button class="hud-combat-button secondary" data-combat-action="rally">Rally (+Atk)</button>
+              <button class="hud-combat-button" data-combat-action="sunder">Sunder (-Def)</button>
+              <button class="hud-combat-button secondary" data-combat-ui-action="back-root">Retour actions</button>
+            </div>
+            <div class="hud-combat-actions-row items" data-hud="combatActionItems" hidden>
+              <button class="hud-combat-button secondary" disabled>Aucun objet combat equipe</button>
+              <button class="hud-combat-button secondary" data-combat-ui-action="back-root">Retour actions</button>
+            </div>
+            <p class="hud-combat-action-hint" data-hud="combatActionHint" role="status" aria-live="polite">
+              Demarre un combat, puis choisis une action.
+            </p>
           </div>
           <div class="hud-combat-error" data-hud="combatError" role="alert" aria-live="assertive" hidden></div>
           <ul class="hud-combat-log" data-hud="combatLogs" role="log" aria-live="polite" aria-relevant="additions text"></ul>
