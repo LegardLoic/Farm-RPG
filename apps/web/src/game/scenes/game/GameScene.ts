@@ -267,10 +267,15 @@ import {
   updateIntroHud as updateIntroHudFromFeature,
 } from './features/intro/introHudRenderer';
 import {
-  getQuestStatusLabel as getQuestStatusLabelFromFeature,
-  getQuestSummaryLabel as getQuestSummaryLabelFromFeature,
+  buildQuestJournalViewModel as buildQuestJournalViewModelFromFeature,
+  clearQuestChangeByKey as clearQuestChangeByKeyFromFeature,
+  computeQuestChangeMap as computeQuestChangeMapFromFeature,
+  isQuestJournalCategoryKey as isQuestJournalCategoryKeyFromFeature,
+  type QuestJournalCategoryKey,
+  type QuestJournalChangeKind,
+  type QuestJournalViewModel,
 } from './features/quests/questHudLogic';
-import { renderQuestList as renderQuestListFromFeature } from './features/quests/questHudRenderer';
+import { renderQuestJournal as renderQuestJournalFromFeature } from './features/quests/questHudRenderer';
 import {
   buildCharacterPanelViewModel as buildCharacterPanelViewModelFromFeature,
   normalizeCharacterEquipmentPayload as normalizeCharacterEquipmentPayloadFromFeature,
@@ -532,6 +537,9 @@ export class GameScene extends Phaser.Scene {
   private characterHotkeys!: {
     togglePanel: Phaser.Input.Keyboard.Key;
   };
+  private questHotkeys!: {
+    togglePanel: Phaser.Input.Keyboard.Key;
+  };
 
   private hudRoot: HTMLElement | null = null;
   private hudPanelRoot: HTMLElement | null = null;
@@ -559,8 +567,22 @@ export class GameScene extends Phaser.Scene {
   private combatEnemyCard: HTMLElement | null = null;
   private combatThreatValue: HTMLElement | null = null;
   private combatErrorValue: HTMLElement | null = null;
+  private questsToggleButton: HTMLButtonElement | null = null;
+  private questsPanelRoot: HTMLElement | null = null;
   private questsSummaryValue: HTMLElement | null = null;
+  private questsTrackedValue: HTMLElement | null = null;
+  private questCategoriesRoot: HTMLElement | null = null;
   private questsListRoot: HTMLElement | null = null;
+  private questDetailTitleValue: HTMLElement | null = null;
+  private questDetailTypeValue: HTMLElement | null = null;
+  private questDetailOriginValue: HTMLElement | null = null;
+  private questDetailStatusValue: HTMLElement | null = null;
+  private questDetailDescriptionValue: HTMLElement | null = null;
+  private questDetailObjectiveValue: HTMLElement | null = null;
+  private questDetailZoneValue: HTMLElement | null = null;
+  private questDetailRewardsRoot: HTMLElement | null = null;
+  private questTrackButton: HTMLButtonElement | null = null;
+  private questClaimButton: HTMLButtonElement | null = null;
   private questsErrorValue: HTMLElement | null = null;
   private blacksmithSummaryValue: HTMLElement | null = null;
   private blacksmithOffersRoot: HTMLElement | null = null;
@@ -706,6 +728,12 @@ export class GameScene extends Phaser.Scene {
   private questBusy = false;
   private questError: string | null = null;
   private questsRenderSignature = '';
+  private questJournalPanelOpen = false;
+  private questJournalActiveCategory: QuestJournalCategoryKey = 'main';
+  private questJournalSelectedQuestKey: string | null = null;
+  private questJournalTrackedQuestKey: string | null = null;
+  private questJournalChangeByKey = new Map<string, QuestJournalChangeKind>();
+  private questJournalKnownSignatures = new Map<string, string>();
   private blacksmithOffers: BlacksmithOfferState[] = [];
   private blacksmithBusy = false;
   private blacksmithError: string | null = null;
@@ -907,6 +935,7 @@ export class GameScene extends Phaser.Scene {
     const combatAction = button.dataset.combatAction;
     const combatUiAction = button.dataset.combatUiAction;
     const questAction = button.dataset.questAction;
+    const questJournalAction = button.dataset.questJournalAction;
     const shopAction = button.dataset.shopAction;
     const marketAction = button.dataset.marketAction;
     const villageNpcAction = button.dataset.villageNpcAction;
@@ -973,6 +1002,32 @@ export class GameScene extends Phaser.Scene {
     if (combatAction === 'forfeit') {
       this.setCombatActionPanelMode('root');
       void this.forfeitCombat();
+      return;
+    }
+
+    if (questJournalAction === 'toggle-panel') {
+      this.toggleQuestJournalPanel();
+      return;
+    }
+
+    if (questJournalAction === 'set-category') {
+      const categoryRaw = button.dataset.category?.trim() ?? '';
+      if (isQuestJournalCategoryKeyFromFeature(categoryRaw)) {
+        this.setQuestJournalCategory(categoryRaw);
+      }
+      return;
+    }
+
+    if (questJournalAction === 'select-quest') {
+      const questKey = button.dataset.questKey?.trim() ?? '';
+      if (questKey.length > 0) {
+        this.selectQuestInJournal(questKey);
+      }
+      return;
+    }
+
+    if (questJournalAction === 'track') {
+      this.toggleTrackedQuestInJournal();
       return;
     }
 
@@ -1351,6 +1406,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.updateGamepadInput();
     this.handleCharacterHotkeys();
+    this.handleQuestHotkeys();
     if (this.frontSceneMode === 'farm') {
       this.handleFarmHotkeys();
     } else {
@@ -1393,6 +1449,9 @@ export class GameScene extends Phaser.Scene {
     this.characterHotkeys = {
       togglePanel: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.P),
     };
+    this.questHotkeys = {
+      togglePanel: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.J),
+    };
   }
 
   private setupHud(): void {
@@ -1426,20 +1485,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateQuestHud(): void {
-    if (this.questsSummaryValue) {
-      this.questsSummaryValue.textContent = getQuestSummaryLabelFromFeature({
-        isAuthenticated: this.isAuthenticated,
-        questBusy: this.questBusy,
-        quests: this.quests,
-      });
-    }
+    const viewModel = this.buildQuestJournalViewModel();
+    this.questJournalActiveCategory = viewModel.activeCategory;
+    this.questJournalSelectedQuestKey = viewModel.selectedQuestKey;
+    this.questJournalTrackedQuestKey = viewModel.trackedQuestKey;
 
     if (this.questsErrorValue) {
       this.questsErrorValue.hidden = !this.questError;
       this.questsErrorValue.textContent = this.questError ?? '';
     }
 
-    this.renderQuestList();
+    this.renderQuestJournal(viewModel);
   }
 
   private updateVillageNpcHud(): void {
@@ -2094,22 +2150,47 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private renderQuestList(): void {
-    if (!this.questsListRoot) {
-      return;
-    }
+  private buildQuestJournalViewModel(): QuestJournalViewModel {
+    return buildQuestJournalViewModelFromFeature({
+      isAuthenticated: this.isAuthenticated,
+      questBusy: this.questBusy,
+      quests: this.quests,
+      panelOpen: this.questJournalPanelOpen,
+      activeCategory: this.questJournalActiveCategory,
+      selectedQuestKey: this.questJournalSelectedQuestKey,
+      trackedQuestKey: this.questJournalTrackedQuestKey,
+      changeByKey: this.questJournalChangeByKey,
+    });
+  }
 
-    const signature = this.computeQuestRenderSignature();
+  private renderQuestJournal(viewModel: QuestJournalViewModel): void {
+    const signature = this.computeQuestRenderSignature(viewModel);
     if (signature === this.questsRenderSignature) {
       return;
     }
     this.questsRenderSignature = signature;
-    renderQuestListFromFeature({
-      root: this.questsListRoot,
-      isAuthenticated: this.isAuthenticated,
+
+    renderQuestJournalFromFeature({
+      elements: {
+        panelRoot: this.questsPanelRoot,
+        toggleButton: this.questsToggleButton,
+        summaryValue: this.questsSummaryValue,
+        trackedValue: this.questsTrackedValue,
+        categoriesRoot: this.questCategoriesRoot,
+        listRoot: this.questsListRoot,
+        detailTitleValue: this.questDetailTitleValue,
+        detailTypeValue: this.questDetailTypeValue,
+        detailOriginValue: this.questDetailOriginValue,
+        detailStatusValue: this.questDetailStatusValue,
+        detailDescriptionValue: this.questDetailDescriptionValue,
+        detailObjectiveValue: this.questDetailObjectiveValue,
+        detailZoneValue: this.questDetailZoneValue,
+        detailRewardsRoot: this.questDetailRewardsRoot,
+        trackButton: this.questTrackButton,
+        claimButton: this.questClaimButton,
+      },
+      viewModel,
       questBusy: this.questBusy,
-      quests: this.quests,
-      getQuestStatusLabel: (status) => getQuestStatusLabelFromFeature(status),
     });
   }
 
@@ -2188,20 +2269,10 @@ export class GameScene extends Phaser.Scene {
     return formatFarmLabelFromLogic(raw);
   }
 
-  private computeQuestRenderSignature(): string {
-    const questParts = this.quests.map((quest) => {
-      const objectiveParts = quest.objectives.map((objective) => (
-        `${objective.key}:${objective.current}/${objective.target}:${objective.completed ? '1' : '0'}`
-      ));
-
-      return `${quest.key}:${quest.status}:${quest.canClaim ? '1' : '0'}:${objectiveParts.join(',')}`;
-    });
-
+  private computeQuestRenderSignature(viewModel: QuestJournalViewModel): string {
     return [
-      this.isAuthenticated ? '1' : '0',
-      this.questBusy ? '1' : '0',
+      viewModel.renderSignature,
       this.questError ?? '',
-      questParts.join(';'),
     ].join('|');
   }
 
@@ -2744,6 +2815,45 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
   }
 
+  private toggleQuestJournalPanel(): void {
+    this.questJournalPanelOpen = !this.questJournalPanelOpen;
+    if (this.questJournalPanelOpen && this.isAuthenticated && this.quests.length === 0 && !this.questBusy) {
+      void this.refreshQuestState();
+    }
+    this.updateHud();
+  }
+
+  private setQuestJournalCategory(category: QuestJournalCategoryKey): void {
+    if (this.questJournalActiveCategory === category) {
+      return;
+    }
+
+    this.questJournalActiveCategory = category;
+    this.questJournalSelectedQuestKey = null;
+    this.updateHud();
+  }
+
+  private selectQuestInJournal(questKey: string): void {
+    if (!this.quests.some((quest) => quest.key === questKey)) {
+      return;
+    }
+
+    this.questJournalSelectedQuestKey = questKey;
+    clearQuestChangeByKeyFromFeature(questKey, this.questJournalChangeByKey);
+    this.updateHud();
+  }
+
+  private toggleTrackedQuestInJournal(): void {
+    if (!this.questJournalSelectedQuestKey) {
+      return;
+    }
+
+    this.questJournalTrackedQuestKey = this.questJournalTrackedQuestKey === this.questJournalSelectedQuestKey
+      ? null
+      : this.questJournalSelectedQuestKey;
+    this.updateHud();
+  }
+
   private async refreshCharacterState(): Promise<void> {
     if (!this.isAuthenticated) {
       this.resetCharacterState();
@@ -2857,6 +2967,24 @@ export class GameScene extends Phaser.Scene {
         method: 'GET',
       });
       this.quests = this.payloadGateway.normalizeQuestsPayload(payload);
+      const changeState = computeQuestChangeMapFromFeature({
+        previousSignatures: this.questJournalKnownSignatures,
+        quests: this.quests,
+      });
+      this.questJournalKnownSignatures = changeState.nextSignatures;
+      this.questJournalChangeByKey = changeState.changeByKey;
+      if (
+        this.questJournalTrackedQuestKey &&
+        !this.quests.some((quest) => quest.key === this.questJournalTrackedQuestKey)
+      ) {
+        this.questJournalTrackedQuestKey = null;
+      }
+      if (
+        this.questJournalSelectedQuestKey &&
+        !this.quests.some((quest) => quest.key === this.questJournalSelectedQuestKey)
+      ) {
+        this.questJournalSelectedQuestKey = null;
+      }
     } catch (error) {
       this.questError = this.getErrorMessage(error, 'Unable to load quests.');
       if (this.quests.length === 0) {
@@ -3477,6 +3605,12 @@ export class GameScene extends Phaser.Scene {
     this.questBusy = false;
     this.questError = null;
     this.questsRenderSignature = '';
+    this.questJournalPanelOpen = false;
+    this.questJournalActiveCategory = 'main';
+    this.questJournalSelectedQuestKey = null;
+    this.questJournalTrackedQuestKey = null;
+    this.questJournalChangeByKey = new Map();
+    this.questJournalKnownSignatures = new Map();
   }
 
   private applyCombatSnapshot(snapshot: CombatEncounterState): void {
@@ -4398,6 +4532,16 @@ export class GameScene extends Phaser.Scene {
 
     if (Phaser.Input.Keyboard.JustDown(this.characterHotkeys.togglePanel)) {
       this.toggleCharacterPanel();
+    }
+  }
+
+  private handleQuestHotkeys(): void {
+    if (isTypingInsideFieldFromCommon(document.activeElement)) {
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.questHotkeys.togglePanel)) {
+      this.toggleQuestJournalPanel();
     }
   }
 

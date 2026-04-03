@@ -333,12 +333,46 @@ export function createHudTemplate(params: CreateHudTemplateParams): string {
           <ul class="hud-combat-log" data-hud="combatLogs" role="log" aria-live="polite" aria-relevant="additions text"></ul>
         </div>
         <div class="hud-quests">
-          <div class="hud-quests-header">
-            <span>Quests</span>
-            <strong data-hud="questsSummary">No quests loaded.</strong>
+          <div class="hud-quests-shortcut">
+            <button class="hud-quests-toggle" data-hud="questsToggle" data-quest-journal-action="toggle-panel">
+              Journal de quetes (J)
+            </button>
+            <strong data-hud="questsSummary">Aucune quete chargee.</strong>
+          </div>
+          <div class="hud-quests-panel" data-hud="questsPanel" hidden>
+            <div class="hud-quests-header">
+              <span>Journal de quetes</span>
+              <strong data-hud="questsTracked">Quete suivie: aucune.</strong>
+            </div>
+            <div class="hud-quests-layout">
+              <div class="quest-journal-categories" data-hud="questCategories"></div>
+              <ul class="hud-quests-list" data-hud="questsList"></ul>
+              <div class="quest-journal-detail">
+                <strong class="quest-journal-detail-title" data-hud="questDetailTitle">Selectionne une quete</strong>
+                <p class="quest-journal-detail-meta">
+                  <span data-hud="questDetailType">-</span>
+                  <span data-hud="questDetailOrigin">-</span>
+                  <span data-hud="questDetailStatus">-</span>
+                </p>
+                <p class="quest-journal-detail-description" data-hud="questDetailDescription">
+                  Le detail apparait ici avec objectif, recompenses et zone.
+                </p>
+                <p class="quest-journal-detail-objective" data-hud="questDetailObjective">Objectif courant: -</p>
+                <p class="quest-journal-detail-zone">
+                  Zone: <strong data-hud="questDetailZone">-</strong>
+                </p>
+                <p class="quest-journal-detail-rewards-label">Recompenses</p>
+                <ul class="quest-journal-detail-rewards" data-hud="questDetailRewards"></ul>
+                <div class="quest-journal-detail-actions">
+                  <button class="hud-quest-action secondary" data-hud="questTrackButton" data-quest-journal-action="track">
+                    Suivre
+                  </button>
+                  <button class="hud-quest-action" data-hud="questClaimButton">Valider quete</button>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="hud-quests-error" data-hud="questsError" hidden></div>
-          <ul class="hud-quests-list" data-hud="questsList"></ul>
         </div>
         <div class="hud-village-npcs">
           <div class="hud-village-npcs-header">
@@ -635,7 +669,7 @@ export function createHudTemplate(params: CreateHudTemplateParams): string {
           <br />
           Manette: D-pad/LB/RB navigue HUD, A valide, X Attack, Y Defend, B Fireball.
           <br />
-          Raccourcis hub: E interagir, R changer de cible (mode village).
+          Raccourcis hub: E interagir, R changer de cible, J journal de quetes.
         </div>
       </div>
         `;
