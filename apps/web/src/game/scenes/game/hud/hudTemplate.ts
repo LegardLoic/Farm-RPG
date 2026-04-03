@@ -176,13 +176,16 @@ export function createHudTemplate(params: CreateHudTemplateParams): string {
           <p class="hud-intro-progress" data-hud="introProgress">Progression: 0/3</p>
           <div class="hud-intro-error" data-hud="introError" hidden></div>
         </div>
-        <div class="hud-combat">
+        <div class="hud-combat" data-hud="combatPanel">
           <div class="hud-combat-header">
             <div>
               <div class="hud-combat-kicker">Combat tour par tour</div>
               <div class="hud-combat-name" data-hud="combatName">Aucun combat actif</div>
             </div>
-            <div class="hud-combat-status" data-hud="combatStatus" role="status" aria-live="polite" aria-atomic="true"></div>
+            <div class="hud-combat-header-badges">
+              <div class="hud-combat-status" data-hud="combatStatus" role="status" aria-live="polite" aria-atomic="true"></div>
+              <div class="hud-combat-threat" data-hud="combatThreat">Menace: Hors combat</div>
+            </div>
           </div>
           <div class="hud-combat-meta">
             <div class="hud-combat-stat"><span>Encounter</span><strong data-hud="combatEncounterId">-</strong></div>
@@ -200,7 +203,7 @@ export function createHudTemplate(params: CreateHudTemplateParams): string {
               <div class="combat-card-line"><span>MP</span><strong data-hud="combatPlayerMp">-</strong></div>
               <div class="combat-card-line"><span>Effects</span><strong data-hud="combatPlayerEffects">-</strong></div>
             </div>
-            <div class="combat-card enemy">
+            <div class="combat-card enemy" data-hud="combatEnemyCard">
               <span>Enemy</span>
               <div class="combat-enemy-visual">
                 <div class="combat-enemy-strip" data-hud="combatEnemyStrip" hidden></div>

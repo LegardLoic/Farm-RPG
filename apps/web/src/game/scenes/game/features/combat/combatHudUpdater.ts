@@ -1,6 +1,8 @@
 import type { CombatEffectChip, CombatEncounterState, CombatUiStatus } from '../../gameScene.stateTypes';
 import {
+  getCombatEncounterTone as getCombatEncounterToneFromLogic,
   getCombatEncounterFloorLabel as getCombatEncounterFloorLabelFromLogic,
+  getCombatThreatLabel as getCombatThreatLabelFromLogic,
   getCombatEncounterTypeLabel as getCombatEncounterTypeLabelFromLogic,
   getCombatEnemyRoleLabel as getCombatEnemyRoleLabelFromLogic,
   getCombatEnemyEffectChips as getCombatEnemyEffectChipsFromLogic,
@@ -29,6 +31,9 @@ export type CombatHudUpdateSceneLike = {
   };
   combatError: string | null;
   combatStatusBadge: HTMLElement | null;
+  combatPanelRoot: HTMLElement | null;
+  combatEnemyCard: HTMLElement | null;
+  combatThreatValue: HTMLElement | null;
   combatErrorValue: HTMLElement | null;
   setHudText(key: string, value: string): void;
   renderCombatEffectChips(key: string, effects: CombatEffectChip[]): void;
@@ -39,6 +44,7 @@ export type CombatHudUpdateSceneLike = {
 };
 
 export function updateCombatHudForScene(scene: CombatHudUpdateSceneLike): void {
+  const encounterTone = getCombatEncounterToneFromLogic(scene.combatState, scene.hudState.towerCurrentFloor);
   scene.setHudText('combatName', getCombatNameFromLogic(scene.combatState, scene.isAuthenticated));
   scene.setHudText('combatStatus', getCombatStatusLabelFromLogic(scene.combatStatus));
   scene.setHudText('combatEncounterId', scene.combatEncounterId ?? '-');
@@ -62,6 +68,16 @@ export function updateCombatHudForScene(scene: CombatHudUpdateSceneLike): void {
 
   if (scene.combatStatusBadge) {
     scene.combatStatusBadge.dataset.status = scene.combatStatus;
+  }
+  if (scene.combatPanelRoot) {
+    scene.combatPanelRoot.dataset.combatTone = encounterTone;
+  }
+  if (scene.combatEnemyCard) {
+    scene.combatEnemyCard.dataset.combatTone = encounterTone;
+  }
+  if (scene.combatThreatValue) {
+    scene.combatThreatValue.dataset.combatTone = encounterTone;
+    scene.combatThreatValue.textContent = getCombatThreatLabelFromLogic(scene.combatState, scene.hudState.towerCurrentFloor);
   }
 
   if (scene.combatErrorValue) {

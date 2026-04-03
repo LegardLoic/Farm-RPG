@@ -538,6 +538,9 @@ export class GameScene extends Phaser.Scene {
   private combatOpenItemsButton: HTMLButtonElement | null = null;
   private combatLogsList: HTMLElement | null = null;
   private combatStatusBadge: HTMLElement | null = null;
+  private combatPanelRoot: HTMLElement | null = null;
+  private combatEnemyCard: HTMLElement | null = null;
+  private combatThreatValue: HTMLElement | null = null;
   private combatErrorValue: HTMLElement | null = null;
   private questsSummaryValue: HTMLElement | null = null;
   private questsListRoot: HTMLElement | null = null;
