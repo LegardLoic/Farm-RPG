@@ -1,5 +1,7 @@
 import type { CombatEffectChip, CombatEncounterState, CombatStatus, CombatUiStatus } from '../../gameScene.stateTypes';
 
+export type CombatEncounterTone = 'idle' | 'normal' | 'milestone' | 'boss';
+
 function formatCombatValue(value: number): string {
   return `${Math.max(0, Math.round(value))}`;
 }
@@ -149,6 +151,37 @@ export function getCombatEnemyRoleLabel(combatState: CombatEncounterState | null
   }
 
   return 'Ennemi standard';
+}
+
+export function getCombatEncounterTone(combatState: CombatEncounterState | null, towerCurrentFloor: number): CombatEncounterTone {
+  if (!combatState) {
+    return 'idle';
+  }
+
+  const floor = Math.max(1, Math.round(towerCurrentFloor));
+  if (floor >= 10) {
+    return 'boss';
+  }
+
+  if (floor === 3 || floor === 5 || floor === 8) {
+    return 'milestone';
+  }
+
+  return 'normal';
+}
+
+export function getCombatThreatLabel(combatState: CombatEncounterState | null, towerCurrentFloor: number): string {
+  const tone = getCombatEncounterTone(combatState, towerCurrentFloor);
+  if (tone === 'boss') {
+    return 'Menace: Boss majeur';
+  }
+  if (tone === 'milestone') {
+    return 'Menace: Combat de palier';
+  }
+  if (tone === 'normal') {
+    return 'Menace: Escarmouche';
+  }
+  return 'Menace: Hors combat';
 }
 
 export function getCombatTurnLabel(combatState: CombatEncounterState | null): string {
