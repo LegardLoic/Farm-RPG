@@ -1,4 +1,3 @@
-import { FARM_SCENE_PLAYER_SPAWN } from '../gameScene.constants';
 import { createVillageShopControllerState as createVillageShopControllerStateFromFeature } from '../features/shops/villageShopController';
 import type { FrontSceneMode } from '../gameScene.types';
 import type { HudState, VillageNpcHudState, VillageNpcRelationshipHudState } from '../gameScene.stateTypes';
@@ -28,6 +27,7 @@ export type GameplayStateResetSceneLike = {
   villageFeedbackMessage: string | null;
   frontSceneMode: FrontSceneMode;
   player: { setPosition(x: number, y: number): void } | null;
+  resolveFarmSpawnPoint?: (spawnId?: string | null) => { x: number; y: number };
   drawDecor(): void;
   rebuildSceneObstacles(): void;
 };
@@ -76,7 +76,10 @@ export function resetGameplayHudStateForScene(scene: GameplayStateResetSceneLike
   scene.frontSceneMode = 'farm';
 
   if (scene.player) {
-    scene.player.setPosition(FARM_SCENE_PLAYER_SPAWN.x, FARM_SCENE_PLAYER_SPAWN.y);
+    const spawn = scene.resolveFarmSpawnPoint?.('spawn_default');
+    if (spawn) {
+      scene.player.setPosition(spawn.x, spawn.y);
+    }
     scene.drawDecor();
     scene.rebuildSceneObstacles();
   }

@@ -1,11 +1,38 @@
 import Phaser from 'phaser';
 
+const FARM_TILESET_IMAGES = [
+  { key: 'ground_grasss', path: 'Terrain/ground_grass/ground_grasss.png' },
+  { key: 'water_detilazation', path: 'Terrain/water/water_detilazation.png' },
+  { key: 'Water_detilazation2', path: 'Terrain/water/water_detilazation_v2.png' },
+  { key: 'Water_coasts', path: 'Terrain/ground_grass/Water_coasts.png' },
+  { key: 'Details', path: 'Decor_Below/Details.png' },
+  { key: 'Houses', path: 'architecture/house/Houses.png' },
+  { key: 'Doors', path: 'architecture/house/Doors.png' },
+  { key: 'house_windows', path: 'architecture/house/house_windows.png' },
+  { key: 'Objects_outside', path: 'architecture/Objects_outside.png' },
+  { key: 'bird_fly_animation', path: 'architecture/bird_fly_animation.png' },
+  { key: 'exterior', path: 'architecture/house/exterior.png' },
+  { key: 'Trees_shadow_source', path: 'architecture/Trees_shadow_source.png' },
+  { key: 'Trees_texture_shadows_dark_source', path: 'architecture/Trees_texture_shadows_dark_source.png' },
+  { key: 'Details_desert', path: 'architecture/Details_desert.png' },
+  { key: 'Icons', path: 'architecture/Icons.png' },
+  { key: 'Objects', path: 'architecture/Objects.png' },
+] as const;
+
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('BootScene');
   }
 
   preload(): void {
+    this.load.setPath('/assets/maps');
+    this.load.json('farm-map-tiled', 'farm.tmj');
+
+    this.load.setPath('/assets/tiles');
+    for (const tilesetImage of FARM_TILESET_IMAGES) {
+      this.load.image(tilesetImage.key, tilesetImage.path);
+    }
+
     this.load.setPath('/assets/sprites');
     this.load.json('sprite-manifest', 'manifest.json');
     this.load.svg('player-hero', 'characters/player-hero.svg');

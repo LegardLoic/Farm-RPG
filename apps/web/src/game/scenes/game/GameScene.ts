@@ -1,7 +1,6 @@
 ﻿import Phaser from 'phaser';
 import { API_BASE_URL } from '../../../config/env';
 import {
-  FARM_SCENE_PLAYER_SPAWN,
   VILLAGE_SCENE_PLAYER_SPAWN,
   VILLAGE_SCENE_ZONES,
 } from './gameScene.constants';
@@ -84,6 +83,15 @@ import {
   runFarmHotkeyCommand as runFarmHotkeyCommandFromFeature,
 } from './features/farm/farmHotkeyController';
 import { updateFarmHudForScene as updateFarmHudForSceneFromFeature } from './features/farm/farmHudUpdater';
+import {
+  loadTiledMap as loadTiledMapFromFarmTiled,
+  resolveSpawnPoint as resolveSpawnPointFromFarmTiled,
+  type FarmInteractable,
+  type FarmPlotTile,
+  type FarmSceneTransition,
+  type FarmTiledMapRuntime,
+  type HarvestableTileRuntime,
+} from './features/farm/farmTiledMap';
 import { isTypingInsideField as isTypingInsideFieldFromCommon } from './features/common/inputGuards';
 import {
   activateGamepadHudElement as activateGamepadHudElementFromCommon,
@@ -529,6 +537,7 @@ export class GameScene extends Phaser.Scene {
     harvest: Phaser.Input.Keyboard.Key;
     sleep: Phaser.Input.Keyboard.Key;
     craft: Phaser.Input.Keyboard.Key;
+    interact: Phaser.Input.Keyboard.Key;
   };
   private villageHotkeys!: {
     interact: Phaser.Input.Keyboard.Key;
@@ -766,6 +775,16 @@ export class GameScene extends Phaser.Scene {
   private farmScenePlotVisuals = new Map<string, FarmScenePlotVisual>();
   private farmSceneStaticLabels: Phaser.GameObjects.GameObject[] = [];
   private farmSceneActionHintLabel: Phaser.GameObjects.Text | null = null;
+  private farmTiledRuntime: FarmTiledMapRuntime | null = null;
+  private farmTiledTilemap: Phaser.Tilemaps.Tilemap | null = null;
+  private farmTiledTilesets: Phaser.Tilemaps.Tileset[] = [];
+  private farmTiledVisualLayers: Phaser.Tilemaps.TilemapLayer[] = [];
+  private farmTiledDebugGraphics: Phaser.GameObjects.Graphics | null = null;
+  private farmTiledTransitionCooldownUntilMs = 0;
+  private farmTiledRequestedSpawnId: string | null = null;
+  private farmResolvedSpawnId: string | null = null;
+  private farmDebugMode = false;
+  private readonly farmTiledFallbackTextureKey = 'farm-tiled-runtime-fallback';
   private villageSceneRenderSignature = '';
   private villageSceneZoneVisuals = new Map<VillageSceneZoneKey, VillageSceneZoneVisual>();
   private villageSceneActionHintLabel: Phaser.GameObjects.Text | null = null;
@@ -1343,10 +1362,14 @@ export class GameScene extends Phaser.Scene {
     super('GameScene');
   }
 
-  create(): void {
+  create(data?: { spawnId?: string; frontSceneMode?: FrontSceneMode }): void {
+    this.farmDebugMode = this.resolveFarmDebugMode();
+    this.farmTiledRequestedSpawnId = data?.spawnId?.trim() || null;
+    this.frontSceneMode = data?.frontSceneMode === 'village' ? 'village' : 'farm';
     this.setupWorld();
+    this.setupFarmTiledRuntime();
     this.drawDecor();
-    this.setupPlayer();
+    this.setupPlayer(this.farmTiledRequestedSpawnId);
     this.setupInput();
     this.setupHud();
     void this.bootstrapSessionState();
@@ -1409,6 +1432,8 @@ export class GameScene extends Phaser.Scene {
     this.handleQuestHotkeys();
     if (this.frontSceneMode === 'farm') {
       this.handleFarmHotkeys();
+      this.handleFarmInteractables();
+      this.handleFarmSceneTransitions();
     } else {
       this.handleVillageHotkeys();
     }
@@ -1416,15 +1441,381 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setupWorld(): void {
-    this.physics.world.setBounds(0, 0, 1600, 900);
-    this.cameras.main.setBounds(0, 0, 1600, 900);
+    this.applyWorldBoundsForMode();
   }
 
-  private setupPlayer(): void {
+  private setupPlayer(spawnId?: string | null): void {
+    const spawn = this.frontSceneMode === 'farm'
+      ? this.resolveFarmSpawnPoint(spawnId)
+      : VILLAGE_SCENE_PLAYER_SPAWN;
     setupPlayerForSceneFromCommon(
       this as unknown as Parameters<typeof setupPlayerForSceneFromCommon>[0],
-      FARM_SCENE_PLAYER_SPAWN,
+      spawn,
     );
+  }
+
+  private setupFarmTiledRuntime(): void {
+    const rawMap = this.cache.json.get('farm-map-tiled');
+    const runtime = loadTiledMapFromFarmTiled(rawMap);
+    this.farmTiledRuntime = runtime;
+    this.farmTiledTilemap = null;
+    this.farmTiledTilesets = [];
+    this.farmResolvedSpawnId = null;
+
+    if (!runtime) {
+      return;
+    }
+
+    this.ensureFarmTiledFallbackTexture(runtime.mapSize.tileWidth, runtime.mapSize.tileHeight);
+    this.applyFarmTilesetImageMetrics(runtime);
+    this.cache.tilemap.remove('farm-map-runtime');
+    this.cache.tilemap.add('farm-map-runtime', {
+      format: Phaser.Tilemaps.Formats.TILED_JSON,
+      data: runtime.mapData,
+    });
+
+    this.farmTiledTilemap = this.make.tilemap({ key: 'farm-map-runtime' });
+    this.farmTiledTilesets = this.buildFarmTiledTilesets();
+    const resolvedSpawn = resolveSpawnPointFromFarmTiled(runtime.spawnPoints, this.farmTiledRequestedSpawnId, 'spawn_default');
+    this.farmResolvedSpawnId = resolvedSpawn.resolvedSpawnId;
+  }
+
+  private applyFarmTilesetImageMetrics(runtime: FarmTiledMapRuntime): void {
+    const tilesets = runtime.mapData.tilesets;
+    if (!Array.isArray(tilesets)) {
+      return;
+    }
+
+    for (const rawTileset of tilesets) {
+      const tileset = rawTileset as {
+        name?: string;
+        tilewidth?: number;
+        tileheight?: number;
+        margin?: number;
+        spacing?: number;
+        columns?: number;
+        tilecount?: number;
+        imagewidth?: number;
+        imageheight?: number;
+      };
+
+      const tilesetName = typeof tileset.name === 'string' ? tileset.name.trim() : '';
+      if (tilesetName.length === 0) {
+        continue;
+      }
+
+      const textureKey = this.resolveFarmTilesetTextureKey(tilesetName);
+      if (textureKey === this.farmTiledFallbackTextureKey || !this.textures.exists(textureKey)) {
+        continue;
+      }
+
+      const sourceImage = this.textures.get(textureKey).getSourceImage() as { width?: number; height?: number } | undefined;
+      const imageWidth = Number(sourceImage?.width ?? 0);
+      const imageHeight = Number(sourceImage?.height ?? 0);
+      if (!Number.isFinite(imageWidth) || imageWidth <= 0 || !Number.isFinite(imageHeight) || imageHeight <= 0) {
+        continue;
+      }
+
+      const tileWidth = Math.max(1, Number(tileset.tilewidth ?? runtime.mapSize.tileWidth));
+      const tileHeight = Math.max(1, Number(tileset.tileheight ?? runtime.mapSize.tileHeight));
+      const margin = Math.max(0, Number(tileset.margin ?? 0));
+      const spacing = Math.max(0, Number(tileset.spacing ?? 0));
+      const columns = this.computeTilesetAxisCount(imageWidth, tileWidth, margin, spacing);
+      const rows = this.computeTilesetAxisCount(imageHeight, tileHeight, margin, spacing);
+
+      tileset.tilewidth = tileWidth;
+      tileset.tileheight = tileHeight;
+      tileset.margin = margin;
+      tileset.spacing = spacing;
+      tileset.columns = columns;
+      tileset.tilecount = Math.max(1, columns * rows);
+      tileset.imagewidth = imageWidth;
+      tileset.imageheight = imageHeight;
+    }
+  }
+
+  private computeTilesetAxisCount(
+    imageSize: number,
+    tileSize: number,
+    margin: number,
+    spacing: number,
+  ): number {
+    const stride = tileSize + spacing;
+    if (stride <= 0) {
+      return 1;
+    }
+
+    const usable = imageSize - margin * 2 + spacing;
+    return Math.max(1, Math.floor(usable / stride));
+  }
+
+  private buildFarmTiledTilesets(): Phaser.Tilemaps.Tileset[] {
+    if (!this.farmTiledTilemap || !this.farmTiledRuntime) {
+      return [];
+    }
+
+    const output: Phaser.Tilemaps.Tileset[] = [];
+    for (const tileset of this.farmTiledTilemap.tilesets) {
+      const textureKey = this.resolveFarmTilesetTextureKey(tileset.name);
+      const resolvedTileset = this.farmTiledTilemap.addTilesetImage(
+        tileset.name,
+        textureKey,
+        tileset.tileWidth || this.farmTiledRuntime.mapSize.tileWidth,
+        tileset.tileHeight || this.farmTiledRuntime.mapSize.tileHeight,
+        tileset.tileMargin || 0,
+        tileset.tileSpacing || 0,
+        tileset.firstgid,
+      );
+      if (resolvedTileset) {
+        output.push(resolvedTileset);
+      }
+    }
+
+    return output;
+  }
+
+  private resolveFarmTilesetTextureKey(tilesetName: string): string {
+    const directName = tilesetName.trim();
+    if (this.textures.exists(directName)) {
+      return directName;
+    }
+
+    const normalizedName = directName.replace(/\.tsx$/i, '');
+    if (this.textures.exists(normalizedName)) {
+      return normalizedName;
+    }
+
+    const deduplicatedName = normalizedName.replace(/__\d+$/i, '');
+    if (this.textures.exists(deduplicatedName)) {
+      return deduplicatedName;
+    }
+
+    return this.farmTiledFallbackTextureKey;
+  }
+
+  private ensureFarmTiledFallbackTexture(tileWidth: number, tileHeight: number): void {
+    if (this.textures.exists(this.farmTiledFallbackTextureKey)) {
+      return;
+    }
+
+    const columns = 64;
+    const rows = 64;
+    const canvasTexture = this.textures.createCanvas(
+      this.farmTiledFallbackTextureKey,
+      columns * tileWidth,
+      rows * tileHeight,
+    );
+    if (!canvasTexture) {
+      return;
+    }
+
+    const context = canvasTexture.getContext();
+    if (!context) {
+      return;
+    }
+
+    context.imageSmoothingEnabled = false;
+
+    for (let y = 0; y < rows; y += 1) {
+      for (let x = 0; x < columns; x += 1) {
+        const index = y * columns + x;
+        const hue = (index * 37) % 360;
+        const saturation = 42 + (index % 5) * 6;
+        const lightness = 28 + (index % 7) * 5;
+        context.fillStyle = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+        context.fillRect(x * tileWidth, y * tileHeight, tileWidth, tileHeight);
+      }
+    }
+
+    canvasTexture.refresh();
+  }
+
+  private drawFarmTiledMap(): boolean {
+    if (!this.farmTiledRuntime || !this.farmTiledTilemap || this.farmTiledTilesets.length === 0) {
+      return false;
+    }
+
+    if (this.farmTiledVisualLayers.length === 0) {
+      for (const [index, layerRef] of this.farmTiledRuntime.renderableTileLayers.entries()) {
+        const layerIndex = this.resolveFarmTilemapLayerIndex(layerRef.id);
+        if (layerIndex === null) {
+          continue;
+        }
+
+        const layer = this.farmTiledTilemap.createLayer(layerIndex, this.farmTiledTilesets, 0, 0);
+        if (!layer) {
+          continue;
+        }
+
+        layer.setDepth(2 + index * 0.01);
+        layer.setAlpha(layerRef.opacity);
+        this.farmTiledVisualLayers.push(layer);
+      }
+    }
+
+    this.setFarmTiledVisualLayersVisible(true);
+    if (this.farmDebugMode) {
+      this.drawFarmTiledDebugOverlay();
+    }
+    return this.farmTiledVisualLayers.length > 0;
+  }
+
+  private resolveFarmTilemapLayerIndex(layerId: number): number | null {
+    if (!this.farmTiledTilemap) {
+      return null;
+    }
+
+    for (const [index, layerData] of this.farmTiledTilemap.layers.entries()) {
+      const tiledLayerId = (layerData as Phaser.Tilemaps.LayerData & { id?: number }).id;
+      if (typeof tiledLayerId === 'number' && tiledLayerId === layerId) {
+        return index;
+      }
+    }
+
+    return null;
+  }
+
+  private setFarmTiledVisualLayersVisible(visible: boolean): void {
+    for (const layer of this.farmTiledVisualLayers) {
+      layer.setVisible(visible);
+    }
+
+    if (this.farmTiledDebugGraphics) {
+      this.farmTiledDebugGraphics.setVisible(visible && this.farmDebugMode && this.frontSceneMode === 'farm');
+    }
+  }
+
+  private drawFarmTiledDebugOverlay(): void {
+    if (!this.farmDebugMode || !this.farmTiledRuntime) {
+      return;
+    }
+
+    if (!this.farmTiledDebugGraphics) {
+      this.farmTiledDebugGraphics = this.add.graphics();
+      this.farmTiledDebugGraphics.setDepth(33);
+    }
+
+    const graphics = this.farmTiledDebugGraphics;
+    graphics.clear();
+    graphics.setVisible(this.frontSceneMode === 'farm');
+
+    graphics.lineStyle(1, 0xff4b3d, 0.9);
+    for (const collision of this.farmTiledRuntime.collisions) {
+      const { x, y, width, height } = collision.bounds;
+      graphics.strokeRect(x, y, width, height);
+      if (collision.kind === 'polygon') {
+        graphics.lineStyle(1, 0xff7f6d, 0.95);
+        graphics.beginPath();
+        const firstPoint = collision.points[0];
+        if (firstPoint) {
+          graphics.moveTo(firstPoint.x, firstPoint.y);
+          for (const point of collision.points.slice(1)) {
+            graphics.lineTo(point.x, point.y);
+          }
+          graphics.closePath();
+          graphics.strokePath();
+        }
+        graphics.lineStyle(1, 0xff4b3d, 0.9);
+      }
+    }
+
+    graphics.lineStyle(1, 0x3da9ff, 0.95);
+    for (const transition of this.farmTiledRuntime.sceneTransitions) {
+      const { x, y, width, height } = transition.bounds;
+      graphics.strokeRect(x, y, width, height);
+    }
+
+    graphics.lineStyle(1, 0xf7c948, 0.95);
+    for (const interactable of this.farmTiledRuntime.interactables) {
+      const { x, y, width, height } = interactable.bounds;
+      graphics.strokeRect(x, y, width, height);
+    }
+
+    graphics.fillStyle(0x4be26a, 0.28);
+    for (const plot of this.farmTiledRuntime.farmPlots.tiles) {
+      graphics.fillRect(plot.worldX, plot.worldY, this.farmTiledRuntime.mapSize.tileWidth, this.farmTiledRuntime.mapSize.tileHeight);
+    }
+
+    graphics.fillStyle(0xffa94d, 0.38);
+    for (const harvestable of this.farmTiledRuntime.harvestables) {
+      graphics.fillRect(harvestable.worldX + 5, harvestable.worldY + 5, 6, 6);
+    }
+  }
+
+  private resolveFarmDebugMode(): boolean {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const debugParam = params.get('farmDebug');
+    if (!debugParam) {
+      return false;
+    }
+
+    return debugParam === '1' || debugParam.toLowerCase() === 'true';
+  }
+
+  private applyWorldBoundsForMode(): void {
+    const farmWidth = this.farmTiledRuntime?.mapSize.pixelWidth ?? 1600;
+    const farmHeight = this.farmTiledRuntime?.mapSize.pixelHeight ?? 900;
+    const width = this.frontSceneMode === 'farm' ? farmWidth : 1600;
+    const height = this.frontSceneMode === 'farm' ? farmHeight : 900;
+
+    this.physics.world.setBounds(0, 0, width, height);
+    this.cameras.main.setBounds(0, 0, width, height);
+  }
+
+  private resolveFarmSpawnPoint(spawnId?: string | null): { x: number; y: number } {
+    if (!this.farmTiledRuntime || this.farmTiledRuntime.spawnPoints.size === 0) {
+      this.farmResolvedSpawnId = 'spawn_default';
+      return { x: 240, y: 220 };
+    }
+
+    const resolution = resolveSpawnPointFromFarmTiled(
+      this.farmTiledRuntime.spawnPoints,
+      spawnId,
+      'spawn_default',
+    );
+    this.farmResolvedSpawnId = resolution.resolvedSpawnId;
+    return resolution.point;
+  }
+
+  private resolveVillageSpawnPoint(spawnId?: string | null): { x: number; y: number } {
+    const normalizedSpawnId = spawnId?.trim();
+    if (normalizedSpawnId === 'spawn_farm_entry') {
+      return { ...VILLAGE_SCENE_PLAYER_SPAWN };
+    }
+
+    return { ...VILLAGE_SCENE_PLAYER_SPAWN };
+  }
+
+  private getFarmPlotTileAtWorldPosition(worldX: number, worldY: number): FarmPlotTile | null {
+    if (!this.farmTiledRuntime) {
+      return null;
+    }
+
+    const tileX = Math.floor(worldX / this.farmTiledRuntime.mapSize.tileWidth);
+    const tileY = Math.floor(worldY / this.farmTiledRuntime.mapSize.tileHeight);
+    if (!this.farmTiledRuntime.farmPlots.tileKeys.has(`${tileX}:${tileY}`)) {
+      return null;
+    }
+
+    return this.farmTiledRuntime.farmPlots.tiles.find((tile) => tile.tileX === tileX && tile.tileY === tileY) ?? null;
+  }
+
+  private isFarmPlotCultivableAtWorldPosition(worldX: number, worldY: number): boolean {
+    return this.getFarmPlotTileAtWorldPosition(worldX, worldY) !== null;
+  }
+
+  private getHarvestableTileAtWorldPosition(worldX: number, worldY: number): HarvestableTileRuntime | null {
+    if (!this.farmTiledRuntime) {
+      return null;
+    }
+
+    const tileX = Math.floor(worldX / this.farmTiledRuntime.mapSize.tileWidth);
+    const tileY = Math.floor(worldY / this.farmTiledRuntime.mapSize.tileHeight);
+    return this.farmTiledRuntime.harvestables.find((tile) => tile.tileX === tileX && tile.tileY === tileY) ?? null;
   }
 
   private setupInput(): void {
@@ -1441,6 +1832,7 @@ export class GameScene extends Phaser.Scene {
       harvest: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.THREE),
       sleep: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.F),
       craft: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.C),
+      interact: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E),
     };
     this.villageHotkeys = {
       interact: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E),
@@ -4225,6 +4617,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawDecor(): void {
+    this.applyWorldBoundsForMode();
+    this.setFarmTiledVisualLayersVisible(false);
+
     if (this.farmSceneBackground) {
       this.farmSceneBackground.destroy();
       this.farmSceneBackground = null;
@@ -4242,6 +4637,9 @@ export class GameScene extends Phaser.Scene {
     this.farmSceneBackground = graphics;
 
     if (this.frontSceneMode === 'village') {
+      if (this.farmTiledDebugGraphics) {
+        this.farmTiledDebugGraphics.setVisible(false);
+      }
       this.drawVillageDecor(graphics);
       return;
     }
@@ -4250,22 +4648,25 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawFarmDecor(graphics: Phaser.GameObjects.Graphics): void {
-    drawFarmSceneBackdrop(graphics);
+    const renderedFromTiled = this.drawFarmTiledMap();
+    if (!renderedFromTiled) {
+      drawFarmSceneBackdrop(graphics);
+      this.farmSceneStaticLabels.push(...createFarmStaticLabelsFromFeature(this));
 
-    this.farmSceneStaticLabels.push(...createFarmStaticLabelsFromFeature(this));
-
-    this.createFarmActionZone(220, 236, 222, 146, () => {
-      void this.sleepAtFarm();
-    });
-    this.createFarmActionZone(218, 446, 196, 74, () => {
-      this.toggleFarmCraftingPanel();
-    });
-    this.createFarmActionZone(1278, 418, 174, 280, () => {
-      this.handleFarmVillageExitIntent();
-    });
+      this.createFarmActionZone(220, 236, 222, 146, () => {
+        void this.sleepAtFarm();
+      });
+      this.createFarmActionZone(218, 446, 196, 74, () => {
+        this.toggleFarmCraftingPanel();
+      });
+      this.createFarmActionZone(1278, 418, 174, 280, () => {
+        this.handleFarmVillageExitIntent();
+      });
+    } else {
+      graphics.clear();
+    }
 
     this.farmSceneActionHintLabel = createFarmActionHintLabelFromFeature(this);
-
     this.renderFarmScene();
   }
 
@@ -4497,14 +4898,20 @@ export class GameScene extends Phaser.Scene {
     this.setFrontSceneMode('village', 'Tu rejoins le village. Le hub est maintenant jouable.');
   }
 
-  private setFrontSceneMode(mode: FrontSceneMode, feedbackMessage: string): void {
+  private setFrontSceneMode(mode: FrontSceneMode, feedbackMessage: string, spawnId?: string): void {
+    const resolvedFarmSpawnId = mode === 'farm'
+      ? (spawnId?.trim() || (this.frontSceneMode === 'village' ? 'spawn_from_village' : this.farmResolvedSpawnId || 'spawn_default'))
+      : (this.farmResolvedSpawnId || 'spawn_default');
+    const farmSpawn = this.resolveFarmSpawnPoint(resolvedFarmSpawnId);
+    const villageSpawn = this.resolveVillageSpawnPoint(spawnId);
+
     setFrontSceneModeForSceneFromCommon(
       this as unknown as Parameters<typeof setFrontSceneModeForSceneFromCommon>[0],
       {
         mode,
         feedbackMessage,
-        farmSpawn: FARM_SCENE_PLAYER_SPAWN,
-        villageSpawn: VILLAGE_SCENE_PLAYER_SPAWN,
+        farmSpawn,
+        villageSpawn,
       },
     );
   }
@@ -4586,6 +4993,128 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  private handleFarmInteractables(): void {
+    if (isTypingInsideFieldFromCommon(document.activeElement)) {
+      return;
+    }
+
+    if (!Phaser.Input.Keyboard.JustDown(this.farmHotkeys.interact)) {
+      return;
+    }
+
+    const interactable = this.getActiveFarmInteractable();
+    if (!interactable) {
+      this.farmFeedbackMessage = 'Aucune interaction disponible ici.';
+      return;
+    }
+
+    this.runFarmInteractable(interactable);
+  }
+
+  private getActiveFarmInteractable(): FarmInteractable | null {
+    if (!this.farmTiledRuntime || this.farmTiledRuntime.interactables.length === 0) {
+      return null;
+    }
+
+    const playerBounds = this.player.getBounds();
+    for (const interactable of this.farmTiledRuntime.interactables) {
+      const rect = new Phaser.Geom.Rectangle(
+        interactable.bounds.x,
+        interactable.bounds.y,
+        interactable.bounds.width,
+        interactable.bounds.height,
+      );
+      if (Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, rect)) {
+        return interactable;
+      }
+    }
+
+    return null;
+  }
+
+  private runFarmInteractable(interactable: FarmInteractable): void {
+    const interactionType = interactable.interactionType?.trim() ?? '';
+    const interactionLabel = interactionType.length > 0 ? interactionType : 'interaction';
+    this.farmFeedbackMessage = `${interactionLabel}: ${interactable.name}.`;
+
+    if (!interactable.targetScene) {
+      return;
+    }
+
+    this.farmTiledTransitionCooldownUntilMs = this.time.now + 320;
+    this.routeFarmSceneChange(interactable.targetScene, interactable.targetSpawn, `interactable:${interactable.name}`);
+  }
+
+  private handleFarmSceneTransitions(): void {
+    if (this.time.now < this.farmTiledTransitionCooldownUntilMs) {
+      return;
+    }
+
+    if (!this.farmTiledRuntime || this.farmTiledRuntime.sceneTransitions.length === 0) {
+      return;
+    }
+
+    const playerBounds = this.player.getBounds();
+    for (const transition of this.farmTiledRuntime.sceneTransitions) {
+      const rect = new Phaser.Geom.Rectangle(
+        transition.bounds.x,
+        transition.bounds.y,
+        transition.bounds.width,
+        transition.bounds.height,
+      );
+      if (!Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, rect)) {
+        continue;
+      }
+
+      this.farmTiledTransitionCooldownUntilMs = this.time.now + 320;
+      this.routeFarmSceneChange(
+        transition.targetScene,
+        transition.targetSpawn,
+        `transition:${transition.name}`,
+      );
+      return;
+    }
+  }
+
+  private routeFarmSceneChange(
+    targetSceneRaw: string | null,
+    targetSpawnRaw: string | null,
+    sourceLabel: string,
+  ): void {
+    const targetScene = targetSceneRaw?.trim();
+    const targetSpawn = targetSpawnRaw?.trim() || undefined;
+    if (!targetScene) {
+      this.farmFeedbackMessage = `Transition invalide (${sourceLabel}).`;
+      return;
+    }
+
+    if (targetScene === 'village') {
+      this.setFrontSceneMode('village', `Transition: ${sourceLabel}.`, targetSpawn);
+      return;
+    }
+
+    if (targetScene === 'farm') {
+      this.setFrontSceneMode('farm', `Transition: ${sourceLabel}.`, targetSpawn);
+      return;
+    }
+
+    if (!this.scene.manager.keys[targetScene]) {
+      this.farmFeedbackMessage = `Scene cible indisponible: ${targetScene}.`;
+      return;
+    }
+
+    if (targetScene === 'farm_house') {
+      this.scene.start(targetScene, {
+        spawnId: targetSpawn,
+        returnScene: 'GameScene',
+        returnSpawnId: 'spawn_house_exit',
+      });
+      return;
+    }
+
+    this.scene.start(targetScene, { spawnId: targetSpawn });
+  }
+
   private rebuildSceneObstacles(): void {
     for (const collider of this.sceneObstacleColliders) {
       collider.destroy();
@@ -4597,13 +5126,300 @@ export class GameScene extends Phaser.Scene {
     }
     this.sceneObstacles = [];
 
-    const layout = getSceneObstacleLayoutFromCommon(this.frontSceneMode);
+    const layout = this.frontSceneMode === 'farm'
+      ? this.getFarmCollisionLayout()
+      : getSceneObstacleLayoutFromCommon(this.frontSceneMode);
 
     for (const entry of layout) {
       const obstacle = this.createObstacle(entry.x, entry.y, entry.width, entry.height);
       this.sceneObstacles.push(obstacle);
       this.sceneObstacleColliders.push(this.physics.add.collider(this.player, obstacle));
     }
+  }
+
+  private getFarmCollisionLayout(): Array<{ x: number; y: number; width: number; height: number }> {
+    if (!this.farmTiledRuntime || this.farmTiledRuntime.collisions.length === 0) {
+      return [...getSceneObstacleLayoutFromCommon('farm')];
+    }
+
+    const output: Array<{ x: number; y: number; width: number; height: number }> = [];
+    for (const shape of this.farmTiledRuntime.collisions) {
+      if (shape.kind === 'rectangle') {
+        output.push({
+          x: shape.bounds.x + shape.bounds.width * 0.5,
+          y: shape.bounds.y + shape.bounds.height * 0.5,
+          width: shape.bounds.width,
+          height: shape.bounds.height,
+        });
+        continue;
+      }
+
+      output.push(...this.buildPolygonCollisionLayout(shape.points));
+    }
+
+    return this.optimizeCollisionLayout(output);
+  }
+
+  private buildPolygonCollisionLayout(
+    points: Array<{ x: number; y: number }>,
+  ): Array<{ x: number; y: number; width: number; height: number }> {
+    if (points.length < 3) {
+      return [];
+    }
+
+    const polygonBounds = this.getPolygonBounds(points);
+    if (polygonBounds.width <= 0 || polygonBounds.height <= 0) {
+      return [];
+    }
+
+    const desiredCellsPerTile = 2;
+    const baseCellSize = this.farmTiledRuntime
+      ? Math.max(4, Math.floor(this.farmTiledRuntime.mapSize.tileWidth / desiredCellsPerTile))
+      : 8;
+    const cellSize = Math.max(4, baseCellSize);
+    const columnCount = Math.max(1, Math.ceil(polygonBounds.width / cellSize));
+    const rowCount = Math.max(1, Math.ceil(polygonBounds.height / cellSize));
+    const topLeftRects: Array<{ x: number; y: number; width: number; height: number }> = [];
+    let previousRowMap = new Map<string, number>();
+
+    for (let row = 0; row < rowCount; row += 1) {
+      const rowTop = polygonBounds.y + row * cellSize;
+      const rowHeight = Math.min(cellSize, polygonBounds.y + polygonBounds.height - rowTop);
+      if (rowHeight <= 0.001) {
+        continue;
+      }
+
+      const sampleY = rowTop + rowHeight * 0.5;
+      const currentRowMap = new Map<string, number>();
+      let col = 0;
+      while (col < columnCount) {
+        if (!this.isPolygonCellInside(points, polygonBounds, col, sampleY, cellSize, columnCount)) {
+          col += 1;
+          continue;
+        }
+
+        const startCol = col;
+        col += 1;
+        while (col < columnCount && this.isPolygonCellInside(points, polygonBounds, col, sampleY, cellSize, columnCount)) {
+          col += 1;
+        }
+
+        const runLeft = polygonBounds.x + startCol * cellSize;
+        const runRight = Math.min(polygonBounds.x + polygonBounds.width, polygonBounds.x + col * cellSize);
+        const runWidth = Math.max(1, runRight - runLeft);
+        const mergeKey = `${Math.round(runLeft * 100)}:${Math.round(runWidth * 100)}`;
+        const previousIndex = previousRowMap.get(mergeKey);
+
+        if (previousIndex !== undefined) {
+          const previousRect = topLeftRects[previousIndex];
+          if (previousRect && Math.abs(previousRect.y + previousRect.height - rowTop) <= 0.001) {
+            previousRect.height += rowHeight;
+            currentRowMap.set(mergeKey, previousIndex);
+            continue;
+          }
+        }
+
+        topLeftRects.push({
+          x: runLeft,
+          y: rowTop,
+          width: runWidth,
+          height: rowHeight,
+        });
+        currentRowMap.set(mergeKey, topLeftRects.length - 1);
+      }
+
+      previousRowMap = currentRowMap;
+    }
+
+    return topLeftRects.map((rect) => ({
+      x: rect.x + rect.width * 0.5,
+      y: rect.y + rect.height * 0.5,
+      width: rect.width,
+      height: rect.height,
+    }));
+  }
+
+  private optimizeCollisionLayout(
+    layout: Array<{ x: number; y: number; width: number; height: number }>,
+  ): Array<{ x: number; y: number; width: number; height: number }> {
+    if (layout.length <= 1) {
+      return layout;
+    }
+
+    const toBounds = (rect: { x: number; y: number; width: number; height: number }) => ({
+      x: rect.x - rect.width * 0.5,
+      y: rect.y - rect.height * 0.5,
+      width: rect.width,
+      height: rect.height,
+    });
+    const toCenter = (rect: { x: number; y: number; width: number; height: number }) => ({
+      x: rect.x + rect.width * 0.5,
+      y: rect.y + rect.height * 0.5,
+      width: rect.width,
+      height: rect.height,
+    });
+
+    const epsilon = 0.25;
+    const horizontalPass = this.mergeCollisionBounds(
+      layout.map(toBounds),
+      'horizontal',
+      epsilon,
+    );
+    const verticalPass = this.mergeCollisionBounds(horizontalPass, 'vertical', epsilon);
+    return verticalPass.map(toCenter);
+  }
+
+  private mergeCollisionBounds(
+    bounds: Array<{ x: number; y: number; width: number; height: number }>,
+    mode: 'horizontal' | 'vertical',
+    epsilon: number,
+  ): Array<{ x: number; y: number; width: number; height: number }> {
+    if (bounds.length <= 1) {
+      return bounds;
+    }
+
+    const sorted = [...bounds].sort((a, b) => {
+      if (mode === 'horizontal') {
+        if (Math.abs(a.y - b.y) > epsilon) return a.y - b.y;
+        if (Math.abs(a.height - b.height) > epsilon) return a.height - b.height;
+        return a.x - b.x;
+      }
+
+      if (Math.abs(a.x - b.x) > epsilon) return a.x - b.x;
+      if (Math.abs(a.width - b.width) > epsilon) return a.width - b.width;
+      return a.y - b.y;
+    });
+
+    const output: Array<{ x: number; y: number; width: number; height: number }> = [];
+    for (const rect of sorted) {
+      const last = output[output.length - 1];
+      if (!last) {
+        output.push({ ...rect });
+        continue;
+      }
+
+      if (mode === 'horizontal') {
+        const sameRow = Math.abs(last.y - rect.y) <= epsilon && Math.abs(last.height - rect.height) <= epsilon;
+        const touching = rect.x <= last.x + last.width + epsilon;
+        if (sameRow && touching) {
+          const right = Math.max(last.x + last.width, rect.x + rect.width);
+          last.width = right - last.x;
+          continue;
+        }
+      } else {
+        const sameColumn = Math.abs(last.x - rect.x) <= epsilon && Math.abs(last.width - rect.width) <= epsilon;
+        const touching = rect.y <= last.y + last.height + epsilon;
+        if (sameColumn && touching) {
+          const bottom = Math.max(last.y + last.height, rect.y + rect.height);
+          last.height = bottom - last.y;
+          continue;
+        }
+      }
+
+      output.push({ ...rect });
+    }
+
+    return output;
+  }
+
+  private getPolygonBounds(points: Array<{ x: number; y: number }>): { x: number; y: number; width: number; height: number } {
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+
+    for (const point of points) {
+      if (point.x < minX) minX = point.x;
+      if (point.x > maxX) maxX = point.x;
+      if (point.y < minY) minY = point.y;
+      if (point.y > maxY) maxY = point.y;
+    }
+
+    if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+      return { x: 0, y: 0, width: 0, height: 0 };
+    }
+
+    return {
+      x: minX,
+      y: minY,
+      width: Math.max(0, maxX - minX),
+      height: Math.max(0, maxY - minY),
+    };
+  }
+
+  private isPolygonCellInside(
+    points: Array<{ x: number; y: number }>,
+    bounds: { x: number; y: number; width: number; height: number },
+    column: number,
+    sampleY: number,
+    cellSize: number,
+    columnCount: number,
+  ): boolean {
+    const left = bounds.x + column * cellSize;
+    const right = Math.min(bounds.x + bounds.width, bounds.x + (column + 1) * cellSize);
+    if (right <= left + 0.001) {
+      return false;
+    }
+
+    const sampleX = left + (right - left) * 0.5;
+    if (column === columnCount - 1) {
+      return this.isPointInsidePolygon(sampleX - 0.001, sampleY, points);
+    }
+
+    return this.isPointInsidePolygon(sampleX, sampleY, points);
+  }
+
+  private isPointInsidePolygon(
+    x: number,
+    y: number,
+    points: Array<{ x: number; y: number }>,
+  ): boolean {
+    let inside = false;
+
+    for (let i = 0, j = points.length - 1; i < points.length; j = i, i += 1) {
+      const a = points[i];
+      const b = points[j];
+      if (!a || !b) {
+        continue;
+      }
+
+      if (this.isPointOnSegment(x, y, a, b, 0.001)) {
+        return true;
+      }
+
+      const intersects = ((a.y > y) !== (b.y > y))
+        && (x < ((b.x - a.x) * (y - a.y)) / ((b.y - a.y) || Number.EPSILON) + a.x);
+      if (intersects) {
+        inside = !inside;
+      }
+    }
+
+    return inside;
+  }
+
+  private isPointOnSegment(
+    px: number,
+    py: number,
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    epsilon: number,
+  ): boolean {
+    const cross = (py - a.y) * (b.x - a.x) - (px - a.x) * (b.y - a.y);
+    if (Math.abs(cross) > epsilon) {
+      return false;
+    }
+
+    const dot = (px - a.x) * (b.x - a.x) + (py - a.y) * (b.y - a.y);
+    if (dot < -epsilon) {
+      return false;
+    }
+
+    const lengthSq = (b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y);
+    if (dot - lengthSq > epsilon) {
+      return false;
+    }
+
+    return true;
   }
 
   private createObstacle(x: number, y: number, width: number, height: number): Phaser.GameObjects.Rectangle {

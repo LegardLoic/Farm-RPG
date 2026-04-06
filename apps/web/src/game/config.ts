@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
+import { FarmHouseScene } from './scenes/FarmHouseScene';
 import { GameScene } from './scenes/game/GameScene';
 
 export const GAME_WIDTH = 640;
@@ -26,6 +27,6 @@ export function createGameConfig(): Phaser.Types.Core.GameConfig {
         debug: false,
       },
     },
-    scene: [BootScene, GameScene],
+    scene: [BootScene, GameScene, FarmHouseScene],
   };
 }
