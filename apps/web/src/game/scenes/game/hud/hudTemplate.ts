@@ -669,7 +669,7 @@ export function createHudTemplate(params: CreateHudTemplateParams): string {
           <br />
           Manette: D-pad/LB/RB navigue HUD, A valide, X Attack, Y Defend, B Fireball.
           <br />
-          Raccourcis hub: E interagir, R changer de cible, J journal de quetes.
+          Raccourcis hub: E interagir, R changer de cible, J journal de quetes, H masquer/afficher HUD.
         </div>
       </div>
         `;

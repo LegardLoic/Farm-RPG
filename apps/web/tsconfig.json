@@ -12,7 +12,8 @@
     "skipLibCheck": true,
     "noEmit": true,
     "types": [],
-    "baseUrl": "."
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src", "vite.config.ts"]
 }

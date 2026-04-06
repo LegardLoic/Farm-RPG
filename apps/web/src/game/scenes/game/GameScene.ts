@@ -549,6 +549,9 @@ export class GameScene extends Phaser.Scene {
   private questHotkeys!: {
     togglePanel: Phaser.Input.Keyboard.Key;
   };
+  private hudHotkeys!: {
+    togglePanelVisibility: Phaser.Input.Keyboard.Key;
+  };
 
   private hudRoot: HTMLElement | null = null;
   private hudPanelRoot: HTMLElement | null = null;
@@ -768,6 +771,7 @@ export class GameScene extends Phaser.Scene {
   private farmCraftingError: string | null = null;
   private farmCraftingRenderSignature = '';
   private frontSceneMode: FrontSceneMode = 'farm';
+  private hudPanelVisible = true;
   private sceneObstacles: Phaser.GameObjects.Rectangle[] = [];
   private sceneObstacleColliders: Phaser.Physics.Arcade.Collider[] = [];
   private farmSceneRenderSignature = '';
@@ -1428,6 +1432,7 @@ export class GameScene extends Phaser.Scene {
       this.updateVillageSelectionFromPlayerPosition();
     }
     this.updateGamepadInput();
+    this.handleHudHotkeys();
     this.handleCharacterHotkeys();
     this.handleQuestHotkeys();
     if (this.frontSceneMode === 'farm') {
@@ -1844,6 +1849,9 @@ export class GameScene extends Phaser.Scene {
     this.questHotkeys = {
       togglePanel: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.J),
     };
+    this.hudHotkeys = {
+      togglePanelVisibility: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.H),
+    };
   }
 
   private setupHud(): void {
@@ -2080,6 +2088,15 @@ export class GameScene extends Phaser.Scene {
     const isFarm = this.frontSceneMode === 'farm';
     this.hudPanelRoot.classList.toggle('hud-panel-farm-mvp', isFarm);
     this.hudPanelRoot.classList.toggle('hud-panel-village-mvp', !isFarm);
+    this.applyHudPanelVisibility();
+  }
+
+  private applyHudPanelVisibility(): void {
+    if (!this.hudPanelRoot) {
+      return;
+    }
+
+    this.hudPanelRoot.hidden = !this.hudPanelVisible;
   }
 
   private getActiveAreaLabel(): string {
@@ -4939,6 +4956,17 @@ export class GameScene extends Phaser.Scene {
 
     if (Phaser.Input.Keyboard.JustDown(this.characterHotkeys.togglePanel)) {
       this.toggleCharacterPanel();
+    }
+  }
+
+  private handleHudHotkeys(): void {
+    if (isTypingInsideFieldFromCommon(document.activeElement)) {
+      return;
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.hudHotkeys.togglePanelVisibility)) {
+      this.hudPanelVisible = !this.hudPanelVisible;
+      this.applyHudPanelVisibility();
     }
   }
 
