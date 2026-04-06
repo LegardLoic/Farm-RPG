@@ -328,6 +328,68 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     `);
 
     await this.query(`
+      CREATE TABLE IF NOT EXISTS farm_tiles (
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        scene_key TEXT NOT NULL DEFAULT 'farm',
+        tile_x INTEGER NOT NULL CHECK (tile_x >= 0),
+        tile_y INTEGER NOT NULL CHECK (tile_y >= 0),
+        tilled BOOLEAN NOT NULL DEFAULT FALSE,
+        watered BOOLEAN NOT NULL DEFAULT FALSE,
+        planted_seed_item_key TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, scene_key, tile_x, tile_y)
+      );
+    `);
+
+    await this.query(`
+      CREATE INDEX IF NOT EXISTS farm_tiles_user_id_scene_idx
+      ON farm_tiles(user_id, scene_key);
+    `);
+
+    await this.query(`
+      ALTER TABLE farm_tiles
+      ADD COLUMN IF NOT EXISTS scene_key TEXT NOT NULL DEFAULT 'farm';
+    `);
+
+    await this.query(`
+      ALTER TABLE farm_tiles
+      ADD COLUMN IF NOT EXISTS tile_x INTEGER;
+    `);
+
+    await this.query(`
+      ALTER TABLE farm_tiles
+      ADD COLUMN IF NOT EXISTS tile_y INTEGER;
+    `);
+
+    await this.query(`
+      ALTER TABLE farm_tiles
+      ADD COLUMN IF NOT EXISTS tilled BOOLEAN NOT NULL DEFAULT FALSE;
+    `);
+
+    await this.query(`
+      ALTER TABLE farm_tiles
+      ADD COLUMN IF NOT EXISTS watered BOOLEAN NOT NULL DEFAULT FALSE;
+    `);
+
+    await this.query(`
+      ALTER TABLE farm_tiles
+      ADD COLUMN IF NOT EXISTS planted_seed_item_key TEXT;
+    `);
+
+    await this.query(`
+      UPDATE farm_tiles
+      SET tilled = FALSE
+      WHERE tilled IS NULL;
+    `);
+
+    await this.query(`
+      UPDATE farm_tiles
+      SET watered = FALSE
+      WHERE watered IS NULL;
+    `);
+
+    await this.query(`
       CREATE TABLE IF NOT EXISTS village_npc_relationships (
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         npc_key TEXT NOT NULL CHECK (npc_key IN ('mayor', 'blacksmith', 'merchant')),

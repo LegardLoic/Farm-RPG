@@ -15,6 +15,7 @@ export type HudMainUpdateSceneLike = {
   updateHeroProfileHud(): void;
   updateIntroHud(): void;
   updateCharacterHud(): void;
+  updateInGameInventoryHotbar(): void;
   updateCombatHud(): void;
   updateQuestHud(): void;
   updateVillageNpcHud(): void;
@@ -52,6 +53,7 @@ export function updateHudForScene(scene: HudMainUpdateSceneLike): void {
   scene.updateHeroProfileHud();
   scene.updateIntroHud();
   scene.updateCharacterHud();
+  scene.updateInGameInventoryHotbar();
   scene.updateCombatHud();
   scene.updateQuestHud();
   scene.updateVillageNpcHud();

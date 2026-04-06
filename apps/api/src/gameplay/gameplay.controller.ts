@@ -5,9 +5,11 @@ import type { AuthenticatedRequest } from '../auth/types/auth.types';
 import { GameplayService } from './gameplay.service';
 import { TowerService } from '../tower/tower.service';
 import { CraftFarmRecipeDto } from './dto/craft-farm-recipe.dto';
+import { FarmTilePositionDto } from './dto/farm-tile-position.dto';
 import { HarvestFarmPlotDto } from './dto/harvest-farm-plot.dto';
 import { InteractVillageNpcDto } from './dto/interact-village-npc.dto';
 import { PlantFarmPlotDto } from './dto/plant-farm-plot.dto';
+import { PlantFarmTileDto } from './dto/plant-farm-tile.dto';
 import { WaterFarmPlotDto } from './dto/water-farm-plot.dto';
 
 @Controller('gameplay')
@@ -129,6 +131,58 @@ export class GameplayController {
   @Post('farm/harvest')
   async harvestFarmPlot(@Req() req: AuthenticatedRequest, @Body() body: HarvestFarmPlotDto) {
     const result = await this.gameplayService.harvestFarmPlot(req.authUser!.id, body.plotKey);
+    return {
+      status: 'ok',
+      ...result,
+    };
+  }
+
+  @Get('farm/tiles')
+  async getFarmTiles(@Req() req: AuthenticatedRequest) {
+    const tiles = await this.gameplayService.getFarmTileStates(req.authUser!.id, 'farm');
+    return {
+      status: 'ok',
+      tiles,
+    };
+  }
+
+  @Post('farm/tiles/till')
+  async tillFarmTile(@Req() req: AuthenticatedRequest, @Body() body: FarmTilePositionDto) {
+    const result = await this.gameplayService.tillFarmTile(
+      req.authUser!.id,
+      body.tileX,
+      body.tileY,
+      body.sceneKey,
+    );
+    return {
+      status: 'ok',
+      ...result,
+    };
+  }
+
+  @Post('farm/tiles/water')
+  async waterFarmTile(@Req() req: AuthenticatedRequest, @Body() body: FarmTilePositionDto) {
+    const result = await this.gameplayService.waterFarmTileByTile(
+      req.authUser!.id,
+      body.tileX,
+      body.tileY,
+      body.sceneKey,
+    );
+    return {
+      status: 'ok',
+      ...result,
+    };
+  }
+
+  @Post('farm/tiles/plant')
+  async plantFarmTile(@Req() req: AuthenticatedRequest, @Body() body: PlantFarmTileDto) {
+    const result = await this.gameplayService.plantFarmTile(
+      req.authUser!.id,
+      body.tileX,
+      body.tileY,
+      body.seedItemKey,
+      body.sceneKey,
+    );
     return {
       status: 'ok',
       ...result,

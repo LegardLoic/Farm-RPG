@@ -2,7 +2,8 @@ import type { FarmCraftingState, FarmPlotState, FarmState } from '../../services
 
 export type RenderFarmPanelParams = {
   seedSelect: HTMLSelectElement;
-  plotsRoot: HTMLElement;
+  plotsRoot: HTMLElement | null;
+  showLegacyPlotsGrid: boolean;
   isAuthenticated: boolean;
   farmBusy: boolean;
   farmState: FarmState | null;
@@ -89,7 +90,7 @@ export function updateFarmHudValues(params: {
 
 export function renderFarmPanel(params: RenderFarmPanelParams): RenderFarmPanelResult {
   params.seedSelect.replaceChildren();
-  params.plotsRoot.replaceChildren();
+  params.plotsRoot?.replaceChildren();
 
   if (!params.isAuthenticated) {
     const option = document.createElement('option');
@@ -102,7 +103,7 @@ export function renderFarmPanel(params: RenderFarmPanelParams): RenderFarmPanelR
     const item = document.createElement('li');
     item.classList.add('farm-plot-item', 'empty');
     item.textContent = 'Connecte-toi pour gerer les parcelles de la ferme.';
-    params.plotsRoot.appendChild(item);
+    params.plotsRoot?.appendChild(item);
     return { selectedSeedItemKey: '' };
   }
 
@@ -118,7 +119,7 @@ export function renderFarmPanel(params: RenderFarmPanelParams): RenderFarmPanelR
     const item = document.createElement('li');
     item.classList.add('farm-plot-item', 'empty');
     item.textContent = params.farmBusy ? 'Chargement des parcelles...' : 'Aucune donnee ferme disponible.';
-    params.plotsRoot.appendChild(item);
+    params.plotsRoot?.appendChild(item);
     return { selectedSeedItemKey: '' };
   }
 
@@ -147,6 +148,20 @@ export function renderFarmPanel(params: RenderFarmPanelParams): RenderFarmPanelR
 
   params.seedSelect.value = selectedSeedItemKey;
   params.seedSelect.disabled = params.farmBusy || !farm.unlocked || unlockedCrops.length === 0;
+
+  if (!params.showLegacyPlotsGrid) {
+    if (params.plotsRoot) {
+      const item = document.createElement('li');
+      item.classList.add('farm-plot-item', 'empty');
+      item.textContent = 'Mecanique in-game active: clique pres d une tuile FarmPlots avec l objet actif.';
+      params.plotsRoot.appendChild(item);
+    }
+    return { selectedSeedItemKey };
+  }
+
+  if (!params.plotsRoot) {
+    return { selectedSeedItemKey };
+  }
 
   if (!farm.unlocked) {
     const item = document.createElement('li');

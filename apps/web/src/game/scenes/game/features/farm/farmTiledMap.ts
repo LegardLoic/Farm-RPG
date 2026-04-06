@@ -461,10 +461,12 @@ function collectRenderableTileLayers(
     const layerOpacity = parentOpacity * toNumber(layer.opacity, 1);
     const path = [...parentPath, layerName];
 
+    // FarmPlots is a logical gameplay layer and must never be rendered visually.
+    if (layerName === 'FarmPlots') {
+      continue;
+    }
+
     if (layer.type === 'group') {
-      if (layerName === 'FarmPlots') {
-        continue;
-      }
       output.push(
         ...collectRenderableTileLayers(
           layer.layers,
@@ -701,7 +703,7 @@ function extractTilesFromTileLayer(
 }
 
 export function extractFarmPlots(
-  farmPlotsGroupLayer: TiledLayer | null,
+  farmPlotsLayer: TiledLayer | null,
   mapSize: { width: number; height: number; tileWidth: number; tileHeight: number },
 ): FarmPlotsRuntime {
   const defaultCapabilities: FarmPlotLayerCapabilities = {
@@ -712,7 +714,7 @@ export function extractFarmPlots(
     toolType: null,
   };
 
-  if (!farmPlotsGroupLayer || farmPlotsGroupLayer.type !== 'group') {
+  if (!farmPlotsLayer) {
     return {
       capabilities: defaultCapabilities,
       tiles: [],
@@ -720,7 +722,7 @@ export function extractFarmPlots(
     };
   }
 
-  const properties = getPropertiesRecord(farmPlotsGroupLayer.properties);
+  const properties = getPropertiesRecord(farmPlotsLayer.properties);
   const capabilities: FarmPlotLayerCapabilities = {
     farmable: toBoolean(properties.farmable, false),
     gridBased: toBoolean(properties.gridBased, false),
@@ -731,15 +733,13 @@ export function extractFarmPlots(
 
   const tiles: FarmPlotTile[] = [];
   const tileKeys = new Set<string>();
-  const childLayers = Array.isArray(farmPlotsGroupLayer.layers) ? farmPlotsGroupLayer.layers : [];
-
-  for (const childLayer of childLayers) {
-    if (childLayer.type !== 'tilelayer') {
-      continue;
+  const pushLayerTiles = (layer: TiledLayer, sourceLayerNameFallback: string) => {
+    if (layer.type !== 'tilelayer') {
+      return;
     }
 
-    const sourceLayerName = toString(childLayer.name) ?? 'FarmPlots';
-    const layerTiles = extractTilesFromTileLayer(childLayer, mapSize);
+    const sourceLayerName = toString(layer.name) ?? sourceLayerNameFallback;
+    const layerTiles = extractTilesFromTileLayer(layer, mapSize);
     for (const tile of layerTiles) {
       const worldX = tile.tileX * mapSize.tileWidth;
       const worldY = tile.tileY * mapSize.tileHeight;
@@ -754,6 +754,15 @@ export function extractFarmPlots(
         sourceLayer: sourceLayerName,
       });
       tileKeys.add(buildTileKey(tile.tileX, tile.tileY));
+    }
+  };
+
+  if (farmPlotsLayer.type === 'tilelayer') {
+    pushLayerTiles(farmPlotsLayer, 'FarmPlots');
+  } else if (farmPlotsLayer.type === 'group') {
+    const childLayers = Array.isArray(farmPlotsLayer.layers) ? farmPlotsLayer.layers : [];
+    for (const childLayer of childLayers) {
+      pushLayerTiles(childLayer, 'FarmPlots');
     }
   }
 
@@ -849,13 +858,13 @@ export function loadTiledMap(rawMap: unknown): FarmTiledMapRuntime | null {
   const collisionsLayer = findLayerByName(gameplayGroup?.layers, 'Collisions', 'objectgroup');
   const sceneTransitionsLayer = findLayerByName(gameplayGroup?.layers, 'SceneTransitions', 'objectgroup');
   const interactablesLayer = findLayerByName(gameplayGroup?.layers, 'Interactables', 'objectgroup');
-  const farmPlotsGroup = findLayerByName(gameplayGroup?.layers, 'FarmPlots', 'group');
+  const farmPlotsLayer = findLayerByName(gameplayGroup?.layers, 'FarmPlots');
 
   const spawnPoints = buildSpawnPoints(playerSpawnLayer?.objects);
   const collisions = buildCollisionShapes(collisionsLayer?.objects, 'Collisions');
   const sceneTransitions = buildSceneTransitions(sceneTransitionsLayer?.objects);
   const interactables = buildInteractables(interactablesLayer?.objects);
-  const farmPlots = extractFarmPlots(farmPlotsGroup, mapSize);
+  const farmPlots = extractFarmPlots(farmPlotsLayer, mapSize);
   const harvestableExtraction = extractHarvestableTiles(gameplayGroup, mapSize);
 
   return {

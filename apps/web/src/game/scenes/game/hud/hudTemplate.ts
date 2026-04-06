@@ -49,7 +49,7 @@ export function createHudTemplate(params: CreateHudTemplateParams): string {
               <strong data-hud="farmContextTitle">Selectionne une parcelle</strong>
             </div>
             <p class="hud-farm-context-status" data-hud="farmContextStatus">
-              Clique une parcelle dans la scene ou dans la grille ci-dessous.
+              Mecanique in-game: clique pres d une tuile cultivable avec l objet actif.
             </p>
             <div class="farm-plot-actions context">
               <button class="hud-farm-action" data-hud="farmContextPlant" data-farm-action="plant">Planter</button>
@@ -57,7 +57,7 @@ export function createHudTemplate(params: CreateHudTemplateParams): string {
               <button class="hud-farm-action harvest" data-hud="farmContextHarvest" data-farm-action="harvest">Recolter</button>
             </div>
             <p class="hud-farm-context-feedback" data-hud="farmContextFeedback" role="status" aria-live="polite">
-              Raccourcis: 1 planter, 2 arroser, 3 recolter, F dormir, C craft.
+              Raccourcis: Shift+1..0/molette pour l objet actif, clic gauche pour agir, E pour interagir.
             </p>
           </div>
           <div class="hud-farm-error" data-hud="farmError" hidden></div>
@@ -670,6 +670,15 @@ export function createHudTemplate(params: CreateHudTemplateParams): string {
           Manette: D-pad/LB/RB navigue HUD, A valide, X Attack, Y Defend, B Fireball.
           <br />
           Raccourcis hub: E interagir, R changer de cible, J journal de quetes, H masquer/afficher HUD.
+          <br />
+          Barre rapide: Shift+1..0 ou molette, puis clic gauche pres d une tuile cultivable pour agir.
+        </div>
+      </div>
+      <div class="hud-inventory-hotbar" data-hud="inventoryHotbar">
+        <ol class="hud-inventory-hotbar-slots" data-hud="inventoryHotbarSlots"></ol>
+        <div class="hud-inventory-hotbar-meta">
+          <strong data-hud="inventoryHotbarItem">Connexion requise</strong>
+          <span data-hud="inventoryHotbarHint">Connecte-toi pour activer la barre rapide.</span>
         </div>
       </div>
         `;

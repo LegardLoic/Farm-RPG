@@ -120,6 +120,44 @@ export interface GameplayFarmHarvestResult {
   totalHarvestItemQuantity: number;
 }
 
+export interface GameplayFarmTileState {
+  sceneKey: string;
+  tileX: number;
+  tileY: number;
+  tilled: boolean;
+  watered: boolean;
+  plantedSeedItemKey: string | null;
+}
+
+export interface GameplayFarmTileTillResult {
+  sceneKey: string;
+  tileX: number;
+  tileY: number;
+  tilled: boolean;
+  watered: boolean;
+  plantedSeedItemKey: string | null;
+}
+
+export interface GameplayFarmTileWaterResult {
+  sceneKey: string;
+  tileX: number;
+  tileY: number;
+  tilled: boolean;
+  watered: boolean;
+  plantedSeedItemKey: string | null;
+}
+
+export interface GameplayFarmTilePlantResult {
+  sceneKey: string;
+  tileX: number;
+  tileY: number;
+  seedItemKey: string;
+  remainingSeedQuantity: number;
+  tilled: boolean;
+  watered: boolean;
+  plantedSeedItemKey: string | null;
+}
+
 export interface GameplaySleepResult {
   dayBefore: number;
   dayAfter: number;

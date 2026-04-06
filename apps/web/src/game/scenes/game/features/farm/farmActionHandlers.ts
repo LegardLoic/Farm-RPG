@@ -62,6 +62,7 @@ export async function runCraftFarmRecipeAction(input: {
   fetchJson: FetchJson;
   refreshGameplayState: AsyncRefresh;
   refreshVillageMarketState: AsyncRefresh;
+  refreshCharacterState?: AsyncRefresh;
   formatFarmLabel: (raw: string) => string;
   setFarmFeedbackMessage: SetFarmFeedbackMessage;
   setFarmCraftingPanelOpen: SetFarmCraftingPanelOpen;
@@ -110,6 +111,9 @@ export async function runCraftFarmRecipeAction(input: {
     });
     await input.refreshGameplayState();
     await input.refreshVillageMarketState();
+    if (input.refreshCharacterState) {
+      await input.refreshCharacterState();
+    }
     input.setFarmFeedbackMessage(`Craft termine: ${input.formatFarmLabel(recipe.outputItemKey)} +${recipe.outputQuantity}.`);
     input.setFarmCraftingPanelOpen(true);
   } catch (error) {
@@ -128,6 +132,7 @@ export async function runPlantFarmPlotAction(input: {
   fetchJson: FetchJson;
   refreshGameplayState: AsyncRefresh;
   refreshVillageMarketState: AsyncRefresh;
+  refreshCharacterState?: AsyncRefresh;
   formatFarmLabel: (raw: string) => string;
   setFarmBusy: SetFarmBusy;
   setFarmError: SetFarmError;
@@ -168,6 +173,9 @@ export async function runPlantFarmPlotAction(input: {
     });
     await input.refreshGameplayState();
     await input.refreshVillageMarketState();
+    if (input.refreshCharacterState) {
+      await input.refreshCharacterState();
+    }
     input.setFarmFeedbackMessage(`Parcelle semee: ${input.formatFarmLabel(seedItemKey)}.`);
   } catch (error) {
     input.setFarmError(input.getErrorMessage(error, 'Unable to plant this plot.'));
@@ -230,6 +238,7 @@ export async function runHarvestFarmPlotAction(input: {
   fetchJson: FetchJson;
   refreshGameplayState: AsyncRefresh;
   refreshVillageMarketState: AsyncRefresh;
+  refreshCharacterState?: AsyncRefresh;
   setFarmBusy: SetFarmBusy;
   setFarmError: SetFarmError;
   setFarmFeedbackMessage: SetFarmFeedbackMessage;
@@ -261,6 +270,9 @@ export async function runHarvestFarmPlotAction(input: {
     });
     await input.refreshGameplayState();
     await input.refreshVillageMarketState();
+    if (input.refreshCharacterState) {
+      await input.refreshCharacterState();
+    }
     input.setFarmFeedbackMessage(
       input.harvestedCropLabel ? `Recolte terminee: ${input.harvestedCropLabel}.` : 'Recolte terminee.',
     );

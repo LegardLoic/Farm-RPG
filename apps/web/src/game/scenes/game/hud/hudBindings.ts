@@ -7,6 +7,10 @@ type HudBindingSelector = {
 
 const HUD_BINDING_SELECTORS: readonly HudBindingSelector[] = [
   { field: 'hudPanelRoot', selector: '[data-hud="panel"]' },
+  { field: 'inventoryHotbarRoot', selector: '[data-hud="inventoryHotbar"]' },
+  { field: 'inventoryHotbarSlotsRoot', selector: '[data-hud="inventoryHotbarSlots"]' },
+  { field: 'inventoryHotbarItemValue', selector: '[data-hud="inventoryHotbarItem"]' },
+  { field: 'inventoryHotbarHintValue', selector: '[data-hud="inventoryHotbarHint"]' },
   { field: 'loginButton', selector: '[data-hud-action="login"]' },
   { field: 'logoutButton', selector: '[data-hud-action="logout"]' },
   { field: 'combatStartButton', selector: '[data-combat-action="start"]' },

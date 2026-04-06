@@ -27,6 +27,7 @@ import {
   FARM_CROP_CATALOG,
   FARM_PLOTS_TABLE,
   FARM_PLOT_LAYOUT,
+  FARM_TILES_TABLE,
   VILLAGE_NPC_KEYS,
   VILLAGE_NPC_RELATIONSHIPS_TABLE,
   PLAYER_PROGRESSION_TABLE,
@@ -46,6 +47,10 @@ import type {
   GameplayFarmCraftResult,
   GameplayFarmPlantResult,
   GameplayFarmState,
+  GameplayFarmTilePlantResult,
+  GameplayFarmTileState,
+  GameplayFarmTileTillResult,
+  GameplayFarmTileWaterResult,
   GameplaySleepResult,
   GameplayFarmWaterResult,
   GameplayIntroState,
@@ -87,6 +92,15 @@ type FarmPlotRow = {
   planted_day: number | null;
   growth_days: number | null;
   watered_today: boolean;
+};
+
+type FarmTileRow = {
+  scene_key: string;
+  tile_x: number;
+  tile_y: number;
+  tilled: boolean;
+  watered: boolean;
+  planted_seed_item_key: string | null;
 };
 
 type InventoryRow = {
@@ -662,6 +676,225 @@ export class GameplayService {
         },
         farm,
         farmStory,
+      };
+    });
+  }
+
+  async getFarmTileStates(userId: string, sceneKeyRaw?: string): Promise<GameplayFarmTileState[]> {
+    await this.ensureWorldState(this.databaseService, userId);
+    const worldFlags = new Set(await this.getWorldFlags(userId));
+    this.assertFarmUnlocked(worldFlags);
+
+    const sceneKey = this.normalizeFarmSceneKey(sceneKeyRaw);
+    const result = await this.databaseService.query<FarmTileRow>(
+      `
+        SELECT scene_key, tile_x, tile_y, tilled, watered, planted_seed_item_key
+        FROM ${FARM_TILES_TABLE}
+        WHERE user_id = $1
+          AND scene_key = $2
+          AND (tilled = TRUE OR watered = TRUE OR planted_seed_item_key IS NOT NULL)
+        ORDER BY tile_y ASC, tile_x ASC
+      `,
+      [userId, sceneKey],
+    );
+
+    return result.rows.map((row) => this.toFarmTileState(row));
+  }
+
+  async tillFarmTile(
+    userId: string,
+    tileXRaw: number,
+    tileYRaw: number,
+    sceneKeyRaw?: string,
+  ): Promise<{ till: GameplayFarmTileTillResult; tile: GameplayFarmTileState }> {
+    return this.databaseService.withTransaction(async (tx) => {
+      await this.ensureWorldState(tx, userId);
+      const worldFlags = new Set(await this.getWorldFlags(userId, tx));
+      this.assertFarmUnlocked(worldFlags);
+
+      const sceneKey = this.normalizeFarmSceneKey(sceneKeyRaw);
+      const tileX = this.normalizeFarmTileAxis(tileXRaw, 'tileX');
+      const tileY = this.normalizeFarmTileAxis(tileYRaw, 'tileY');
+      await this.ensureFarmTileRow(tx, userId, sceneKey, tileX, tileY);
+      const tile = await this.getFarmTileForUpdate(tx, userId, sceneKey, tileX, tileY);
+      if (!tile) {
+        throw new NotFoundException('Farm tile not found after initialization');
+      }
+
+      if (tile.planted_seed_item_key) {
+        throw new BadRequestException(`Tile ${tileX}:${tileY} already has a planted seed`);
+      }
+
+      if (!tile.tilled || tile.watered) {
+        await tx.query(
+          `
+            UPDATE ${FARM_TILES_TABLE}
+            SET tilled = TRUE,
+                watered = FALSE,
+                updated_at = NOW()
+            WHERE user_id = $1
+              AND scene_key = $2
+              AND tile_x = $3
+              AND tile_y = $4
+          `,
+          [userId, sceneKey, tileX, tileY],
+        );
+      }
+
+      const nextTile = await this.getFarmTileForUpdate(tx, userId, sceneKey, tileX, tileY);
+      if (!nextTile) {
+        throw new NotFoundException('Farm tile not found after till action');
+      }
+      const tileState = this.toFarmTileState(nextTile);
+      return {
+        till: {
+          sceneKey: tileState.sceneKey,
+          tileX: tileState.tileX,
+          tileY: tileState.tileY,
+          tilled: tileState.tilled,
+          watered: tileState.watered,
+          plantedSeedItemKey: tileState.plantedSeedItemKey,
+        },
+        tile: tileState,
+      };
+    });
+  }
+
+  async waterFarmTileByTile(
+    userId: string,
+    tileXRaw: number,
+    tileYRaw: number,
+    sceneKeyRaw?: string,
+  ): Promise<{ water: GameplayFarmTileWaterResult; tile: GameplayFarmTileState }> {
+    return this.databaseService.withTransaction(async (tx) => {
+      await this.ensureWorldState(tx, userId);
+      const worldFlags = new Set(await this.getWorldFlags(userId, tx));
+      this.assertFarmUnlocked(worldFlags);
+
+      const sceneKey = this.normalizeFarmSceneKey(sceneKeyRaw);
+      const tileX = this.normalizeFarmTileAxis(tileXRaw, 'tileX');
+      const tileY = this.normalizeFarmTileAxis(tileYRaw, 'tileY');
+      await this.ensureFarmTileRow(tx, userId, sceneKey, tileX, tileY);
+      const tile = await this.getFarmTileForUpdate(tx, userId, sceneKey, tileX, tileY);
+      if (!tile) {
+        throw new NotFoundException('Farm tile not found after initialization');
+      }
+
+      if (!tile.tilled) {
+        throw new BadRequestException(`Tile ${tileX}:${tileY} is not tilled`);
+      }
+      if (tile.planted_seed_item_key) {
+        throw new BadRequestException(`Tile ${tileX}:${tileY} already has a planted seed`);
+      }
+
+      if (!tile.watered) {
+        await tx.query(
+          `
+            UPDATE ${FARM_TILES_TABLE}
+            SET watered = TRUE,
+                updated_at = NOW()
+            WHERE user_id = $1
+              AND scene_key = $2
+              AND tile_x = $3
+              AND tile_y = $4
+          `,
+          [userId, sceneKey, tileX, tileY],
+        );
+      }
+
+      const nextTile = await this.getFarmTileForUpdate(tx, userId, sceneKey, tileX, tileY);
+      if (!nextTile) {
+        throw new NotFoundException('Farm tile not found after water action');
+      }
+      const tileState = this.toFarmTileState(nextTile);
+      return {
+        water: {
+          sceneKey: tileState.sceneKey,
+          tileX: tileState.tileX,
+          tileY: tileState.tileY,
+          tilled: tileState.tilled,
+          watered: tileState.watered,
+          plantedSeedItemKey: tileState.plantedSeedItemKey,
+        },
+        tile: tileState,
+      };
+    });
+  }
+
+  async plantFarmTile(
+    userId: string,
+    tileXRaw: number,
+    tileYRaw: number,
+    seedItemKeyRaw: string,
+    sceneKeyRaw?: string,
+  ): Promise<{ plant: GameplayFarmTilePlantResult; tile: GameplayFarmTileState }> {
+    return this.databaseService.withTransaction(async (tx) => {
+      await this.ensureWorldState(tx, userId);
+      const worldFlags = new Set(await this.getWorldFlags(userId, tx));
+      this.assertFarmUnlocked(worldFlags);
+
+      const sceneKey = this.normalizeFarmSceneKey(sceneKeyRaw);
+      const tileX = this.normalizeFarmTileAxis(tileXRaw, 'tileX');
+      const tileY = this.normalizeFarmTileAxis(tileYRaw, 'tileY');
+      const seedItemKey = seedItemKeyRaw.trim().toLowerCase();
+      if (!seedItemKey) {
+        throw new BadRequestException('seedItemKey is required');
+      }
+
+      await this.ensureFarmTileRow(tx, userId, sceneKey, tileX, tileY);
+      const tile = await this.getFarmTileForUpdate(tx, userId, sceneKey, tileX, tileY);
+      if (!tile) {
+        throw new NotFoundException('Farm tile not found after initialization');
+      }
+
+      if (!tile.tilled) {
+        throw new BadRequestException(`Tile ${tileX}:${tileY} is not tilled`);
+      }
+      if (!tile.watered) {
+        throw new BadRequestException(`Tile ${tileX}:${tileY} is not watered`);
+      }
+      if (tile.planted_seed_item_key) {
+        throw new BadRequestException(`Tile ${tileX}:${tileY} already has a planted seed`);
+      }
+
+      this.resolveCropBySeedItem(seedItemKey, worldFlags);
+      const seedRow = await this.getInventoryItemForUpdate(tx, userId, seedItemKey);
+      if (!seedRow || seedRow.quantity < 1) {
+        throw new BadRequestException(`Missing seed item: ${seedItemKey}`);
+      }
+
+      const remainingSeedQuantity = seedRow.quantity - 1;
+      await this.setInventoryItemQuantity(tx, userId, seedItemKey, remainingSeedQuantity);
+      await tx.query(
+        `
+          UPDATE ${FARM_TILES_TABLE}
+          SET planted_seed_item_key = $5,
+              updated_at = NOW()
+          WHERE user_id = $1
+            AND scene_key = $2
+            AND tile_x = $3
+            AND tile_y = $4
+        `,
+        [userId, sceneKey, tileX, tileY, seedItemKey],
+      );
+
+      const nextTile = await this.getFarmTileForUpdate(tx, userId, sceneKey, tileX, tileY);
+      if (!nextTile) {
+        throw new NotFoundException('Farm tile not found after plant action');
+      }
+      const tileState = this.toFarmTileState(nextTile);
+      return {
+        plant: {
+          sceneKey: tileState.sceneKey,
+          tileX: tileState.tileX,
+          tileY: tileState.tileY,
+          seedItemKey,
+          remainingSeedQuantity,
+          tilled: tileState.tilled,
+          watered: tileState.watered,
+          plantedSeedItemKey: tileState.plantedSeedItemKey,
+        },
+        tile: tileState,
       };
     });
   }
@@ -1348,6 +1581,79 @@ export class GameplayService {
     );
 
     return result.rows[0] ?? null;
+  }
+
+  private normalizeFarmSceneKey(sceneKeyRaw?: string): string {
+    const trimmed = sceneKeyRaw?.trim().toLowerCase();
+    if (!trimmed) {
+      return 'farm';
+    }
+    return trimmed.slice(0, 64);
+  }
+
+  private normalizeFarmTileAxis(value: number, label: 'tileX' | 'tileY'): number {
+    if (!Number.isFinite(value)) {
+      throw new BadRequestException(`${label} must be a finite number`);
+    }
+
+    const normalized = Math.floor(value);
+    if (normalized < 0) {
+      throw new BadRequestException(`${label} must be >= 0`);
+    }
+
+    return normalized;
+  }
+
+  private async ensureFarmTileRow(
+    executor: QueryExecutor,
+    userId: string,
+    sceneKey: string,
+    tileX: number,
+    tileY: number,
+  ): Promise<void> {
+    await executor.query(
+      `
+        INSERT INTO ${FARM_TILES_TABLE} (user_id, scene_key, tile_x, tile_y, tilled, watered, planted_seed_item_key)
+        VALUES ($1, $2, $3, $4, FALSE, FALSE, NULL)
+        ON CONFLICT (user_id, scene_key, tile_x, tile_y) DO NOTHING
+      `,
+      [userId, sceneKey, tileX, tileY],
+    );
+  }
+
+  private async getFarmTileForUpdate(
+    executor: TransactionClient,
+    userId: string,
+    sceneKey: string,
+    tileX: number,
+    tileY: number,
+  ): Promise<FarmTileRow | null> {
+    const result = await executor.query<FarmTileRow>(
+      `
+        SELECT scene_key, tile_x, tile_y, tilled, watered, planted_seed_item_key
+        FROM ${FARM_TILES_TABLE}
+        WHERE user_id = $1
+          AND scene_key = $2
+          AND tile_x = $3
+          AND tile_y = $4
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [userId, sceneKey, tileX, tileY],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  private toFarmTileState(row: FarmTileRow): GameplayFarmTileState {
+    return {
+      sceneKey: row.scene_key?.trim() ? row.scene_key.trim() : 'farm',
+      tileX: Math.max(0, Math.floor(row.tile_x)),
+      tileY: Math.max(0, Math.floor(row.tile_y)),
+      tilled: Boolean(row.tilled),
+      watered: Boolean(row.watered),
+      plantedSeedItemKey: row.planted_seed_item_key?.trim() ? row.planted_seed_item_key.trim() : null,
+    };
   }
 
   private async getInventoryItemForUpdate(

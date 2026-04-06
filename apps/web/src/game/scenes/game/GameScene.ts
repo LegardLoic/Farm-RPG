@@ -92,6 +92,11 @@ import {
   type FarmTiledMapRuntime,
   type HarvestableTileRuntime,
 } from './features/farm/farmTiledMap';
+import {
+  buildFarmTileRuntimeKey as buildFarmTileRuntimeKeyFromFeature,
+  createFarmTileRuntimeStateIndex as createFarmTileRuntimeStateIndexFromFeature,
+  type FarmTileRuntimeState,
+} from './features/farm/farmTileRuntime';
 import { isTypingInsideField as isTypingInsideFieldFromCommon } from './features/common/inputGuards';
 import {
   activateGamepadHudElement as activateGamepadHudElementFromCommon,
@@ -298,6 +303,15 @@ import {
   type CharacterEquipmentSlot,
   type CharacterInventoryItemState,
 } from './features/character/characterEquipmentTypes';
+import {
+  IN_GAME_HOTBAR_SLOT_COUNT,
+  updateInGameInventoryHotbar as updateInGameInventoryHotbarFromFeature,
+} from './features/inventory/inGameInventoryHotbar';
+import {
+  getSelectedHotbarItemKey as getSelectedHotbarItemKeyFromFeature,
+  isSeedInventoryItemKey as isSeedInventoryItemKeyFromFeature,
+  resolveFarmHotbarActionIntent as resolveFarmHotbarActionIntentFromFeature,
+} from './features/inventory/inGameInventoryHotbarGameplay';
 import {
   buildDebugQaMarkdownFilename as buildDebugQaMarkdownFilenameFromDebugQa,
   buildDebugQaMarkdownReport as buildDebugQaMarkdownReportFromDebugQa,
@@ -552,9 +566,17 @@ export class GameScene extends Phaser.Scene {
   private hudHotkeys!: {
     togglePanelVisibility: Phaser.Input.Keyboard.Key;
   };
+  private inventoryHotbarHotkeys!: {
+    shiftModifier: Phaser.Input.Keyboard.Key;
+    slotKeys: Phaser.Input.Keyboard.Key[];
+  };
 
   private hudRoot: HTMLElement | null = null;
   private hudPanelRoot: HTMLElement | null = null;
+  private inventoryHotbarRoot: HTMLElement | null = null;
+  private inventoryHotbarSlotsRoot: HTMLElement | null = null;
+  private inventoryHotbarItemValue: HTMLElement | null = null;
+  private inventoryHotbarHintValue: HTMLElement | null = null;
   private loginButton: HTMLButtonElement | null = null;
   private logoutButton: HTMLButtonElement | null = null;
   private combatStartButton: HTMLButtonElement | null = null;
@@ -772,6 +794,9 @@ export class GameScene extends Phaser.Scene {
   private farmCraftingRenderSignature = '';
   private frontSceneMode: FrontSceneMode = 'farm';
   private hudPanelVisible = true;
+  private inventoryHotbarSelectedIndex = 0;
+  private inventoryHotbarRenderSignature = '';
+  private inventoryHotbarNextWheelAtMs = 0;
   private sceneObstacles: Phaser.GameObjects.Rectangle[] = [];
   private sceneObstacleColliders: Phaser.Physics.Arcade.Collider[] = [];
   private farmSceneRenderSignature = '';
@@ -789,6 +814,11 @@ export class GameScene extends Phaser.Scene {
   private farmResolvedSpawnId: string | null = null;
   private farmDebugMode = false;
   private readonly farmTiledFallbackTextureKey = 'farm-tiled-runtime-fallback';
+  private farmTileRuntimeStateByKey = new Map<string, FarmTileRuntimeState>();
+  private farmTileRuntimeVisuals: Phaser.GameObjects.Graphics | null = null;
+  private farmTileRuntimeRenderRevision = 0;
+  private farmTileRuntimeRenderedRevision = -1;
+  private readonly farmTileInteractionDistancePx = 72;
   private villageSceneRenderSignature = '';
   private villageSceneZoneVisuals = new Map<VillageSceneZoneKey, VillageSceneZoneVisual>();
   private villageSceneActionHintLabel: Phaser.GameObjects.Text | null = null;
@@ -943,6 +973,49 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
   };
 
+  private readonly onInventoryHotbarWheel = (
+    _pointer: Phaser.Input.Pointer,
+    _currentlyOver: Phaser.GameObjects.GameObject[],
+    _deltaX: number,
+    deltaY: number,
+  ) => {
+    if (!this.isAuthenticated || isTypingInsideFieldFromCommon(document.activeElement)) {
+      return;
+    }
+    if (Math.abs(deltaY) < 1) {
+      return;
+    }
+
+    const now = this.time.now;
+    if (now < this.inventoryHotbarNextWheelAtMs) {
+      return;
+    }
+    this.inventoryHotbarNextWheelAtMs = now + 80;
+    this.cycleInventoryHotbarSelection(deltaY > 0 ? 1 : -1);
+  };
+
+  private readonly onFarmPointerDown = (pointer: Phaser.Input.Pointer) => {
+    if (this.frontSceneMode !== 'farm') {
+      return;
+    }
+
+    if (!this.hasFarmPlotsFromTiled()) {
+      return;
+    }
+
+    if (pointer.button !== 0 && pointer.button !== -1) {
+      return;
+    }
+
+    if (isTypingInsideFieldFromCommon(document.activeElement)) {
+      return;
+    }
+
+    if (this.tryRunFarmHotbarActionAtWorldPosition(pointer.worldX, pointer.worldY, true)) {
+      this.updateHud();
+    }
+  };
+
   private readonly onDebugQaImportFileChange = (event: Event) => {
     void this.handleDebugQaImportFileChange(event);
   };
@@ -970,6 +1043,7 @@ export class GameScene extends Phaser.Scene {
     const saveAction = button.dataset.saveAction;
     const profileAction = button.dataset.profileAction;
     const characterAction = button.dataset.characterAction;
+    const hotbarAction = button.dataset.hotbarAction;
     const introAction = button.dataset.introAction;
     const debugAction = button.dataset.debugAction;
 
@@ -1124,6 +1198,12 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (farmAction === 'plant' || farmAction === 'water' || farmAction === 'harvest') {
+      if (this.hasFarmPlotsFromTiled()) {
+        this.farmFeedbackMessage = 'Utilise la barre rapide et clique pres d une tuile farmable.';
+        this.updateHud();
+        return;
+      }
+
       const plotKeyFromButton = button.dataset.plotKey?.trim();
       const plotKey = plotKeyFromButton && plotKeyFromButton.length > 0
         ? plotKeyFromButton
@@ -1245,6 +1325,14 @@ export class GameScene extends Phaser.Scene {
 
     if (characterAction === 'toggle-panel') {
       this.toggleCharacterPanel();
+      return;
+    }
+
+    if (hotbarAction === 'select') {
+      const slotIndex = Number(button.dataset.slotIndex);
+      if (Number.isInteger(slotIndex)) {
+        this.setInventoryHotbarSelection(slotIndex);
+      }
       return;
     }
 
@@ -1375,11 +1463,15 @@ export class GameScene extends Phaser.Scene {
     this.drawDecor();
     this.setupPlayer(this.farmTiledRequestedSpawnId);
     this.setupInput();
+    this.input.on('wheel', this.onInventoryHotbarWheel, this);
+    this.input.on('pointerdown', this.onFarmPointerDown, this);
     this.setupHud();
     void this.bootstrapSessionState();
     this.setupCamera();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.off('wheel', this.onInventoryHotbarWheel, this);
+      this.input.off('pointerdown', this.onFarmPointerDown, this);
       this.teardownHud();
     });
   }
@@ -1432,6 +1524,7 @@ export class GameScene extends Phaser.Scene {
       this.updateVillageSelectionFromPlayerPosition();
     }
     this.updateGamepadInput();
+    this.handleInventoryHotbarHotkeys();
     this.handleHudHotkeys();
     this.handleCharacterHotkeys();
     this.handleQuestHotkeys();
@@ -1466,6 +1559,7 @@ export class GameScene extends Phaser.Scene {
     this.farmTiledTilemap = null;
     this.farmTiledTilesets = [];
     this.farmResolvedSpawnId = null;
+    this.resetFarmTileRuntimeStateIndex();
 
     if (!runtime) {
       return;
@@ -1481,6 +1575,7 @@ export class GameScene extends Phaser.Scene {
 
     this.farmTiledTilemap = this.make.tilemap({ key: 'farm-map-runtime' });
     this.farmTiledTilesets = this.buildFarmTiledTilesets();
+    this.resetFarmTileRuntimeStateIndex();
     const resolvedSpawn = resolveSpawnPointFromFarmTiled(runtime.spawnPoints, this.farmTiledRequestedSpawnId, 'spawn_default');
     this.farmResolvedSpawnId = resolvedSpawn.resolvedSpawnId;
   }
@@ -1795,6 +1890,16 @@ export class GameScene extends Phaser.Scene {
     return { ...VILLAGE_SCENE_PLAYER_SPAWN };
   }
 
+  private hasFarmPlotsFromTiled(): boolean {
+    return (this.farmTiledRuntime?.farmPlots.tiles.length ?? 0) > 0;
+  }
+
+  private resetFarmTileRuntimeStateIndex(): void {
+    const tiles = this.farmTiledRuntime?.farmPlots.tiles ?? [];
+    this.farmTileRuntimeStateByKey = createFarmTileRuntimeStateIndexFromFeature(tiles);
+    this.farmTileRuntimeRenderRevision += 1;
+  }
+
   private getFarmPlotTileAtWorldPosition(worldX: number, worldY: number): FarmPlotTile | null {
     if (!this.farmTiledRuntime) {
       return null;
@@ -1802,7 +1907,7 @@ export class GameScene extends Phaser.Scene {
 
     const tileX = Math.floor(worldX / this.farmTiledRuntime.mapSize.tileWidth);
     const tileY = Math.floor(worldY / this.farmTiledRuntime.mapSize.tileHeight);
-    if (!this.farmTiledRuntime.farmPlots.tileKeys.has(`${tileX}:${tileY}`)) {
+    if (!this.farmTiledRuntime.farmPlots.tileKeys.has(buildFarmTileRuntimeKeyFromFeature(tileX, tileY))) {
       return null;
     }
 
@@ -1821,6 +1926,279 @@ export class GameScene extends Phaser.Scene {
     const tileX = Math.floor(worldX / this.farmTiledRuntime.mapSize.tileWidth);
     const tileY = Math.floor(worldY / this.farmTiledRuntime.mapSize.tileHeight);
     return this.farmTiledRuntime.harvestables.find((tile) => tile.tileX === tileX && tile.tileY === tileY) ?? null;
+  }
+
+  private getNearestFarmPlotTileToWorldPosition(worldX: number, worldY: number, maxDistancePx: number): FarmPlotTile | null {
+    if (!this.farmTiledRuntime || maxDistancePx <= 0) {
+      return null;
+    }
+
+    let bestTile: FarmPlotTile | null = null;
+    let bestDistanceSq = maxDistancePx * maxDistancePx;
+    for (const tile of this.farmTiledRuntime.farmPlots.tiles) {
+      const distanceSq = Phaser.Math.Distance.Squared(worldX, worldY, tile.centerX, tile.centerY);
+      if (distanceSq > bestDistanceSq) {
+        continue;
+      }
+      bestDistanceSq = distanceSq;
+      bestTile = tile;
+    }
+
+    return bestTile;
+  }
+
+  private applyFarmTileRuntimeStateFromPayload(payload: unknown): void {
+    const record = this.payloadGateway.asRecord(payload);
+    if (!record) {
+      return;
+    }
+
+    const tileX = this.payloadGateway.asNumber(record.tileX);
+    const tileY = this.payloadGateway.asNumber(record.tileY);
+    if (tileX === null || tileY === null) {
+      return;
+    }
+
+    const tileKey = buildFarmTileRuntimeKeyFromFeature(Math.floor(tileX), Math.floor(tileY));
+    const current = this.farmTileRuntimeStateByKey.get(tileKey);
+    if (!current) {
+      return;
+    }
+
+    current.tilled = Boolean(record.tilled);
+    current.watered = Boolean(record.watered);
+    const plantedSeedItemKey = this.payloadGateway.asString(record.plantedSeedItemKey);
+    current.plantedSeedItemKey = plantedSeedItemKey ? plantedSeedItemKey.trim().toLowerCase() : null;
+  }
+
+  private async refreshFarmTileRuntimeState(): Promise<void> {
+    this.resetFarmTileRuntimeStateIndex();
+
+    if (!this.isAuthenticated || !this.hasFarmPlotsFromTiled()) {
+      this.renderFarmTileRuntimeVisuals(true);
+      return;
+    }
+
+    try {
+      const payload = await this.fetchJson<unknown>('/gameplay/farm/tiles', {
+        method: 'GET',
+      });
+      const root = this.payloadGateway.asRecord(payload);
+      const tilesRaw = Array.isArray(root?.tiles) ? root.tiles : [];
+      for (const entry of tilesRaw) {
+        this.applyFarmTileRuntimeStateFromPayload(entry);
+      }
+      this.farmError = null;
+    } catch (error) {
+      this.farmError = this.getErrorMessage(error, 'Unable to load farm tile state.');
+    } finally {
+      this.farmTileRuntimeRenderRevision += 1;
+      this.renderFarmTileRuntimeVisuals(true);
+      this.updateHud();
+    }
+  }
+
+  private async runFarmTileAction(params: {
+    tileX: number;
+    tileY: number;
+    action: 'till' | 'water' | 'plant';
+    seedItemKey?: string;
+  }): Promise<void> {
+    if (!this.isAuthenticated) {
+      this.farmFeedbackMessage = 'Connexion requise pour agir sur les parcelles.';
+      this.updateHud();
+      return;
+    }
+
+    if (this.farmBusy) {
+      return;
+    }
+
+    this.farmBusy = true;
+    this.farmError = null;
+    this.updateHud();
+
+    try {
+      const endpoint = params.action === 'till'
+        ? '/gameplay/farm/tiles/till'
+        : params.action === 'water'
+          ? '/gameplay/farm/tiles/water'
+          : '/gameplay/farm/tiles/plant';
+      const body: Record<string, unknown> = {
+        tileX: params.tileX,
+        tileY: params.tileY,
+        sceneKey: 'farm',
+      };
+      if (params.action === 'plant') {
+        body.seedItemKey = params.seedItemKey ?? '';
+      }
+
+      const payload = await this.fetchJson<unknown>(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+
+      const root = this.payloadGateway.asRecord(payload);
+      if (root?.tile) {
+        this.applyFarmTileRuntimeStateFromPayload(root.tile);
+      }
+
+      if (params.action === 'till') {
+        this.farmFeedbackMessage = 'Terre labouree.';
+      } else if (params.action === 'water') {
+        this.farmFeedbackMessage = 'Terre arrosee.';
+      } else {
+        this.farmFeedbackMessage = `Graine plantee: ${this.formatFarmLabel(params.seedItemKey ?? '')}.`;
+      }
+
+      if (params.action === 'plant') {
+        await this.refreshCharacterState();
+      }
+
+      this.farmTileRuntimeRenderRevision += 1;
+      this.renderFarmTileRuntimeVisuals();
+    } catch (error) {
+      this.farmError = this.getErrorMessage(error, 'Unable to apply farm tile action.');
+    } finally {
+      this.farmBusy = false;
+      this.updateHud();
+    }
+  }
+
+  private isFarmTileWithinInteractionDistance(tile: FarmPlotTile): boolean {
+    const distanceSq = Phaser.Math.Distance.Squared(this.player.x, this.player.y, tile.centerX, tile.centerY);
+    return distanceSq <= this.farmTileInteractionDistancePx * this.farmTileInteractionDistancePx;
+  }
+
+  private tryRunFarmHotbarActionAtWorldPosition(
+    worldX: number,
+    worldY: number,
+    announceFailure: boolean,
+  ): boolean {
+    if (!this.hasFarmPlotsFromTiled()) {
+      return false;
+    }
+
+    const selectedItemKey = this.getSelectedInventoryHotbarItemKey();
+    const intent = resolveFarmHotbarActionIntentFromFeature(selectedItemKey);
+    if (intent.kind === 'none') {
+      if (announceFailure) {
+        this.farmFeedbackMessage = intent.reason === 'empty-slot'
+          ? 'Slot actif vide. Selectionne une houe, un arrosoir ou une graine.'
+          : 'Item actif incompatible avec les actions de ferme.';
+      }
+      return true;
+    }
+
+    const pointerSnapRadius = Math.max(
+      this.farmTiledRuntime?.mapSize.tileWidth ?? 0,
+      this.farmTiledRuntime?.mapSize.tileHeight ?? 0,
+    ) * 0.7;
+    const tile = this.getFarmPlotTileAtWorldPosition(worldX, worldY)
+      ?? this.getNearestFarmPlotTileToWorldPosition(worldX, worldY, pointerSnapRadius);
+    if (!tile) {
+      if (announceFailure) {
+        this.farmFeedbackMessage = 'Cette zone n est pas cultivable.';
+      }
+      return true;
+    }
+
+    if (!this.isFarmTileWithinInteractionDistance(tile)) {
+      if (announceFailure) {
+        this.farmFeedbackMessage = 'Approche toi de la parcelle pour agir.';
+      }
+      return true;
+    }
+
+    if (intent.kind === 'plant') {
+      const unlockedSeedKeys = this.getUnlockedFarmSeedItemKeys();
+      if (unlockedSeedKeys.size > 0 && !unlockedSeedKeys.has(intent.seedItemKey)) {
+        this.farmFeedbackMessage = `Graine verrouillee: ${this.formatFarmLabel(intent.seedItemKey)}.`;
+        return true;
+      }
+      this.farmSelectedSeedItemKey = intent.seedItemKey;
+      void this.runFarmTileAction({
+        action: 'plant',
+        tileX: tile.tileX,
+        tileY: tile.tileY,
+        seedItemKey: intent.seedItemKey,
+      });
+      return true;
+    }
+
+    if (intent.kind === 'till') {
+      void this.runFarmTileAction({
+        action: 'till',
+        tileX: tile.tileX,
+        tileY: tile.tileY,
+      });
+      return true;
+    }
+
+    if (intent.kind === 'water') {
+      void this.runFarmTileAction({
+        action: 'water',
+        tileX: tile.tileX,
+        tileY: tile.tileY,
+      });
+      return true;
+    }
+
+    this.farmFeedbackMessage = 'Recolte outil non branchee cote API pour ces tuiles.';
+    return true;
+  }
+
+  private renderFarmTileRuntimeVisuals(force = false): void {
+    if (!this.hasFarmPlotsFromTiled() || !this.farmTiledRuntime) {
+      if (this.farmTileRuntimeVisuals) {
+        this.farmTileRuntimeVisuals.clear();
+        this.farmTileRuntimeVisuals.setVisible(false);
+      }
+      this.farmTileRuntimeRenderedRevision = this.farmTileRuntimeRenderRevision;
+      return;
+    }
+
+    if (!this.farmTileRuntimeVisuals) {
+      this.farmTileRuntimeVisuals = this.add.graphics();
+      this.farmTileRuntimeVisuals.setDepth(30);
+    }
+
+    if (!force && this.farmTileRuntimeRenderedRevision === this.farmTileRuntimeRenderRevision) {
+      this.farmTileRuntimeVisuals.setVisible(this.frontSceneMode === 'farm');
+      return;
+    }
+
+    const graphics = this.farmTileRuntimeVisuals;
+    graphics.clear();
+    graphics.setVisible(this.frontSceneMode === 'farm');
+
+    const tileWidth = this.farmTiledRuntime.mapSize.tileWidth;
+    const tileHeight = this.farmTiledRuntime.mapSize.tileHeight;
+
+    for (const tile of this.farmTiledRuntime.farmPlots.tiles) {
+      const tileKey = buildFarmTileRuntimeKeyFromFeature(tile.tileX, tile.tileY);
+      const state = this.farmTileRuntimeStateByKey.get(tileKey);
+      if (!state) {
+        continue;
+      }
+
+      const x = tile.worldX;
+      const y = tile.worldY;
+      if (state.tilled) {
+        graphics.fillStyle(0x5b3a24, 0.38);
+        graphics.fillRect(x + 1, y + 1, tileWidth - 2, tileHeight - 2);
+      }
+      if (state.watered) {
+        graphics.fillStyle(0x3a7cc9, 0.35);
+        graphics.fillRect(x + 2, y + 2, tileWidth - 4, tileHeight - 4);
+      }
+      if (state.plantedSeedItemKey) {
+        graphics.fillStyle(0x57c96b, 0.95);
+        graphics.fillRect(x + tileWidth * 0.34, y + tileHeight * 0.34, tileWidth * 0.32, tileHeight * 0.32);
+      }
+    }
+
+    this.farmTileRuntimeRenderedRevision = this.farmTileRuntimeRenderRevision;
   }
 
   private setupInput(): void {
@@ -1851,6 +2229,21 @@ export class GameScene extends Phaser.Scene {
     };
     this.hudHotkeys = {
       togglePanelVisibility: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.H),
+    };
+    this.inventoryHotbarHotkeys = {
+      shiftModifier: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
+      slotKeys: [
+        this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
+        this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.TWO),
+        this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.THREE),
+        this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR),
+        this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.FIVE),
+        this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SIX),
+        this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SEVEN),
+        this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.EIGHT),
+        this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.NINE),
+        this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ZERO),
+      ],
     };
   }
 
@@ -2267,6 +2660,12 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
+  private updateInGameInventoryHotbar(): void {
+    updateInGameInventoryHotbarFromFeature(
+      this as unknown as Parameters<typeof updateInGameInventoryHotbarFromFeature>[0],
+    );
+  }
+
   private buildCharacterPanelViewModel(): CharacterPanelViewModel {
     const heroAppearanceLabel = this.heroProfile
       ? getHeroAppearanceLabelFromIntro(this.heroProfile.appearanceKey, HERO_APPEARANCE_OPTIONS)
@@ -2513,10 +2912,10 @@ export class GameScene extends Phaser.Scene {
 
   private renderFarmPanel(): void {
     const seedSelect = this.farmSeedSelect;
-    const plotsRoot = this.farmPlotsRoot;
-    if (!seedSelect || !plotsRoot) {
+    if (!seedSelect) {
       return;
     }
+    const plotsRoot = this.farmPlotsRoot;
 
     const signature = this.computeFarmRenderSignature();
     if (signature === this.farmRenderSignature) {
@@ -2526,6 +2925,7 @@ export class GameScene extends Phaser.Scene {
     const result = renderFarmPanelFromFeature({
       seedSelect,
       plotsRoot,
+      showLegacyPlotsGrid: !this.hasFarmPlotsFromTiled(),
       isAuthenticated: this.isAuthenticated,
       farmBusy: this.farmBusy,
       farmState: this.farmState,
@@ -2737,6 +3137,7 @@ export class GameScene extends Phaser.Scene {
       this.isAuthenticated ? '1' : '0',
       this.farmBusy ? '1' : '0',
       this.farmError ?? '',
+      this.hasFarmPlotsFromTiled() ? 'tiled-plots' : 'legacy-plots',
       this.farmSelectedSeedItemKey,
       this.farmSelectedPlotKey ?? '',
       this.farmCraftingPanelOpen ? '1' : '0',
@@ -3119,6 +3520,7 @@ export class GameScene extends Phaser.Scene {
     const authenticated = await this.refreshAuthState();
     if (authenticated) {
       await this.refreshGameplayState();
+      await this.refreshFarmTileRuntimeState();
       await this.refreshHeroProfileState();
       await this.refreshCharacterState();
       await this.refreshAutoSaveState();
@@ -3140,6 +3542,8 @@ export class GameScene extends Phaser.Scene {
     this.resetVillageMarketState();
     this.resetQuestState();
     this.resetCombatState();
+    this.resetFarmTileRuntimeStateIndex();
+    this.renderFarmTileRuntimeVisuals(true);
     this.updateHud();
   }
 
@@ -3300,6 +3704,8 @@ export class GameScene extends Phaser.Scene {
       ) {
         this.characterSelectedInventoryItemKey = null;
       }
+      this.inventoryHotbarSelectedIndex = this.normalizeInventoryHotbarIndex(this.inventoryHotbarSelectedIndex);
+      this.syncFarmSeedSelectionFromHotbar();
     } catch (error) {
       this.characterError = this.getErrorMessage(error, 'Impossible de charger la fiche personnage.');
     } finally {
@@ -3670,6 +4076,7 @@ export class GameScene extends Phaser.Scene {
       fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
       refreshGameplayState: () => this.refreshGameplayState(),
       refreshVillageMarketState: () => this.refreshVillageMarketState(),
+      refreshCharacterState: () => this.refreshCharacterState(),
       formatFarmLabel: (raw) => this.formatFarmLabel(raw),
       setFarmFeedbackMessage: (message) => {
         this.farmFeedbackMessage = message;
@@ -3689,14 +4096,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   private async plantFarmPlot(plotKey: string): Promise<void> {
+    await this.plantFarmPlotWithSeed(plotKey, this.farmSelectedSeedItemKey);
+  }
+
+  private async plantFarmPlotWithSeed(plotKey: string, seedItemKeyOverride: string): Promise<void> {
+    const resolvedSeedItemKey = seedItemKeyOverride.trim();
     await runPlantFarmPlotActionFromFeature({
       isAuthenticated: this.isAuthenticated,
       farmUnlocked: Boolean(this.farmState?.unlocked),
       plotKey,
-      seedItemKey: this.farmSelectedSeedItemKey,
+      seedItemKey: resolvedSeedItemKey,
       fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
       refreshGameplayState: () => this.refreshGameplayState(),
       refreshVillageMarketState: () => this.refreshVillageMarketState(),
+      refreshCharacterState: () => this.refreshCharacterState(),
       formatFarmLabel: (raw) => this.formatFarmLabel(raw),
       setFarmBusy: (busy) => {
         this.farmBusy = busy;
@@ -3744,6 +4157,7 @@ export class GameScene extends Phaser.Scene {
       fetchJson: (path, init) => this.fetchJson<unknown>(path, init),
       refreshGameplayState: () => this.refreshGameplayState(),
       refreshVillageMarketState: () => this.refreshVillageMarketState(),
+      refreshCharacterState: () => this.refreshCharacterState(),
       setFarmBusy: (busy) => {
         this.farmBusy = busy;
       },
@@ -3935,6 +4349,7 @@ export class GameScene extends Phaser.Scene {
       this as unknown as Parameters<typeof applyGameplaySnapshotForSceneFromService>[0],
       payload,
     );
+    this.syncFarmSeedSelectionFromHotbar();
   }
 
   private resetGameplayHudState(): void {
@@ -3960,6 +4375,9 @@ export class GameScene extends Phaser.Scene {
     this.characterSelectedSlot = 'main_hand';
     this.characterSelectedInventoryItemKey = null;
     this.characterRenderSignature = '';
+    this.inventoryHotbarSelectedIndex = 0;
+    this.inventoryHotbarRenderSignature = '';
+    this.inventoryHotbarNextWheelAtMs = 0;
   }
 
   private resetIntroNarrativeState(): void {
@@ -4684,11 +5102,15 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.farmSceneActionHintLabel = createFarmActionHintLabelFromFeature(this);
+    this.renderFarmTileRuntimeVisuals(true);
     this.renderFarmScene();
   }
 
   private drawVillageDecor(graphics: Phaser.GameObjects.Graphics): void {
     drawVillageSceneBackdrop(graphics);
+    if (this.farmTileRuntimeVisuals) {
+      this.farmTileRuntimeVisuals.setVisible(false);
+    }
 
     this.farmSceneStaticLabels.push(...createVillageStaticLabelsFromFeature(this));
 
@@ -4746,6 +5168,10 @@ export class GameScene extends Phaser.Scene {
     if (this.farmSceneActionHintLabel) {
       this.farmSceneActionHintLabel.destroy();
       this.farmSceneActionHintLabel = null;
+    }
+
+    if (this.farmTileRuntimeVisuals) {
+      this.farmTileRuntimeVisuals.clear();
     }
   }
 
@@ -4845,11 +5271,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   private ensureSelectedFarmPlot(): void {
+    if (this.hasFarmPlotsFromTiled()) {
+      this.farmSelectedPlotKey = null;
+      return;
+    }
+
     const slots = getFarmSceneSlotsFromLogic(this.farmState);
     this.farmSelectedPlotKey = resolveSelectedFarmPlotKeyFromLogic(slots, this.farmSelectedPlotKey);
   }
 
   private setSelectedFarmPlot(plotKey: string, announceSelection: boolean): void {
+    if (this.hasFarmPlotsFromTiled()) {
+      return;
+    }
+
     const slot = getFarmSlotByKeyFromLogic(getFarmSceneSlotsFromLogic(this.farmState), plotKey);
     if (!slot) {
       return;
@@ -4864,6 +5299,28 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateFarmContextPanel(): void {
+    if (this.hasFarmPlotsFromTiled()) {
+      if (this.farmContextTitleValue) {
+        this.farmContextTitleValue.textContent = 'Actions in-game (Tiled FarmPlots)';
+      }
+      if (this.farmContextStatusValue) {
+        this.farmContextStatusValue.textContent = 'Equipe une houe, un arrosoir ou une graine, puis clique pres d une tuile cultivable.';
+      }
+      if (this.farmContextPlantButton) {
+        this.farmContextPlantButton.disabled = true;
+        delete this.farmContextPlantButton.dataset.plotKey;
+      }
+      if (this.farmContextWaterButton) {
+        this.farmContextWaterButton.disabled = true;
+        delete this.farmContextWaterButton.dataset.plotKey;
+      }
+      if (this.farmContextHarvestButton) {
+        this.farmContextHarvestButton.disabled = true;
+        delete this.farmContextHarvestButton.dataset.plotKey;
+      }
+      return;
+    }
+
     const farm = this.farmState;
     const selectedPlot = getFarmPlotByKeyFromLogic(this.farmSelectedPlotKey, this.farmState);
     const context = buildFarmContextViewModelFromFeature({
@@ -4949,6 +5406,91 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private getSelectedInventoryHotbarItemKey(): string | null {
+    return getSelectedHotbarItemKeyFromFeature(this.characterInventory, this.inventoryHotbarSelectedIndex);
+  }
+
+  private getUnlockedFarmSeedItemKeys(): Set<string> {
+    if (!this.farmState?.unlocked) {
+      return new Set<string>();
+    }
+
+    return new Set(
+      this.farmState.cropCatalog
+        .filter((entry) => entry.unlocked)
+        .map((entry) => entry.seedItemKey.trim().toLowerCase()),
+    );
+  }
+
+  private syncFarmSeedSelectionFromHotbar(): void {
+    if (!this.farmState?.unlocked) {
+      return;
+    }
+
+    const selectedItemKey = this.getSelectedInventoryHotbarItemKey();
+    if (!selectedItemKey || !isSeedInventoryItemKeyFromFeature(selectedItemKey)) {
+      return;
+    }
+
+    const unlockedSeedKeys = this.getUnlockedFarmSeedItemKeys();
+    if (!unlockedSeedKeys.has(selectedItemKey)) {
+      return;
+    }
+
+    this.farmSelectedSeedItemKey = selectedItemKey;
+  }
+
+  private normalizeInventoryHotbarIndex(rawIndex: number): number {
+    if (!Number.isFinite(rawIndex)) {
+      return 0;
+    }
+
+    const roundedIndex = Math.trunc(rawIndex);
+    return ((roundedIndex % IN_GAME_HOTBAR_SLOT_COUNT) + IN_GAME_HOTBAR_SLOT_COUNT) % IN_GAME_HOTBAR_SLOT_COUNT;
+  }
+
+  private setInventoryHotbarSelection(rawIndex: number): void {
+    if (!this.isAuthenticated) {
+      return;
+    }
+
+    const nextIndex = this.normalizeInventoryHotbarIndex(rawIndex);
+    if (this.inventoryHotbarSelectedIndex === nextIndex) {
+      this.syncFarmSeedSelectionFromHotbar();
+      return;
+    }
+
+    this.inventoryHotbarSelectedIndex = nextIndex;
+    this.syncFarmSeedSelectionFromHotbar();
+    this.updateHud();
+  }
+
+  private cycleInventoryHotbarSelection(step: number): void {
+    if (!this.isAuthenticated || step === 0) {
+      return;
+    }
+
+    this.setInventoryHotbarSelection(this.inventoryHotbarSelectedIndex + step);
+  }
+
+  private handleInventoryHotbarHotkeys(): void {
+    if (!this.isAuthenticated || isTypingInsideFieldFromCommon(document.activeElement)) {
+      return;
+    }
+
+    if (!this.inventoryHotbarHotkeys.shiftModifier.isDown) {
+      return;
+    }
+
+    for (let slotIndex = 0; slotIndex < this.inventoryHotbarHotkeys.slotKeys.length; slotIndex += 1) {
+      const hotkey = this.inventoryHotbarHotkeys.slotKeys[slotIndex];
+      if (hotkey && Phaser.Input.Keyboard.JustDown(hotkey)) {
+        this.setInventoryHotbarSelection(slotIndex);
+        return;
+      }
+    }
+  }
+
   private handleCharacterHotkeys(): void {
     if (isTypingInsideFieldFromCommon(document.activeElement)) {
       return;
@@ -4993,14 +5535,31 @@ export class GameScene extends Phaser.Scene {
   }
 
   private handleFarmHotkeys(): void {
+    const shiftIsDown = this.inventoryHotbarHotkeys.shiftModifier.isDown;
+    if (this.hasFarmPlotsFromTiled()) {
+      if (isTypingInsideFieldFromCommon(document.activeElement)) {
+        return;
+      }
+
+      if (Phaser.Input.Keyboard.JustDown(this.farmHotkeys.craft)) {
+        this.toggleFarmCraftingPanel();
+        return;
+      }
+
+      if (Phaser.Input.Keyboard.JustDown(this.farmHotkeys.sleep)) {
+        void this.sleepAtFarm();
+      }
+      return;
+    }
+
     const hotkeyResolution = resolveFarmHotkeyCommandFromFeature({
       isTypingInsideField: isTypingInsideFieldFromCommon(document.activeElement),
       hotkeys: {
         craft: Phaser.Input.Keyboard.JustDown(this.farmHotkeys.craft),
         sleep: Phaser.Input.Keyboard.JustDown(this.farmHotkeys.sleep),
-        plant: Phaser.Input.Keyboard.JustDown(this.farmHotkeys.plant),
-        water: Phaser.Input.Keyboard.JustDown(this.farmHotkeys.water),
-        harvest: Phaser.Input.Keyboard.JustDown(this.farmHotkeys.harvest),
+        plant: !shiftIsDown && Phaser.Input.Keyboard.JustDown(this.farmHotkeys.plant),
+        water: !shiftIsDown && Phaser.Input.Keyboard.JustDown(this.farmHotkeys.water),
+        harvest: !shiftIsDown && Phaser.Input.Keyboard.JustDown(this.farmHotkeys.harvest),
       },
       selectedPlotKey: this.farmSelectedPlotKey,
     });
@@ -5031,12 +5590,62 @@ export class GameScene extends Phaser.Scene {
     }
 
     const interactable = this.getActiveFarmInteractable();
-    if (!interactable) {
-      this.farmFeedbackMessage = 'Aucune interaction disponible ici.';
+    if (interactable) {
+      this.runFarmInteractable(interactable);
       return;
     }
 
-    this.runFarmInteractable(interactable);
+    if (this.hasFarmPlotsFromTiled()) {
+      if (this.tryRunFarmHotbarActionAtWorldPosition(this.player.x, this.player.y, true)) {
+        return;
+      }
+    } else if (this.tryRunFarmHotbarActionOnSelectedPlot()) {
+      return;
+    }
+
+    this.farmFeedbackMessage = 'Aucune interaction disponible ici.';
+  }
+
+  private tryRunFarmHotbarActionOnSelectedPlot(): boolean {
+    const plotKey = this.farmSelectedPlotKey?.trim();
+    if (!plotKey) {
+      return false;
+    }
+
+    const selectedItemKey = this.getSelectedInventoryHotbarItemKey();
+    const intent = resolveFarmHotbarActionIntentFromFeature(selectedItemKey);
+
+    if (intent.kind === 'none') {
+      this.farmFeedbackMessage = intent.reason === 'empty-slot'
+        ? 'Slot actif vide. Selectionne une graine ou un outil de ferme.'
+        : 'Item actif incompatible avec les actions de ferme.';
+      return true;
+    }
+
+    if (intent.kind === 'till') {
+      this.farmFeedbackMessage = 'Labour detecte (hoe). Le backend de preparation du sol arrive ensuite.';
+      return true;
+    }
+
+    if (intent.kind === 'plant') {
+      const unlockedSeedKeys = this.getUnlockedFarmSeedItemKeys();
+      if (unlockedSeedKeys.size > 0 && !unlockedSeedKeys.has(intent.seedItemKey)) {
+        this.farmFeedbackMessage = `Graine verrouillee: ${this.formatFarmLabel(intent.seedItemKey)}.`;
+        return true;
+      }
+
+      this.farmSelectedSeedItemKey = intent.seedItemKey;
+      void this.plantFarmPlotWithSeed(plotKey, intent.seedItemKey);
+      return true;
+    }
+
+    if (intent.kind === 'water') {
+      void this.waterFarmPlot(plotKey);
+      return true;
+    }
+
+    void this.harvestFarmPlot(plotKey);
+    return true;
   }
 
   private getActiveFarmInteractable(): FarmInteractable | null {

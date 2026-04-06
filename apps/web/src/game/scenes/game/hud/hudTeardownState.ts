@@ -54,6 +54,9 @@ export function resetHudTeardownState(target: any): void {
   target.characterSelectedSlot = 'main_hand';
   target.characterSelectedInventoryItemKey = null;
   target.characterRenderSignature = '';
+  target.inventoryHotbarSelectedIndex = 0;
+  target.inventoryHotbarRenderSignature = '';
+  target.inventoryHotbarNextWheelAtMs = 0;
   target.debugQaBusyAction = null;
   target.debugQaStatus = 'idle';
   target.debugQaMessage = null;

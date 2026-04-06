@@ -348,6 +348,7 @@ function createGameplayDatabaseStub(
       boss_floor_10_defeated: Boolean(initialTower.boss_floor_10_defeated),
     },
     farmPlots: new Map(),
+    farmTiles: new Map(),
     inventory: new Map(Object.entries(initialInventory)),
     relationships: new Map(),
   };
@@ -453,6 +454,24 @@ function createGameplayDatabaseStub(
       return { rows: [] };
     }
 
+    if (text.includes('INSERT INTO farm_tiles')) {
+      const sceneKey = values[1];
+      const tileX = values[2];
+      const tileY = values[3];
+      const key = `${sceneKey}:${tileX}:${tileY}`;
+      if (!state.farmTiles.has(key)) {
+        state.farmTiles.set(key, {
+          scene_key: sceneKey,
+          tile_x: tileX,
+          tile_y: tileY,
+          tilled: false,
+          watered: false,
+          planted_seed_item_key: null,
+        });
+      }
+      return { rows: [] };
+    }
+
     if (text.includes('INSERT INTO village_npc_relationships')) {
       const npcKey = values[1];
       if (!state.relationships.has(npcKey)) {
@@ -509,6 +528,75 @@ function createGameplayDatabaseStub(
       return {
         rows: row ? [{ ...row }] : [],
       };
+    }
+
+    if (
+      text.includes('SELECT scene_key, tile_x, tile_y, tilled, watered, planted_seed_item_key') &&
+      text.includes('FROM farm_tiles') &&
+      text.includes('AND tile_x = $3') &&
+      text.includes('AND tile_y = $4') &&
+      text.includes('FOR UPDATE')
+    ) {
+      const sceneKey = values[1];
+      const tileX = values[2];
+      const tileY = values[3];
+      const key = `${sceneKey}:${tileX}:${tileY}`;
+      const row = state.farmTiles.get(key);
+      return {
+        rows: row ? [{ ...row }] : [],
+      };
+    }
+
+    if (
+      text.includes('SELECT scene_key, tile_x, tile_y, tilled, watered, planted_seed_item_key') &&
+      text.includes('FROM farm_tiles') &&
+      text.includes('AND scene_key = $2') &&
+      text.includes('ORDER BY tile_y ASC, tile_x ASC')
+    ) {
+      const sceneKey = values[1];
+      const rows = Array.from(state.farmTiles.values())
+        .filter((row) => row.scene_key === sceneKey && (row.tilled || row.watered || row.planted_seed_item_key))
+        .sort((left, right) => left.tile_y - right.tile_y || left.tile_x - right.tile_x)
+        .map((entry) => ({ ...entry }));
+      return { rows };
+    }
+
+    if (text.includes('UPDATE farm_tiles') && text.includes('SET tilled = TRUE')) {
+      const sceneKey = values[1];
+      const tileX = values[2];
+      const tileY = values[3];
+      const key = `${sceneKey}:${tileX}:${tileY}`;
+      const row = state.farmTiles.get(key);
+      if (row) {
+        row.tilled = true;
+        row.watered = false;
+      }
+      return { rows: [] };
+    }
+
+    if (text.includes('UPDATE farm_tiles') && text.includes('SET watered = TRUE')) {
+      const sceneKey = values[1];
+      const tileX = values[2];
+      const tileY = values[3];
+      const key = `${sceneKey}:${tileX}:${tileY}`;
+      const row = state.farmTiles.get(key);
+      if (row) {
+        row.watered = true;
+      }
+      return { rows: [] };
+    }
+
+    if (text.includes('UPDATE farm_tiles') && text.includes('SET planted_seed_item_key = $5')) {
+      const sceneKey = values[1];
+      const tileX = values[2];
+      const tileY = values[3];
+      const plantedSeedItemKey = values[4];
+      const key = `${sceneKey}:${tileX}:${tileY}`;
+      const row = state.farmTiles.get(key);
+      if (row) {
+        row.planted_seed_item_key = plantedSeedItemKey;
+      }
+      return { rows: [] };
     }
 
     if (text.includes('UPDATE farm_plots') && text.includes('SET crop_key = $3')) {
@@ -1565,6 +1653,76 @@ test('gameplay farm water marks planted plot as watered for current day', async 
   assert.equal(result.water.cropKey, 'turnip');
   assert.equal(result.water.wateredToday, true);
   assert.equal(wateredPlot?.wateredToday, true);
+});
+
+test('gameplay farm tile till marks tile as tilled and clears watered state', async () => {
+  const db = createGameplayDatabaseStub(['intro_farm_assigned']);
+  const service = new GameplayService(db);
+
+  const result = await service.tillFarmTile('user-1', 12, 7, 'farm');
+
+  assert.equal(result.till.sceneKey, 'farm');
+  assert.equal(result.till.tileX, 12);
+  assert.equal(result.till.tileY, 7);
+  assert.equal(result.till.tilled, true);
+  assert.equal(result.till.watered, false);
+  assert.equal(result.tile.plantedSeedItemKey, null);
+});
+
+test('gameplay farm tile water requires tile to be tilled first', async () => {
+  const db = createGameplayDatabaseStub(['intro_farm_assigned']);
+  const service = new GameplayService(db);
+
+  await assert.rejects(
+    () => service.waterFarmTileByTile('user-1', 4, 9, 'farm'),
+    /not tilled/,
+  );
+});
+
+test('gameplay farm tile plant requires tilled+watered and consumes one seed', async () => {
+  const db = createGameplayDatabaseStub(['intro_farm_assigned'], [], {
+    turnip_seed: 2,
+  });
+  const service = new GameplayService(db);
+
+  await service.tillFarmTile('user-1', 5, 5, 'farm');
+  await service.waterFarmTileByTile('user-1', 5, 5, 'farm');
+  const result = await service.plantFarmTile('user-1', 5, 5, 'turnip_seed', 'farm');
+
+  assert.equal(result.plant.sceneKey, 'farm');
+  assert.equal(result.plant.tileX, 5);
+  assert.equal(result.plant.tileY, 5);
+  assert.equal(result.plant.seedItemKey, 'turnip_seed');
+  assert.equal(result.plant.remainingSeedQuantity, 1);
+  assert.equal(result.tile.tilled, true);
+  assert.equal(result.tile.watered, true);
+  assert.equal(result.tile.plantedSeedItemKey, 'turnip_seed');
+  assert.equal(db.state.inventory.get('turnip_seed'), 1);
+});
+
+test('gameplay farm tile states list returns active tiles for a scene', async () => {
+  const db = createGameplayDatabaseStub(['intro_farm_assigned'], [], {
+    carrot_seed: 1,
+  });
+  const service = new GameplayService(db);
+
+  await service.tillFarmTile('user-1', 2, 1, 'farm');
+  await service.tillFarmTile('user-1', 3, 1, 'farm');
+  await service.waterFarmTileByTile('user-1', 3, 1, 'farm');
+  await service.plantFarmTile('user-1', 3, 1, 'carrot_seed', 'farm');
+
+  const tiles = await service.getFarmTileStates('user-1', 'farm');
+  const tilledOnly = tiles.find((tile) => tile.tileX === 2 && tile.tileY === 1);
+  const planted = tiles.find((tile) => tile.tileX === 3 && tile.tileY === 1);
+
+  assert.equal(Array.isArray(tiles), true);
+  assert.equal(tiles.length, 2);
+  assert.equal(tilledOnly?.tilled, true);
+  assert.equal(tilledOnly?.watered, false);
+  assert.equal(tilledOnly?.plantedSeedItemKey, null);
+  assert.equal(planted?.tilled, true);
+  assert.equal(planted?.watered, true);
+  assert.equal(planted?.plantedSeedItemKey, 'carrot_seed');
 });
 
 test('gameplay farm harvest grants crop item and resets plot', async () => {

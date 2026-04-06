@@ -2,6 +2,7 @@ export const PLAYER_PROGRESSION_TABLE = 'player_progression';
 export const WORLD_FLAGS_TABLE = 'world_flags';
 export const WORLD_STATE_TABLE = 'world_state';
 export const FARM_PLOTS_TABLE = 'farm_plots';
+export const FARM_TILES_TABLE = 'farm_tiles';
 export const VILLAGE_NPC_RELATIONSHIPS_TABLE = 'village_npc_relationships';
 
 export const BASE_PLAYER_LEVEL = 1;
