@@ -14,6 +14,7 @@ export type HudMainUpdateSceneLike = {
   setHudText(key: string, value: string): void;
   updateHeroProfileHud(): void;
   updateIntroHud(): void;
+  updateCharacterHud(): void;
   updateCombatHud(): void;
   updateQuestHud(): void;
   updateVillageNpcHud(): void;
@@ -50,6 +51,7 @@ export function updateHudForScene(scene: HudMainUpdateSceneLike): void {
   }
   scene.updateHeroProfileHud();
   scene.updateIntroHud();
+  scene.updateCharacterHud();
   scene.updateCombatHud();
   scene.updateQuestHud();
   scene.updateVillageNpcHud();

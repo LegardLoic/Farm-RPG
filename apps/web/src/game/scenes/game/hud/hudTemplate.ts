@@ -176,6 +176,64 @@ export function createHudTemplate(params: CreateHudTemplateParams): string {
           <p class="hud-intro-progress" data-hud="introProgress">Progression: 0/3</p>
           <div class="hud-intro-error" data-hud="introError" hidden></div>
         </div>
+        <div class="hud-character-shortcut">
+          <button class="hud-character-toggle" data-hud="characterToggle" data-character-action="toggle-panel">
+            Fiche perso (P)
+          </button>
+        </div>
+        <div class="hud-character" data-hud="characterPanel" hidden>
+          <div class="hud-character-header">
+            <div>
+              <span>Personnage / Equipement</span>
+              <strong data-hud="characterIdentity">Heros sans profil</strong>
+            </div>
+            <div class="hud-character-header-actions">
+              <button class="hud-character-button" data-hud="characterRefresh" data-character-action="refresh">
+                Actualiser
+              </button>
+              <button class="hud-character-button danger" data-hud="characterUnequip" data-character-action="unequip" data-slot="main_hand">
+                Retirer slot
+              </button>
+              <button class="hud-character-button secondary" data-character-action="toggle-panel">Fermer</button>
+            </div>
+          </div>
+          <p class="hud-character-summary" data-hud="characterSummary">
+            Lisibilite du build: stats, slots, detail et comparaison.
+          </p>
+          <div class="hud-character-grid">
+            <div class="hud-character-block">
+              <p class="hud-character-block-title">Stats principales</p>
+              <div class="hud-character-stats" data-hud="characterStats"></div>
+              <p class="hud-character-block-title secondary">Synthese</p>
+              <div class="hud-character-stats secondary" data-hud="characterSecondaryStats"></div>
+            </div>
+            <div class="hud-character-block">
+              <p class="hud-character-block-title">Slots equipes</p>
+              <div class="hud-character-slots" data-hud="characterSlots"></div>
+            </div>
+            <div class="hud-character-block detail">
+              <p class="hud-character-block-title">Detail selection</p>
+              <strong class="hud-character-detail-name" data-hud="characterDetailName">Slot vide</strong>
+              <p class="hud-character-detail-meta" data-hud="characterDetailMeta">-</p>
+              <p class="hud-character-detail-description" data-hud="characterDetailDescription">
+                Selectionne un slot ou un objet de l inventaire.
+              </p>
+              <p class="hud-character-comparison" data-hud="characterComparison">
+                Comparaison: selectionne un objet de l inventaire pour comparer.
+              </p>
+            </div>
+          </div>
+          <div class="hud-character-build">
+            <p class="hud-character-block-title">Orientation du build</p>
+            <p class="hud-character-build-summary" data-hud="characterBuildSummary">Orientation: Hybride lisible.</p>
+            <ul class="hud-character-linked-skills" data-hud="characterLinkedSkills"></ul>
+          </div>
+          <div class="hud-character-inventory-panel">
+            <p class="hud-character-block-title">Objets equipables (inventaire)</p>
+            <ul class="hud-character-inventory" data-hud="characterInventory"></ul>
+          </div>
+          <div class="hud-character-error" data-hud="characterError" hidden></div>
+        </div>
         <div class="hud-combat" data-hud="combatPanel">
           <div class="hud-combat-header">
             <div>
@@ -275,12 +333,46 @@ export function createHudTemplate(params: CreateHudTemplateParams): string {
           <ul class="hud-combat-log" data-hud="combatLogs" role="log" aria-live="polite" aria-relevant="additions text"></ul>
         </div>
         <div class="hud-quests">
-          <div class="hud-quests-header">
-            <span>Quests</span>
-            <strong data-hud="questsSummary">No quests loaded.</strong>
+          <div class="hud-quests-shortcut">
+            <button class="hud-quests-toggle" data-hud="questsToggle" data-quest-journal-action="toggle-panel">
+              Journal de quetes (J)
+            </button>
+            <strong data-hud="questsSummary">Aucune quete chargee.</strong>
+          </div>
+          <div class="hud-quests-panel" data-hud="questsPanel" hidden>
+            <div class="hud-quests-header">
+              <span>Journal de quetes</span>
+              <strong data-hud="questsTracked">Quete suivie: aucune.</strong>
+            </div>
+            <div class="hud-quests-layout">
+              <div class="quest-journal-categories" data-hud="questCategories"></div>
+              <ul class="hud-quests-list" data-hud="questsList"></ul>
+              <div class="quest-journal-detail">
+                <strong class="quest-journal-detail-title" data-hud="questDetailTitle">Selectionne une quete</strong>
+                <p class="quest-journal-detail-meta">
+                  <span data-hud="questDetailType">-</span>
+                  <span data-hud="questDetailOrigin">-</span>
+                  <span data-hud="questDetailStatus">-</span>
+                </p>
+                <p class="quest-journal-detail-description" data-hud="questDetailDescription">
+                  Le detail apparait ici avec objectif, recompenses et zone.
+                </p>
+                <p class="quest-journal-detail-objective" data-hud="questDetailObjective">Objectif courant: -</p>
+                <p class="quest-journal-detail-zone">
+                  Zone: <strong data-hud="questDetailZone">-</strong>
+                </p>
+                <p class="quest-journal-detail-rewards-label">Recompenses</p>
+                <ul class="quest-journal-detail-rewards" data-hud="questDetailRewards"></ul>
+                <div class="quest-journal-detail-actions">
+                  <button class="hud-quest-action secondary" data-hud="questTrackButton" data-quest-journal-action="track">
+                    Suivre
+                  </button>
+                  <button class="hud-quest-action" data-hud="questClaimButton">Valider quete</button>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="hud-quests-error" data-hud="questsError" hidden></div>
-          <ul class="hud-quests-list" data-hud="questsList"></ul>
         </div>
         <div class="hud-village-npcs">
           <div class="hud-village-npcs-header">
@@ -577,7 +669,7 @@ export function createHudTemplate(params: CreateHudTemplateParams): string {
           <br />
           Manette: D-pad/LB/RB navigue HUD, A valide, X Attack, Y Defend, B Fireball.
           <br />
-          Raccourcis hub: E interagir, R changer de cible (mode village).
+          Raccourcis hub: E interagir, R changer de cible, J journal de quetes.
         </div>
       </div>
         `;

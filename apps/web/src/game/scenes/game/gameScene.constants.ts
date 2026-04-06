@@ -36,7 +36,6 @@ export const FARM_SCENE_ORIGIN_X = 540;
 export const FARM_SCENE_ORIGIN_Y = 260;
 export const FARM_SCENE_COL_STEP = 128;
 export const FARM_SCENE_ROW_STEP = 96;
-export const FARM_SCENE_PLAYER_SPAWN = { x: 240, y: 220 };
 export const VILLAGE_SCENE_PLAYER_SPAWN = { x: 804, y: 734 };
 
 export const VILLAGE_SCENE_ZONES: VillageSceneZoneConfig[] = [
