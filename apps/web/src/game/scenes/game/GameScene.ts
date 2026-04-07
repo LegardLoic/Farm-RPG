@@ -2001,8 +2001,9 @@ export class GameScene extends Phaser.Scene {
   private async runFarmTileAction(params: {
     tileX: number;
     tileY: number;
-    action: 'till' | 'water' | 'plant';
+    action: 'till' | 'water' | 'plant' | 'harvest';
     seedItemKey?: string;
+    toolItemKey?: string;
   }): Promise<void> {
     if (!this.isAuthenticated) {
       this.farmFeedbackMessage = 'Connexion requise pour agir sur les parcelles.';
@@ -2023,7 +2024,9 @@ export class GameScene extends Phaser.Scene {
         ? '/gameplay/farm/tiles/till'
         : params.action === 'water'
           ? '/gameplay/farm/tiles/water'
-          : '/gameplay/farm/tiles/plant';
+          : params.action === 'plant'
+            ? '/gameplay/farm/tiles/plant'
+            : '/gameplay/farm/tiles/harvest';
       const body: Record<string, unknown> = {
         tileX: params.tileX,
         tileY: params.tileY,
@@ -2031,6 +2034,9 @@ export class GameScene extends Phaser.Scene {
       };
       if (params.action === 'plant') {
         body.seedItemKey = params.seedItemKey ?? '';
+      }
+      if (params.action === 'harvest') {
+        body.toolItemKey = params.toolItemKey ?? '';
       }
 
       const payload = await this.fetchJson<unknown>(endpoint, {
@@ -2047,12 +2053,22 @@ export class GameScene extends Phaser.Scene {
         this.farmFeedbackMessage = 'Terre labouree.';
       } else if (params.action === 'water') {
         this.farmFeedbackMessage = 'Terre arrosee.';
-      } else {
+      } else if (params.action === 'plant') {
         this.farmFeedbackMessage = `Graine plantee: ${this.formatFarmLabel(params.seedItemKey ?? '')}.`;
+      } else {
+        const harvestRecord = this.payloadGateway.asRecord(root?.harvest);
+        const harvestedItemKey = this.payloadGateway.asString(harvestRecord?.harvestItemKey)?.trim() ?? '';
+        this.farmFeedbackMessage = harvestedItemKey
+          ? `Recolte terminee: ${this.formatFarmLabel(harvestedItemKey)}.`
+          : 'Recolte terminee.';
       }
 
-      if (params.action === 'plant') {
+      if (params.action === 'plant' || params.action === 'harvest') {
         await this.refreshCharacterState();
+      }
+      if (params.action === 'harvest') {
+        await this.refreshGameplayState();
+        await this.refreshVillageMarketState();
       }
 
       this.farmTileRuntimeRenderRevision += 1;
@@ -2084,7 +2100,7 @@ export class GameScene extends Phaser.Scene {
     if (intent.kind === 'none') {
       if (announceFailure) {
         this.farmFeedbackMessage = intent.reason === 'empty-slot'
-          ? 'Slot actif vide. Selectionne une houe, un arrosoir ou une graine.'
+          ? 'Slot actif vide. Selectionne une houe, un arrosoir, une faux ou une graine.'
           : 'Item actif incompatible avec les actions de ferme.';
       }
       return true;
@@ -2144,7 +2160,12 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
 
-    this.farmFeedbackMessage = 'Recolte outil non branchee cote API pour ces tuiles.';
+    void this.runFarmTileAction({
+      action: 'harvest',
+      tileX: tile.tileX,
+      tileY: tile.tileY,
+      toolItemKey: intent.toolItemKey,
+    });
     return true;
   }
 

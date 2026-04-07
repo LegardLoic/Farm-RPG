@@ -7,6 +7,7 @@ import { TowerService } from '../tower/tower.service';
 import { CraftFarmRecipeDto } from './dto/craft-farm-recipe.dto';
 import { FarmTilePositionDto } from './dto/farm-tile-position.dto';
 import { HarvestFarmPlotDto } from './dto/harvest-farm-plot.dto';
+import { HarvestFarmTileDto } from './dto/harvest-farm-tile.dto';
 import { InteractVillageNpcDto } from './dto/interact-village-npc.dto';
 import { PlantFarmPlotDto } from './dto/plant-farm-plot.dto';
 import { PlantFarmTileDto } from './dto/plant-farm-tile.dto';
@@ -181,6 +182,21 @@ export class GameplayController {
       body.tileX,
       body.tileY,
       body.seedItemKey,
+      body.sceneKey,
+    );
+    return {
+      status: 'ok',
+      ...result,
+    };
+  }
+
+  @Post('farm/tiles/harvest')
+  async harvestFarmTile(@Req() req: AuthenticatedRequest, @Body() body: HarvestFarmTileDto) {
+    const result = await this.gameplayService.harvestFarmTileByTile(
+      req.authUser!.id,
+      body.tileX,
+      body.tileY,
+      body.toolItemKey,
       body.sceneKey,
     );
     return {

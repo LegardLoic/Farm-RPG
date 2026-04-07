@@ -66,7 +66,7 @@ export function applyFarmTileRuntimeAction(params: {
       handled: false,
       changed: false,
       message: params.intent.reason === 'empty-slot'
-        ? 'Slot actif vide. Selectionne une houe, un arrosoir ou une graine.'
+        ? 'Slot actif vide. Selectionne une houe, un arrosoir, une faux ou une graine.'
         : 'Item actif incompatible avec les actions de ferme.',
       state,
     };

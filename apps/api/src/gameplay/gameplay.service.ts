@@ -47,6 +47,7 @@ import type {
   GameplayFarmCraftResult,
   GameplayFarmPlantResult,
   GameplayFarmState,
+  GameplayFarmTileHarvestResult,
   GameplayFarmTilePlantResult,
   GameplayFarmTileState,
   GameplayFarmTileTillResult,
@@ -899,6 +900,118 @@ export class GameplayService {
     });
   }
 
+  async harvestFarmTileByTile(
+    userId: string,
+    tileXRaw: number,
+    tileYRaw: number,
+    toolItemKeyRaw: string,
+    sceneKeyRaw?: string,
+  ): Promise<{
+    harvest: GameplayFarmTileHarvestResult;
+    tile: GameplayFarmTileState;
+    farmStory: GameplayFarmStoryState;
+  }> {
+    return this.databaseService.withTransaction(async (tx) => {
+      await this.ensureWorldState(tx, userId);
+      const worldFlags = new Set(await this.getWorldFlags(userId, tx));
+      this.assertFarmUnlocked(worldFlags);
+
+      const world = await this.getWorldStateForUpdate(tx, userId);
+      const sceneKey = this.normalizeFarmSceneKey(sceneKeyRaw);
+      const tileX = this.normalizeFarmTileAxis(tileXRaw, 'tileX');
+      const tileY = this.normalizeFarmTileAxis(tileYRaw, 'tileY');
+      const toolItemKey = toolItemKeyRaw?.trim().toLowerCase();
+      if (!toolItemKey) {
+        throw new BadRequestException('toolItemKey is required');
+      }
+      if (!this.isHarvestToolItemKey(toolItemKey)) {
+        throw new BadRequestException(`Tool ${toolItemKey} cannot harvest crops`);
+      }
+
+      const toolRow = await this.getInventoryItemForUpdate(tx, userId, toolItemKey);
+      if (!toolRow || toolRow.quantity < 1) {
+        throw new BadRequestException(`Missing harvest tool in inventory: ${toolItemKey}`);
+      }
+
+      await this.ensureFarmTileRow(tx, userId, sceneKey, tileX, tileY);
+      const tile = await this.getFarmTileForUpdate(tx, userId, sceneKey, tileX, tileY);
+      if (!tile) {
+        throw new NotFoundException('Farm tile not found after initialization');
+      }
+
+      const plantedSeedItemKey = tile.planted_seed_item_key?.trim().toLowerCase() ?? '';
+      if (!plantedSeedItemKey) {
+        throw new BadRequestException(`Tile ${tileX}:${tileY} has no crop to harvest`);
+      }
+
+      const crop = this.resolveCropBySeedItem(plantedSeedItemKey, worldFlags);
+      const inventoryRow = await this.addInventoryQuantity(tx, userId, crop.harvestItemKey, 1);
+
+      await tx.query(
+        `
+          UPDATE ${FARM_TILES_TABLE}
+          SET tilled = FALSE,
+              watered = FALSE,
+              planted_seed_item_key = NULL,
+              updated_at = NOW()
+          WHERE user_id = $1
+            AND scene_key = $2
+            AND tile_x = $3
+            AND tile_y = $4
+        `,
+        [userId, sceneKey, tileX, tileY],
+      );
+
+      if (this.questsService) {
+        await this.questsService.recordFarmHarvest(tx, userId, {
+          cropKey: crop.cropKey,
+          quantity: 1,
+        });
+      }
+
+      const harvestProgressUpdate = await tx.query<Pick<WorldStateRow, 'farm_harvest_total'>>(
+        `
+          UPDATE ${WORLD_STATE_TABLE}
+          SET farm_harvest_total = farm_harvest_total + 1,
+              updated_at = NOW()
+          WHERE user_id = $1
+          RETURNING farm_harvest_total
+        `,
+        [userId],
+      );
+      const harvestTotal = Number.isFinite(harvestProgressUpdate.rows[0]?.farm_harvest_total)
+        ? Math.max(0, Math.floor(harvestProgressUpdate.rows[0]!.farm_harvest_total))
+        : 0;
+
+      await this.applyFarmStoryEventFlags(tx, userId, worldFlags, world.day, harvestTotal);
+
+      const nextTile = await this.getFarmTileForUpdate(tx, userId, sceneKey, tileX, tileY);
+      if (!nextTile) {
+        throw new NotFoundException('Farm tile not found after harvest action');
+      }
+      const tileState = this.toFarmTileState(nextTile);
+      const farmStory = this.buildFarmStoryState(worldFlags, world.day, harvestTotal);
+
+      return {
+        harvest: {
+          sceneKey: tileState.sceneKey,
+          tileX: tileState.tileX,
+          tileY: tileState.tileY,
+          toolItemKey,
+          cropKey: crop.cropKey,
+          harvestItemKey: crop.harvestItemKey,
+          quantityGained: 1,
+          totalHarvestItemQuantity: inventoryRow.quantity,
+          tilled: tileState.tilled,
+          watered: tileState.watered,
+          plantedSeedItemKey: tileState.plantedSeedItemKey,
+        },
+        tile: tileState,
+        farmStory,
+      };
+    });
+  }
+
   async sleep(userId: string): Promise<{
     sleep: GameplaySleepResult;
     world: GameplayWorldState;
@@ -1581,6 +1694,11 @@ export class GameplayService {
     );
 
     return result.rows[0] ?? null;
+  }
+
+  private isHarvestToolItemKey(itemKey: string): boolean {
+    const normalized = itemKey.trim().toLowerCase();
+    return normalized.includes('scythe') || normalized.includes('sickle');
   }
 
   private normalizeFarmSceneKey(sceneKeyRaw?: string): string {
