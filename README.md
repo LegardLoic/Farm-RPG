@@ -31,6 +31,15 @@ Create local env files before starting:
 - `npm run qa:gate:mvp`: run vertical MVP gate (lint + typecheck + build + api/web tests)
 - `npm run test:e2e --workspace @farm-rpg/api`: run e2e auth -> combat -> save/load (requires env + seeded DB)
 
+## Item Catalog (TS Source Of Truth)
+
+- File to edit: `apps/api/src/items/items.catalog.ts` (`RAW_GAME_ITEM_CATALOG`)
+- API read endpoints:
+  - `GET /items/catalog`
+  - `GET /items/catalog/:itemKey`
+- `itemKey` convention is strict: lowercase `snake_case` only (e.g. `turnip_seed`).
+- Cross-module tests enforce that item keys used by gameplay/shops/combat/quests/debug presets exist in catalog.
+
 ## Branch strategy
 
 - `main`: production-ready branch
@@ -59,6 +68,8 @@ Create local env files before starting:
 - `GET /inventory`
 - `POST /inventory/add`
 - `POST /inventory/use`
+- `GET /items/catalog`
+- `GET /items/catalog/:itemKey`
 - `GET /equipment`
 - `POST /equipment/equip`
 - `POST /equipment/unequip`
