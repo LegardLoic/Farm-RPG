@@ -599,6 +599,24 @@ function createGameplayDatabaseStub(
       return { rows: [] };
     }
 
+    if (
+      text.includes('UPDATE farm_tiles') &&
+      text.includes('SET tilled = FALSE') &&
+      text.includes('planted_seed_item_key = NULL')
+    ) {
+      const sceneKey = values[1];
+      const tileX = values[2];
+      const tileY = values[3];
+      const key = `${sceneKey}:${tileX}:${tileY}`;
+      const row = state.farmTiles.get(key);
+      if (row) {
+        row.tilled = false;
+        row.watered = false;
+        row.planted_seed_item_key = null;
+      }
+      return { rows: [] };
+    }
+
     if (text.includes('UPDATE farm_plots') && text.includes('SET crop_key = $3')) {
       const plotKey = values[1];
       const row = state.farmPlots.get(plotKey);
@@ -1698,6 +1716,90 @@ test('gameplay farm tile plant requires tilled+watered and consumes one seed', a
   assert.equal(result.tile.watered, true);
   assert.equal(result.tile.plantedSeedItemKey, 'turnip_seed');
   assert.equal(db.state.inventory.get('turnip_seed'), 1);
+});
+
+test('gameplay farm tile harvest requires a scythe/sickle tool key', async () => {
+  const db = createGameplayDatabaseStub(['intro_farm_assigned'], [], {
+    turnip_seed: 1,
+    wooden_hoe: 1,
+  });
+  const service = new GameplayService(db);
+
+  await service.tillFarmTile('user-1', 6, 6, 'farm');
+  await service.waterFarmTileByTile('user-1', 6, 6, 'farm');
+  await service.plantFarmTile('user-1', 6, 6, 'turnip_seed', 'farm');
+
+  await assert.rejects(
+    () => service.harvestFarmTileByTile('user-1', 6, 6, 'wooden_hoe', 'farm'),
+    /cannot harvest crops/,
+  );
+});
+
+test('gameplay farm tile harvest requires the harvest tool to be in inventory', async () => {
+  const db = createGameplayDatabaseStub(['intro_farm_assigned'], [], {
+    turnip_seed: 1,
+  });
+  const service = new GameplayService(db);
+
+  await service.tillFarmTile('user-1', 7, 6, 'farm');
+  await service.waterFarmTileByTile('user-1', 7, 6, 'farm');
+  await service.plantFarmTile('user-1', 7, 6, 'turnip_seed', 'farm');
+
+  await assert.rejects(
+    () => service.harvestFarmTileByTile('user-1', 7, 6, 'starter_scythe', 'farm'),
+    /Missing harvest tool in inventory/,
+  );
+});
+
+test('gameplay farm tile harvest grants crop item, resets tile and progresses story', async () => {
+  const db = createGameplayDatabaseStub(['intro_farm_assigned'], [], {
+    turnip_seed: 1,
+    starter_scythe: 1,
+  });
+  db.state.world.day = 3;
+  const quests = createQuestProgressRecorder();
+  const service = new GameplayService(db, quests);
+
+  await service.tillFarmTile('user-1', 8, 6, 'farm');
+  await service.waterFarmTileByTile('user-1', 8, 6, 'farm');
+  await service.plantFarmTile('user-1', 8, 6, 'turnip_seed', 'farm');
+  const result = await service.harvestFarmTileByTile('user-1', 8, 6, 'starter_scythe', 'farm');
+
+  assert.equal(result.harvest.sceneKey, 'farm');
+  assert.equal(result.harvest.tileX, 8);
+  assert.equal(result.harvest.tileY, 6);
+  assert.equal(result.harvest.toolItemKey, 'starter_scythe');
+  assert.equal(result.harvest.cropKey, 'turnip');
+  assert.equal(result.harvest.harvestItemKey, 'turnip');
+  assert.equal(result.harvest.quantityGained, 1);
+  assert.equal(result.harvest.totalHarvestItemQuantity, 1);
+  assert.equal(result.harvest.tilled, false);
+  assert.equal(result.harvest.watered, false);
+  assert.equal(result.harvest.plantedSeedItemKey, null);
+
+  assert.equal(result.tile.tilled, false);
+  assert.equal(result.tile.watered, false);
+  assert.equal(result.tile.plantedSeedItemKey, null);
+
+  assert.equal(db.state.inventory.get('turnip'), 1);
+  assert.equal(db.state.inventory.get('starter_scythe'), 1);
+  assert.equal(db.state.world.farm_harvest_total, 1);
+
+  assert.equal(result.farmStory.day, 3);
+  assert.equal(result.farmStory.harvestTotal, 1);
+  assert.equal(result.farmStory.unlockedEvents, 2);
+  assert.equal(result.farmStory.totalEvents, 4);
+  assert.equal(db.state.worldFlags.has('story_farm_day_2_briefing'), true);
+  assert.equal(db.state.worldFlags.has('story_farm_first_harvest_report'), true);
+
+  assert.equal(quests.harvestCalls.length, 1);
+  assert.deepEqual(quests.harvestCalls[0], {
+    userId: 'user-1',
+    input: {
+      cropKey: 'turnip',
+      quantity: 1,
+    },
+  });
 });
 
 test('gameplay farm tile states list returns active tiles for a scene', async () => {
