@@ -16,6 +16,7 @@ type TiledObject = {
   y?: number;
   width?: number;
   height?: number;
+  rotation?: number;
   visible?: boolean;
   point?: boolean;
   polygon?: TiledPoint[];
@@ -409,6 +410,71 @@ function normalizeBounds(x: number, y: number, width: number, height: number): R
   };
 }
 
+function getObjectRotationDegrees(object: TiledObject): number {
+  const rotation = toNumber(object.rotation, 0);
+  if (!Number.isFinite(rotation)) {
+    return 0;
+  }
+
+  // Tiled stores clockwise degrees in top-left coordinate space.
+  return rotation;
+}
+
+function getRotatedRectanglePoints(object: TiledObject): Array<{ x: number; y: number }> | null {
+  const width = toNumber(object.width, 0);
+  const height = toNumber(object.height, 0);
+  if (Math.abs(width) <= 0.0001 || Math.abs(height) <= 0.0001) {
+    return null;
+  }
+
+  const rotationDeg = getObjectRotationDegrees(object);
+  if (Math.abs(rotationDeg) <= 0.0001) {
+    return null;
+  }
+
+  const originX = toNumber(object.x, 0);
+  const originY = toNumber(object.y, 0);
+  const radians = (rotationDeg * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+
+  const rotateLocalPoint = (localX: number, localY: number): { x: number; y: number } => ({
+    x: originX + localX * cos - localY * sin,
+    y: originY + localX * sin + localY * cos,
+  });
+
+  return [
+    rotateLocalPoint(0, 0),
+    rotateLocalPoint(width, 0),
+    rotateLocalPoint(width, height),
+    rotateLocalPoint(0, height),
+  ];
+}
+
+function getBoundsFromPoints(points: Array<{ x: number; y: number }>): RectBounds | null {
+  if (points.length === 0) {
+    return null;
+  }
+
+  let minX = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const point of points) {
+    if (point.x < minX) minX = point.x;
+    if (point.x > maxX) maxX = point.x;
+    if (point.y < minY) minY = point.y;
+    if (point.y > maxY) maxY = point.y;
+  }
+
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+    return null;
+  }
+
+  return normalizeBounds(minX, minY, maxX - minX, maxY - minY);
+}
+
 function getObjectBounds(object: TiledObject): RectBounds | null {
   const objectX = toNumber(object.x, 0);
   const objectY = toNumber(object.y, 0);
@@ -435,6 +501,11 @@ function getObjectBounds(object: TiledObject): RectBounds | null {
     }
 
     return normalizeBounds(minX, minY, maxX - minX, maxY - minY);
+  }
+
+  const rotatedRectanglePoints = getRotatedRectanglePoints(object);
+  if (rotatedRectanglePoints) {
+    return getBoundsFromPoints(rotatedRectanglePoints);
   }
 
   if (objectWidth > 0 || objectHeight > 0) {
@@ -592,6 +663,18 @@ export function buildCollisionShapes(
         kind: 'polygon',
         bounds,
         points,
+        sourceName,
+      });
+      continue;
+    }
+
+    const rotatedRectanglePoints = getRotatedRectanglePoints(object);
+    if (rotatedRectanglePoints) {
+      output.push({
+        id: objectId,
+        kind: 'polygon',
+        bounds,
+        points: rotatedRectanglePoints,
         sourceName,
       });
       continue;

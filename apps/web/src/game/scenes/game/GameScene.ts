@@ -109,7 +109,18 @@ import {
 import { updateGamepadInputFrame as updateGamepadInputFrameFromFeature } from './features/common/gamepadInputController';
 import { getSceneObstacleLayout as getSceneObstacleLayoutFromCommon } from './features/common/sceneObstacleLayout';
 import { setFrontSceneModeForScene as setFrontSceneModeForSceneFromCommon } from './features/common/frontSceneModeController';
-import { setupPlayerForScene as setupPlayerForSceneFromCommon } from './features/common/playerSetupController';
+import {
+  setupPlayerForScene as setupPlayerForSceneFromCommon,
+  type PlayerSetupMode,
+} from './features/common/playerSetupController';
+import {
+  WORLD_PLAYER_DEFAULT_DIRECTION,
+  ensureWorldPlayerWalkAnimations as ensureWorldPlayerWalkAnimationsFromFeature,
+  getWorldPlayerIdleTextureKey as getWorldPlayerIdleTextureKeyFromFeature,
+  getWorldPlayerWalkAnimationKey as getWorldPlayerWalkAnimationKeyFromFeature,
+  resolveWorldPlayerDirection as resolveWorldPlayerDirectionFromFeature,
+  type WorldPlayerDirection,
+} from './features/common/playerWorldAnimations';
 import {
   renderFarmCraftingRecipes as renderFarmCraftingRecipesFromFeature,
   renderFarmPanel as renderFarmPanelFromFeature,
@@ -873,6 +884,8 @@ export class GameScene extends Phaser.Scene {
   private gamepadHudFocusableElements: HTMLElement[] = [];
   private gamepadHudFocusIndex = -1;
   private spriteManifest: SpriteManifest | null = null;
+  private playerSetupMode: PlayerSetupMode = 'static';
+  private playerWorldDirection: WorldPlayerDirection = WORLD_PLAYER_DEFAULT_DIRECTION;
   private playerUsesStripAnimation = false;
   private playerStripActionTimer: Phaser.Time.TimerEvent | null = null;
   private playerStripAccentTimer: Phaser.Time.TimerEvent | null = null;
@@ -1515,11 +1528,15 @@ export class GameScene extends Phaser.Scene {
       this.hudState.stamina = Math.max(0, this.hudState.stamina - 0.01);
     }
 
-    if (this.playerUsesStripAnimation && !this.playerStripActionTimer) {
+    if (this.playerSetupMode === 'directional-world') {
+      this.updateWorldPlayerAnimation(velocityX, velocityY);
+    } else if (this.playerUsesStripAnimation && !this.playerStripActionTimer) {
       this.playPlayerStripAnimation('idle');
     }
 
-    this.player.setTint(velocityX !== 0 || velocityY !== 0 ? 0xd8f1ff : 0xffffff);
+    if (this.playerSetupMode !== 'directional-world') {
+      this.player.setTint(velocityX !== 0 || velocityY !== 0 ? 0xd8f1ff : 0xffffff);
+    }
     if (this.frontSceneMode === 'village') {
       this.updateVillageSelectionFromPlayerPosition();
     }
@@ -1546,10 +1563,16 @@ export class GameScene extends Phaser.Scene {
     const spawn = this.frontSceneMode === 'farm'
       ? this.resolveFarmSpawnPoint(spawnId)
       : VILLAGE_SCENE_PLAYER_SPAWN;
-    setupPlayerForSceneFromCommon(
+    this.playerSetupMode = setupPlayerForSceneFromCommon(
       this as unknown as Parameters<typeof setupPlayerForSceneFromCommon>[0],
       spawn,
     );
+    this.playerWorldDirection = WORLD_PLAYER_DEFAULT_DIRECTION;
+
+    if (this.playerSetupMode === 'directional-world') {
+      this.ensureWorldPlayerWalkAnimations();
+      this.applyWorldPlayerIdleTexture(this.playerWorldDirection, true);
+    }
   }
 
   private setupFarmTiledRuntime(): void {
@@ -3408,6 +3431,53 @@ export class GameScene extends Phaser.Scene {
     return resolveTimingValueFromFeature(value, fallback, min, max);
   }
 
+  private ensureWorldPlayerWalkAnimations(): void {
+    ensureWorldPlayerWalkAnimationsFromFeature(this);
+  }
+
+  private updateWorldPlayerAnimation(velocityX: number, velocityY: number): void {
+    if (!this.player || this.playerSetupMode !== 'directional-world') {
+      return;
+    }
+
+    const direction = resolveWorldPlayerDirectionFromFeature(velocityX, velocityY, this.playerWorldDirection);
+    this.playerWorldDirection = direction;
+
+    const moving = Math.abs(velocityX) > 0.001 || Math.abs(velocityY) > 0.001;
+    if (!moving) {
+      this.applyWorldPlayerIdleTexture(direction);
+      return;
+    }
+
+    const animationKey = getWorldPlayerWalkAnimationKeyFromFeature(direction);
+    if (!this.anims.exists(animationKey)) {
+      this.applyWorldPlayerIdleTexture(direction);
+      return;
+    }
+
+    const currentAnimationKey = this.player.anims.currentAnim?.key ?? null;
+    if (currentAnimationKey !== animationKey || !this.player.anims.isPlaying) {
+      this.player.play(animationKey, true);
+    }
+  }
+
+  private applyWorldPlayerIdleTexture(direction: WorldPlayerDirection, force = false): void {
+    if (!this.player || this.playerSetupMode !== 'directional-world') {
+      return;
+    }
+
+    const textureKey = getWorldPlayerIdleTextureKeyFromFeature(direction);
+    const currentTextureKey = this.player.texture.key;
+
+    if (!force && currentTextureKey === textureKey && !this.player.anims.isPlaying) {
+      return;
+    }
+
+    this.player.anims.stop();
+    this.player.setTexture(textureKey);
+    this.player.clearTint();
+  }
+
   private ensureStripAnimations(strip: SpriteManifestStripEntry): void {
     const playerTimings = this.getStripPlayerTimings(strip);
 
@@ -5068,6 +5138,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setupCamera(): void {
+    if (this.playerSetupMode === 'directional-world') {
+      this.cameras.main.startFollow(this.player, true, 1, 1);
+      this.cameras.main.setDeadzone(0, 0);
+      return;
+    }
+
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(80, 50);
   }
