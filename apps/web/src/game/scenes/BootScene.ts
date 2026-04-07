@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { preloadWorldPlayerSprites as preloadWorldPlayerSpritesFromFeature } from './game/features/common/playerWorldAnimations';
 
 const FARM_TILESET_IMAGES = [
   { key: 'ground_grasss', path: 'Terrain/ground_grass/ground_grasss.png' },
@@ -32,6 +33,8 @@ export class BootScene extends Phaser.Scene {
     for (const tilesetImage of FARM_TILESET_IMAGES) {
       this.load.image(tilesetImage.key, tilesetImage.path);
     }
+
+    preloadWorldPlayerSpritesFromFeature(this);
 
     this.load.setPath('/assets/sprites');
     this.load.json('sprite-manifest', 'manifest.json');
