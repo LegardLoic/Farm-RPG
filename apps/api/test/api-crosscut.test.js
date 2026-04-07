@@ -15,11 +15,26 @@ const {
   parseDebugForceCombatEnemyFlag,
 } = require('../dist/debug/debug-admin.constants.js');
 const { CombatService } = require('../dist/combat/combat.service.js');
+const {
+  BOSS_SPECIFIC_BONUS_LOOT,
+  COMBAT_ENEMY_DEFINITIONS,
+  FLOOR_LOOT_TABLES,
+} = require('../dist/combat/combat.constants.js');
 const { GameplayService } = require('../dist/gameplay/gameplay.service.js');
+const { FARM_CRAFT_RECIPES, FARM_CROP_CATALOG } = require('../dist/gameplay/gameplay.constants.js');
+const { GAME_ITEM_CATALOG } = require('../dist/items/items.catalog.js');
+const { ItemsService } = require('../dist/items/items.service.js');
 const { ProfileService } = require('../dist/profile/profile.service.js');
+const { QUEST_DEFINITIONS } = require('../dist/quests/quests.constants.js');
 const { SavesService } = require('../dist/saves/saves.service.js');
-const { BLACKSMITH_SHOP_UNLOCK_FLAG } = require('../dist/shops/shops.constants.js');
+const {
+  BLACKSMITH_OFFERS,
+  BLACKSMITH_SHOP_UNLOCK_FLAG,
+  VILLAGE_CROP_BUYBACK_OFFERS,
+  VILLAGE_SEED_OFFERS,
+} = require('../dist/shops/shops.constants.js');
 const { ShopsService } = require('../dist/shops/shops.service.js');
+const { DEBUG_LOADOUT_PRESETS } = require('../dist/debug/debug-loadout.constants.js');
 
 function createConfigService(overrides = {}) {
   return {
@@ -2059,4 +2074,103 @@ test('gameplay crafting consumes crops and grants consumable combat items', asyn
 
   const refreshedRecipe = result.crafting.recipes.find((recipe) => recipe.recipeKey === 'focus_tonic');
   assert.equal(refreshedRecipe?.maxCraftable, 1);
+});
+
+test('items catalog exposes normalized entries and key lookup', async () => {
+  const service = new ItemsService();
+
+  const entries = service.listCatalog();
+  const turnipSeed = service.getByKey('TURNIP_SEED');
+  const unknown = service.getByKey('unknown_item_key');
+
+  assert.equal(Array.isArray(entries), true);
+  assert.equal(entries.length >= 45, true);
+  assert.equal(turnipSeed?.itemKey, 'turnip_seed');
+  assert.equal(turnipSeed?.category, 'seed');
+  assert.equal(turnipSeed?.buyPrice, 8);
+  assert.equal(unknown, null);
+});
+
+function collectReferencedItemKeys() {
+  const keys = new Set();
+
+  const push = (itemKey) => {
+    if (!itemKey || typeof itemKey !== 'string') {
+      return;
+    }
+    keys.add(itemKey.trim().toLowerCase());
+  };
+
+  for (const crop of FARM_CROP_CATALOG) {
+    push(crop.seedItemKey);
+    push(crop.harvestItemKey);
+  }
+  for (const recipe of FARM_CRAFT_RECIPES) {
+    push(recipe.outputItemKey);
+    for (const ingredient of recipe.ingredients) {
+      push(ingredient.itemKey);
+    }
+  }
+  for (const offer of BLACKSMITH_OFFERS) {
+    push(offer.itemKey);
+  }
+  for (const offer of VILLAGE_SEED_OFFERS) {
+    push(offer.itemKey);
+  }
+  for (const offer of VILLAGE_CROP_BUYBACK_OFFERS) {
+    push(offer.itemKey);
+  }
+  for (const table of FLOOR_LOOT_TABLES) {
+    for (const drop of table.drops) {
+      push(drop.itemKey);
+    }
+  }
+  for (const lootTable of Object.values(BOSS_SPECIFIC_BONUS_LOOT)) {
+    for (const drop of lootTable) {
+      push(drop.itemKey);
+    }
+  }
+  for (const enemy of Object.values(COMBAT_ENEMY_DEFINITIONS)) {
+    for (const drop of enemy.rewards.loot) {
+      push(drop.itemKey);
+    }
+  }
+  for (const quest of QUEST_DEFINITIONS) {
+    for (const reward of quest.rewards.items) {
+      push(reward.itemKey);
+    }
+  }
+  for (const preset of DEBUG_LOADOUT_PRESETS) {
+    for (const equipped of preset.equipment) {
+      push(equipped.itemKey);
+    }
+    for (const inventory of preset.inventory) {
+      push(inventory.itemKey);
+    }
+  }
+
+  return keys;
+}
+
+test('items catalog key conventions and cross-module references stay consistent', async () => {
+  const keyPattern = /^[a-z0-9]+(?:_[a-z0-9]+)*$/;
+  const byKey = new Map(GAME_ITEM_CATALOG.map((entry) => [entry.itemKey, entry]));
+
+  for (const item of GAME_ITEM_CATALOG) {
+    assert.equal(keyPattern.test(item.itemKey), true, `Invalid itemKey format: ${item.itemKey}`);
+    assert.equal(item.itemKey.length <= 64, true, `itemKey too long: ${item.itemKey}`);
+    assert.equal(item.name.trim().length > 0, true, `Missing name for ${item.itemKey}`);
+    if (item.category === 'equipment') {
+      assert.equal(item.equipSlots.length > 0, true, `Equipment without equipSlots: ${item.itemKey}`);
+      assert.equal(item.stackable, false, `Equipment should not stack: ${item.itemKey}`);
+    }
+    if (item.category === 'tool') {
+      assert.equal(Boolean(item.toolType), true, `Tool without toolType: ${item.itemKey}`);
+      assert.equal(item.stackable, false, `Tool should not stack: ${item.itemKey}`);
+    }
+  }
+
+  const referencedKeys = collectReferencedItemKeys();
+  const missing = [...referencedKeys].filter((itemKey) => !byKey.has(itemKey)).sort();
+  assert.deepEqual(missing, []);
 });
