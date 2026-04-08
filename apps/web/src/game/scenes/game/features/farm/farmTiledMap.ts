@@ -39,6 +39,13 @@ type TiledLayer = {
   properties?: TiledProperty[];
 };
 
+type TiledTilesetTile = {
+  id?: number;
+  objectgroup?: {
+    objects?: TiledObject[];
+  };
+};
+
 type TiledTileset = {
   firstgid?: number;
   source?: string;
@@ -52,6 +59,7 @@ type TiledTileset = {
   imageheight?: number;
   margin?: number;
   spacing?: number;
+  tiles?: TiledTilesetTile[];
 };
 
 type TiledMap = {
@@ -214,6 +222,16 @@ function toBoolean(value: unknown, fallback = false): boolean {
   return typeof value === 'boolean' ? value : fallback;
 }
 
+function normalizeGlobalTileId(value: unknown): number {
+  const gid = toNumber(value, 0);
+  if (gid <= 0) {
+    return 0;
+  }
+
+  const unsigned = Math.trunc(gid) >>> 0;
+  return unsigned & 0x1fffffff;
+}
+
 function getPropertiesRecord(properties: TiledProperty[] | undefined): Record<string, unknown> {
   const output: Record<string, unknown> = {};
   if (!Array.isArray(properties)) {
@@ -259,7 +277,7 @@ function collectMaxGidFromLayers(layers: TiledLayer[] | undefined): number {
   for (const layer of layers) {
     if (layer.type === 'tilelayer' && Array.isArray(layer.data)) {
       for (const rawGid of layer.data) {
-        const gid = toNumber(rawGid, 0);
+        const gid = normalizeGlobalTileId(rawGid);
         if (gid > maxGid) {
           maxGid = gid;
         }
@@ -691,6 +709,156 @@ export function buildCollisionShapes(
   return output;
 }
 
+type GameplayTileLayerEntry = {
+  layer: TiledLayer;
+  layerName: string;
+  groupPath: string[];
+};
+
+type TilesetCollisionMetadata = {
+  firstGid: number;
+  lastGid: number;
+  collisionObjectsByLocalTileId: Map<number, TiledObject[]>;
+};
+
+function collectGameplayTileLayers(
+  layers: TiledLayer[] | undefined,
+  parentPath: string[] = [],
+): GameplayTileLayerEntry[] {
+  if (!Array.isArray(layers)) {
+    return [];
+  }
+
+  const output: GameplayTileLayerEntry[] = [];
+  for (const layer of layers) {
+    if (!toBoolean(layer.visible, true)) {
+      continue;
+    }
+
+    const layerName = toString(layer.name) ?? '';
+    const nextPath = [...parentPath, layerName];
+
+    if (layer.type === 'group') {
+      output.push(...collectGameplayTileLayers(layer.layers, nextPath));
+      continue;
+    }
+
+    if (layer.type !== 'tilelayer' || layerName === 'FarmPlots') {
+      continue;
+    }
+
+    output.push({
+      layer,
+      layerName: layerName || 'tile_layer',
+      groupPath: nextPath,
+    });
+  }
+
+  return output;
+}
+
+function buildTilesetCollisionMetadata(tilesets: TiledTileset[] | undefined): TilesetCollisionMetadata[] {
+  if (!Array.isArray(tilesets) || tilesets.length === 0) {
+    return [];
+  }
+
+  const output: TilesetCollisionMetadata[] = [];
+  for (const tileset of tilesets) {
+    const firstGid = Math.max(1, toNumber(tileset.firstgid, 1));
+    const tileCount = Math.max(1, toNumber(tileset.tilecount, 1));
+    const tileEntries = Array.isArray(tileset.tiles) ? tileset.tiles : [];
+    const collisionObjectsByLocalTileId = new Map<number, TiledObject[]>();
+
+    for (const tileEntry of tileEntries) {
+      const localTileId = toNumber(tileEntry.id, -1);
+      if (localTileId < 0) {
+        continue;
+      }
+
+      const objectGroup = tileEntry.objectgroup;
+      const objects = Array.isArray(objectGroup?.objects) ? objectGroup.objects : [];
+      if (objects.length === 0) {
+        continue;
+      }
+
+      collisionObjectsByLocalTileId.set(localTileId, objects);
+    }
+
+    if (collisionObjectsByLocalTileId.size === 0) {
+      continue;
+    }
+
+    output.push({
+      firstGid,
+      lastGid: firstGid + tileCount - 1,
+      collisionObjectsByLocalTileId,
+    });
+  }
+
+  output.sort((a, b) => a.firstGid - b.firstGid);
+  return output;
+}
+
+function resolveTilesetCollisionObjectsForGid(
+  gid: number,
+  metadata: TilesetCollisionMetadata[],
+): TiledObject[] | null {
+  for (let index = metadata.length - 1; index >= 0; index -= 1) {
+    const entry = metadata[index];
+    if (!entry || gid < entry.firstGid || gid > entry.lastGid) {
+      continue;
+    }
+
+    const localTileId = gid - entry.firstGid;
+    return entry.collisionObjectsByLocalTileId.get(localTileId) ?? null;
+  }
+
+  return null;
+}
+
+function buildTileCollisionShapesFromGameplayTiles(
+  gameplayGroup: TiledLayer | null,
+  mapData: TiledMap,
+  mapSize: { width: number; height: number; tileWidth: number; tileHeight: number },
+): FarmCollisionShape[] {
+  if (!gameplayGroup || gameplayGroup.type !== 'group') {
+    return [];
+  }
+
+  const tilesetCollisionMetadata = buildTilesetCollisionMetadata(mapData.tilesets);
+  if (tilesetCollisionMetadata.length === 0) {
+    return [];
+  }
+
+  const gameplayTileLayers = collectGameplayTileLayers(gameplayGroup.layers, ['Gameplay']);
+  if (gameplayTileLayers.length === 0) {
+    return [];
+  }
+
+  const output: FarmCollisionShape[] = [];
+  for (const layerEntry of gameplayTileLayers) {
+    const tiles = extractTilesFromTileLayer(layerEntry.layer, mapSize);
+    for (const tile of tiles) {
+      const collisionObjects = resolveTilesetCollisionObjectsForGid(tile.gid, tilesetCollisionMetadata);
+      if (!collisionObjects || collisionObjects.length === 0) {
+        continue;
+      }
+
+      const tileWorldX = tile.tileX * mapSize.tileWidth;
+      const tileWorldY = tile.tileY * mapSize.tileHeight;
+      const shiftedObjects = collisionObjects.map((object) => ({
+        ...object,
+        x: tileWorldX + toNumber(object.x, 0),
+        y: tileWorldY + toNumber(object.y, 0),
+      }));
+      const sourceName = `TileCollision:${layerEntry.groupPath.join('/')}:tile_${tile.tileX}_${tile.tileY}:gid_${tile.gid}`;
+      output.push(...buildCollisionShapes(shiftedObjects, sourceName));
+    }
+  }
+
+  return output;
+}
+
 export function buildSceneTransitions(
   transitionObjects: TiledObject[] | undefined,
 ): FarmSceneTransition[] {
@@ -772,7 +940,7 @@ function extractTilesFromTileLayer(
   const layerWidth = Math.max(1, toNumber(layer.width, mapSize.width));
 
   for (let index = 0; index < layer.data.length; index += 1) {
-    const gid = toNumber(layer.data[index], 0);
+    const gid = normalizeGlobalTileId(layer.data[index]);
     if (gid <= 0) {
       continue;
     }
@@ -944,7 +1112,10 @@ export function loadTiledMap(rawMap: unknown): FarmTiledMapRuntime | null {
   const farmPlotsLayer = findLayerByName(gameplayGroup?.layers, 'FarmPlots');
 
   const spawnPoints = buildSpawnPoints(playerSpawnLayer?.objects);
-  const collisions = buildCollisionShapes(collisionsLayer?.objects, 'Collisions');
+  const collisions = [
+    ...buildCollisionShapes(collisionsLayer?.objects, 'Collisions'),
+    ...buildTileCollisionShapesFromGameplayTiles(gameplayGroup, mapData, mapSize),
+  ];
   const sceneTransitions = buildSceneTransitions(sceneTransitionsLayer?.objects);
   const interactables = buildInteractables(interactablesLayer?.objects);
   const farmPlots = extractFarmPlots(farmPlotsLayer, mapSize);
