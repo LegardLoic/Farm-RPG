@@ -15,7 +15,7 @@ const FARM_TILESET_IMAGES = [
   { key: 'exterior', path: 'architecture/house/exterior.png' },
   { key: 'Trees_shadow_source', path: 'architecture/Trees_shadow_source.png' },
   { key: 'Trees_texture_shadows_dark_source', path: 'architecture/Trees_texture_shadows_dark_source.png' },
-  { key: 'Details_desert', path: 'architecture/Details_desert.png' },
+  { key: 'Details__2', path: 'architecture/Details_desert.png' },
   { key: 'Icons', path: 'architecture/Icons.png' },
   { key: 'Objects', path: 'architecture/Objects.png' },
 ] as const;

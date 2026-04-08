@@ -88,6 +88,7 @@ import {
   resolveSpawnPoint as resolveSpawnPointFromFarmTiled,
   type FarmInteractable,
   type FarmPlotTile,
+  type FarmRenderableTileLayer,
   type FarmSceneTransition,
   type FarmTiledMapRuntime,
   type HarvestableTileRuntime,
@@ -819,6 +820,7 @@ export class GameScene extends Phaser.Scene {
   private farmTiledTilemap: Phaser.Tilemaps.Tilemap | null = null;
   private farmTiledTilesets: Phaser.Tilemaps.Tileset[] = [];
   private farmTiledVisualLayers: Phaser.Tilemaps.TilemapLayer[] = [];
+  private farmTiledVisualLayerByMapLayerId = new Map<number, Phaser.Tilemaps.TilemapLayer>();
   private farmTiledDebugGraphics: Phaser.GameObjects.Graphics | null = null;
   private farmTiledTransitionCooldownUntilMs = 0;
   private farmTiledRequestedSpawnId: string | null = null;
@@ -830,6 +832,8 @@ export class GameScene extends Phaser.Scene {
   private farmTileRuntimeRenderRevision = 0;
   private farmTileRuntimeRenderedRevision = -1;
   private readonly farmTileInteractionDistancePx = 72;
+  private readonly farmTreeTopLayerDepthBase = 35;
+  private readonly farmTreeTopLayerDepthStep = 0.01;
   private villageSceneRenderSignature = '';
   private villageSceneZoneVisuals = new Map<VillageSceneZoneKey, VillageSceneZoneVisual>();
   private villageSceneActionHintLabel: Phaser.GameObjects.Text | null = null;
@@ -1581,6 +1585,7 @@ export class GameScene extends Phaser.Scene {
     this.farmTiledRuntime = runtime;
     this.farmTiledTilemap = null;
     this.farmTiledTilesets = [];
+    this.farmTiledVisualLayerByMapLayerId.clear();
     this.farmResolvedSpawnId = null;
     this.resetFarmTileRuntimeStateIndex();
 
@@ -1621,6 +1626,27 @@ export class GameScene extends Phaser.Scene {
         imagewidth?: number;
         imageheight?: number;
       };
+
+      const existingColumns = Number(tileset.columns ?? 0);
+      const existingTileCount = Number(tileset.tilecount ?? 0);
+      const existingImageWidth = Number(tileset.imagewidth ?? 0);
+      const existingImageHeight = Number(tileset.imageheight ?? 0);
+      const hasExplicitMetrics =
+        Number.isFinite(existingColumns) &&
+        existingColumns > 0 &&
+        Number.isFinite(existingTileCount) &&
+        existingTileCount > 0 &&
+        Number.isFinite(existingImageWidth) &&
+        existingImageWidth > 0 &&
+        Number.isFinite(existingImageHeight) &&
+        existingImageHeight > 0;
+
+      // Keep Tiled-exported metrics untouched when they are already present.
+      // Recomputing from runtime textures can shrink some tilesets when names collide,
+      // which creates missing gid entries and crashes Phaser parsing.
+      if (hasExplicitMetrics) {
+        continue;
+      }
 
       const tilesetName = typeof tileset.name === 'string' ? tileset.name.trim() : '';
       if (tilesetName.length === 0) {
@@ -1759,6 +1785,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.farmTiledVisualLayers.length === 0) {
+      this.farmTiledVisualLayerByMapLayerId.clear();
+      let treeTopDepthOffset = 0;
       for (const [index, layerRef] of this.farmTiledRuntime.renderableTileLayers.entries()) {
         const layerIndex = this.resolveFarmTilemapLayerIndex(layerRef.id);
         if (layerIndex === null) {
@@ -1770,9 +1798,15 @@ export class GameScene extends Phaser.Scene {
           continue;
         }
 
-        layer.setDepth(2 + index * 0.01);
+        if (this.isFarmTreeTopRenderableLayer(layerRef)) {
+          layer.setDepth(this.farmTreeTopLayerDepthBase + treeTopDepthOffset * this.farmTreeTopLayerDepthStep);
+          treeTopDepthOffset += 1;
+        } else {
+          layer.setDepth(2 + index * 0.01);
+        }
         layer.setAlpha(layerRef.opacity);
         this.farmTiledVisualLayers.push(layer);
+        this.farmTiledVisualLayerByMapLayerId.set(layerRef.id, layer);
       }
     }
 
@@ -1796,6 +1830,17 @@ export class GameScene extends Phaser.Scene {
     }
 
     return null;
+  }
+
+  private isFarmTreeTopRenderableLayer(layerRef: FarmRenderableTileLayer): boolean {
+    const layerName = layerRef.name.trim().toLowerCase();
+    const path = layerRef.groupPath.map((segment) => segment.trim().toLowerCase());
+    const inTreeHarvestableGroup = path.some((segment) => segment.includes('harvestables_tree'));
+    if (!inTreeHarvestableGroup) {
+      return false;
+    }
+
+    return layerName.includes('_top') || path.some((segment) => segment.includes('tree_top'));
   }
 
   private setFarmTiledVisualLayersVisible(visible: boolean): void {
@@ -1949,6 +1994,457 @@ export class GameScene extends Phaser.Scene {
     const tileX = Math.floor(worldX / this.farmTiledRuntime.mapSize.tileWidth);
     const tileY = Math.floor(worldY / this.farmTiledRuntime.mapSize.tileHeight);
     return this.farmTiledRuntime.harvestables.find((tile) => tile.tileX === tileX && tile.tileY === tileY) ?? null;
+  }
+
+  private getNearestHarvestableTileToWorldPosition(
+    worldX: number,
+    worldY: number,
+    maxDistancePx: number,
+  ): HarvestableTileRuntime | null {
+    if (!this.farmTiledRuntime || maxDistancePx <= 0) {
+      return null;
+    }
+
+    let bestTile: HarvestableTileRuntime | null = null;
+    let bestDistanceSq = maxDistancePx * maxDistancePx;
+    for (const tile of this.farmTiledRuntime.harvestables) {
+      const distanceSq = Phaser.Math.Distance.Squared(worldX, worldY, tile.centerX, tile.centerY);
+      if (distanceSq > bestDistanceSq) {
+        continue;
+      }
+
+      bestDistanceSq = distanceSq;
+      bestTile = tile;
+    }
+
+    return bestTile;
+  }
+
+  private isHarvestableTileWithinInteractionDistance(tile: HarvestableTileRuntime): boolean {
+    const distanceSq = Phaser.Math.Distance.Squared(this.player.x, this.player.y, tile.centerX, tile.centerY);
+    return distanceSq <= this.farmTileInteractionDistancePx * this.farmTileInteractionDistancePx;
+  }
+
+  private isTreeHarvestableTile(tile: HarvestableTileRuntime): boolean {
+    return tile.sourceGroup.trim().toLowerCase().includes('harvestables_tree');
+  }
+
+  private getTreeHarvestableLayerFamilyKey(sourceLayer: string): string {
+    return sourceLayer
+      .trim()
+      .toLowerCase()
+      .replace(/_(top|bottom)\b/g, '');
+  }
+
+  private buildHarvestableCoordKey(tileX: number, tileY: number): string {
+    return `${tileX}:${tileY}`;
+  }
+
+  private buildHarvestableRuntimeTileKey(tile: Pick<HarvestableTileRuntime, 'sourceLayer' | 'tileX' | 'tileY'>): string {
+    return `${tile.sourceLayer}:${tile.tileX}:${tile.tileY}`;
+  }
+
+  private isTreeTopSourceLayer(sourceLayer: string): boolean {
+    return sourceLayer.trim().toLowerCase().includes('_top');
+  }
+
+  private isTreeBottomSourceLayer(sourceLayer: string): boolean {
+    return sourceLayer.trim().toLowerCase().includes('_bottom');
+  }
+
+  private buildHarvestableComponentsForSourceLayer(
+    sourceLayer: string,
+    tiles: HarvestableTileRuntime[],
+  ): Array<{
+    sourceLayer: string;
+    tiles: HarvestableTileRuntime[];
+    tileCoordKeys: Set<string>;
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+    width: number;
+    height: number;
+    centerX: number;
+    centerY: number;
+  }> {
+    if (tiles.length === 0) {
+      return [];
+    }
+
+    const byCoord = new Map<string, HarvestableTileRuntime>();
+    for (const tile of tiles) {
+      byCoord.set(this.buildHarvestableCoordKey(tile.tileX, tile.tileY), tile);
+    }
+
+    const visited = new Set<string>();
+    const output: Array<{
+      sourceLayer: string;
+      tiles: HarvestableTileRuntime[];
+      tileCoordKeys: Set<string>;
+      minX: number;
+      maxX: number;
+      minY: number;
+      maxY: number;
+      width: number;
+      height: number;
+      centerX: number;
+      centerY: number;
+    }> = [];
+
+    const offsets: Array<{ dx: number; dy: number }> = [
+      { dx: 1, dy: 0 },
+      { dx: -1, dy: 0 },
+      { dx: 0, dy: 1 },
+      { dx: 0, dy: -1 },
+    ];
+
+    for (const seedTile of tiles) {
+      const seedCoordKey = this.buildHarvestableCoordKey(seedTile.tileX, seedTile.tileY);
+      if (visited.has(seedCoordKey)) {
+        continue;
+      }
+
+      const queue: Array<{ tileX: number; tileY: number }> = [{ tileX: seedTile.tileX, tileY: seedTile.tileY }];
+      visited.add(seedCoordKey);
+      const componentTiles: HarvestableTileRuntime[] = [];
+      const componentKeys = new Set<string>();
+      let minX = Number.POSITIVE_INFINITY;
+      let maxX = Number.NEGATIVE_INFINITY;
+      let minY = Number.POSITIVE_INFINITY;
+      let maxY = Number.NEGATIVE_INFINITY;
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current) {
+          continue;
+        }
+
+        const currentKey = this.buildHarvestableCoordKey(current.tileX, current.tileY);
+        const currentTile = byCoord.get(currentKey);
+        if (!currentTile) {
+          continue;
+        }
+
+        componentTiles.push(currentTile);
+        componentKeys.add(currentKey);
+        if (currentTile.tileX < minX) minX = currentTile.tileX;
+        if (currentTile.tileX > maxX) maxX = currentTile.tileX;
+        if (currentTile.tileY < minY) minY = currentTile.tileY;
+        if (currentTile.tileY > maxY) maxY = currentTile.tileY;
+
+        for (const offset of offsets) {
+          const nextX = current.tileX + offset.dx;
+          const nextY = current.tileY + offset.dy;
+          const nextKey = this.buildHarvestableCoordKey(nextX, nextY);
+          if (!byCoord.has(nextKey) || visited.has(nextKey)) {
+            continue;
+          }
+          visited.add(nextKey);
+          queue.push({ tileX: nextX, tileY: nextY });
+        }
+      }
+
+      if (componentTiles.length === 0) {
+        continue;
+      }
+
+      const width = maxX - minX + 1;
+      const height = maxY - minY + 1;
+      output.push({
+        sourceLayer,
+        tiles: componentTiles,
+        tileCoordKeys: componentKeys,
+        minX,
+        maxX,
+        minY,
+        maxY,
+        width,
+        height,
+        centerX: (minX + maxX) * 0.5,
+        centerY: (minY + maxY) * 0.5,
+      });
+    }
+
+    return output;
+  }
+
+  private resolveTreeHarvestableCompanionComponent(
+    seedComponent: {
+      sourceLayer: string;
+      minX: number;
+      maxX: number;
+      width: number;
+      centerX: number;
+      centerY: number;
+    },
+    candidateComponents: Array<{
+      sourceLayer: string;
+      minX: number;
+      maxX: number;
+      width: number;
+      centerX: number;
+      centerY: number;
+      tiles: HarvestableTileRuntime[];
+    }>,
+  ): {
+    sourceLayer: string;
+    minX: number;
+    maxX: number;
+    width: number;
+    centerX: number;
+    centerY: number;
+    tiles: HarvestableTileRuntime[];
+  } | null {
+    const seedIsTop = this.isTreeTopSourceLayer(seedComponent.sourceLayer);
+    const seedIsBottom = this.isTreeBottomSourceLayer(seedComponent.sourceLayer);
+
+    let bestMatch:
+      | {
+          sourceLayer: string;
+          minX: number;
+          maxX: number;
+          width: number;
+          centerX: number;
+          centerY: number;
+          tiles: HarvestableTileRuntime[];
+        }
+      | null = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    for (const candidate of candidateComponents) {
+      const candidateIsTop = this.isTreeTopSourceLayer(candidate.sourceLayer);
+      const candidateIsBottom = this.isTreeBottomSourceLayer(candidate.sourceLayer);
+      if (seedIsTop && candidateIsTop) {
+        continue;
+      }
+      if (seedIsBottom && candidateIsBottom) {
+        continue;
+      }
+
+      if (seedIsBottom && candidateIsTop && candidate.centerY >= seedComponent.centerY) {
+        continue;
+      }
+      if (seedIsTop && candidateIsBottom && candidate.centerY <= seedComponent.centerY) {
+        continue;
+      }
+
+      const overlapX = Math.min(seedComponent.maxX, candidate.maxX) - Math.max(seedComponent.minX, candidate.minX) + 1;
+      const centerDx = Math.abs(seedComponent.centerX - candidate.centerX);
+      const centerDy = Math.abs(seedComponent.centerY - candidate.centerY);
+      const maxCenterDx = Math.max(seedComponent.width, candidate.width) * 0.75 + 1.5;
+      if (centerDx > maxCenterDx || centerDy > 10) {
+        continue;
+      }
+      if (overlapX <= 0 && centerDx > 2.5) {
+        continue;
+      }
+
+      const score = centerDx * 2 + centerDy + (overlapX > 0 ? 0 : 1.5);
+      if (score >= bestScore) {
+        continue;
+      }
+      bestScore = score;
+      bestMatch = candidate;
+    }
+
+    return bestMatch;
+  }
+
+  private resolveTreeHarvestableTilesForRemoval(seedTile: HarvestableTileRuntime): HarvestableTileRuntime[] {
+    if (!this.farmTiledRuntime) {
+      return [seedTile];
+    }
+
+    const familyKey = this.getTreeHarvestableLayerFamilyKey(seedTile.sourceLayer);
+    const familyTiles = this.farmTiledRuntime.harvestables.filter(
+      (tile) =>
+        this.isTreeHarvestableTile(tile)
+        && this.getTreeHarvestableLayerFamilyKey(tile.sourceLayer) === familyKey,
+    );
+    if (familyTiles.length === 0) {
+      return [seedTile];
+    }
+
+    const familyTilesByLayer = new Map<string, HarvestableTileRuntime[]>();
+    for (const tile of familyTiles) {
+      const tiles = familyTilesByLayer.get(tile.sourceLayer) ?? [];
+      tiles.push(tile);
+      familyTilesByLayer.set(tile.sourceLayer, tiles);
+    }
+
+    const familyComponentsByLayer = new Map<
+      string,
+      Array<{
+        sourceLayer: string;
+        tiles: HarvestableTileRuntime[];
+        tileCoordKeys: Set<string>;
+        minX: number;
+        maxX: number;
+        minY: number;
+        maxY: number;
+        width: number;
+        height: number;
+        centerX: number;
+        centerY: number;
+      }>
+    >();
+    for (const [sourceLayer, tiles] of familyTilesByLayer.entries()) {
+      familyComponentsByLayer.set(sourceLayer, this.buildHarvestableComponentsForSourceLayer(sourceLayer, tiles));
+    }
+
+    const seedCoordKey = this.buildHarvestableCoordKey(seedTile.tileX, seedTile.tileY);
+    const seedComponents = familyComponentsByLayer.get(seedTile.sourceLayer) ?? [];
+    const seedComponent = seedComponents.find((component) => component.tileCoordKeys.has(seedCoordKey));
+    if (!seedComponent) {
+      return [seedTile];
+    }
+
+    const outputByKey = new Map<string, HarvestableTileRuntime>();
+    for (const tile of seedComponent.tiles) {
+      outputByKey.set(this.buildHarvestableRuntimeTileKey(tile), tile);
+    }
+
+    for (const [sourceLayer, components] of familyComponentsByLayer.entries()) {
+      if (sourceLayer === seedTile.sourceLayer || components.length === 0) {
+        continue;
+      }
+
+      const companion = this.resolveTreeHarvestableCompanionComponent(seedComponent, components);
+      if (!companion) {
+        continue;
+      }
+
+      for (const tile of companion.tiles) {
+        outputByKey.set(this.buildHarvestableRuntimeTileKey(tile), tile);
+      }
+    }
+
+    return [...outputByKey.values()];
+  }
+
+  private resolveFarmVisualLayerForHarvestableTile(tile: HarvestableTileRuntime): Phaser.Tilemaps.TilemapLayer | null {
+    if (!this.farmTiledRuntime) {
+      return null;
+    }
+
+    const sourceLayer = tile.sourceLayer.trim().toLowerCase();
+    const sourceGroup = tile.sourceGroup.trim().toLowerCase();
+    const renderableLayer = this.farmTiledRuntime.renderableTileLayers.find((layerRef) => {
+      if (layerRef.name.trim().toLowerCase() !== sourceLayer) {
+        return false;
+      }
+      return layerRef.groupPath.some((segment) => segment.trim().toLowerCase() === sourceGroup);
+    });
+    if (!renderableLayer) {
+      return null;
+    }
+
+    return this.farmTiledVisualLayerByMapLayerId.get(renderableLayer.id) ?? null;
+  }
+
+  private removeHarvestableTilesFromVisualMap(tiles: HarvestableTileRuntime[]): void {
+    for (const tile of tiles) {
+      const layer = this.resolveFarmVisualLayerForHarvestableTile(tile);
+      if (!layer) {
+        continue;
+      }
+      layer.removeTileAt(tile.tileX, tile.tileY, true, false);
+    }
+  }
+
+  private removeHarvestableTilesFromRuntime(tiles: HarvestableTileRuntime[]): void {
+    if (!this.farmTiledRuntime || tiles.length === 0) {
+      return;
+    }
+
+    const removedKeys = new Set<string>();
+    for (const tile of tiles) {
+      removedKeys.add(this.buildHarvestableRuntimeTileKey(tile));
+    }
+
+    this.farmTiledRuntime.harvestables = this.farmTiledRuntime.harvestables.filter(
+      (tile) => !removedKeys.has(this.buildHarvestableRuntimeTileKey(tile)),
+    );
+  }
+
+  private removeHarvestableTileCollisions(tiles: HarvestableTileRuntime[]): boolean {
+    if (!this.farmTiledRuntime || tiles.length === 0 || this.farmTiledRuntime.collisions.length === 0) {
+      return false;
+    }
+
+    const markers = tiles.map((tile) => ({
+      layerSegment: `/${tile.sourceLayer}:`,
+      tileSegment: `:tile_${tile.tileX}_${tile.tileY}:`,
+    }));
+
+    const nextCollisions = this.farmTiledRuntime.collisions.filter((shape) => {
+      if (!shape.sourceName.startsWith('TileCollision:')) {
+        return true;
+      }
+
+      return !markers.some(
+        (marker) =>
+          shape.sourceName.includes(marker.layerSegment)
+          && shape.sourceName.includes(marker.tileSegment),
+      );
+    });
+
+    if (nextCollisions.length === this.farmTiledRuntime.collisions.length) {
+      return false;
+    }
+
+    this.farmTiledRuntime.collisions = nextCollisions;
+    return true;
+  }
+
+  private tryHarvestWorldHarvestableAtWorldPosition(
+    worldX: number,
+    worldY: number,
+    announceFailure: boolean,
+  ): boolean {
+    if (!this.farmTiledRuntime || this.farmTiledRuntime.harvestables.length === 0) {
+      return false;
+    }
+
+    const pointerSnapRadius = Math.max(
+      this.farmTiledRuntime.mapSize.tileWidth,
+      this.farmTiledRuntime.mapSize.tileHeight,
+    ) * 0.8;
+    const harvestableTile = this.getHarvestableTileAtWorldPosition(worldX, worldY)
+      ?? this.getNearestHarvestableTileToWorldPosition(worldX, worldY, pointerSnapRadius);
+    if (!harvestableTile) {
+      return false;
+    }
+
+    if (!this.isHarvestableTileWithinInteractionDistance(harvestableTile)) {
+      if (announceFailure) {
+        this.farmFeedbackMessage = 'Approche toi de la ressource pour recolter.';
+      }
+      return true;
+    }
+
+    const removedTiles = this.isTreeHarvestableTile(harvestableTile)
+      ? this.resolveTreeHarvestableTilesForRemoval(harvestableTile)
+      : [harvestableTile];
+    if (removedTiles.length === 0) {
+      return true;
+    }
+
+    this.removeHarvestableTilesFromVisualMap(removedTiles);
+    this.removeHarvestableTilesFromRuntime(removedTiles);
+    const collisionsChanged = this.removeHarvestableTileCollisions(removedTiles);
+    if (collisionsChanged) {
+      this.rebuildSceneObstacles();
+    }
+
+    this.farmFeedbackMessage = this.isTreeHarvestableTile(harvestableTile)
+      ? 'Arbre recolte.'
+      : 'Ressource recoltee.';
+    if (this.farmDebugMode) {
+      this.drawFarmTiledDebugOverlay();
+    }
+    return true;
   }
 
   private getNearestFarmPlotTileToWorldPosition(worldX: number, worldY: number, maxDistancePx: number): FarmPlotTile | null {
@@ -2126,6 +2622,10 @@ export class GameScene extends Phaser.Scene {
           ? 'Slot actif vide. Selectionne une houe, un arrosoir, une faux ou une graine.'
           : 'Item actif incompatible avec les actions de ferme.';
       }
+      return true;
+    }
+
+    if (intent.kind === 'harvest' && this.tryHarvestWorldHarvestableAtWorldPosition(worldX, worldY, announceFailure)) {
       return true;
     }
 
